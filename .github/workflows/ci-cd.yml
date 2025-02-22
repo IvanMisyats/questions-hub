@@ -40,11 +40,11 @@ jobs:
 
       # 7. Build Docker image
       - name: Build Docker image
-        run: docker build -t ghcr.io/${{ toLower(github.repository) }}:latest .
+        run: docker build -t ghcr.io/${{ vars.PROJECT_NAME }}:latest .
 
       # 8. Push Docker image to GHCR
       - name: Push Docker image
-        run: docker push ghcr.io/${{ toLower(github.repository) }}:latest
+        run: docker push ghcr.io/${{ vars.PROJECT_NAME }}:latest
 
       # 9. Deploy to VPS via SSH
       - name: Deploy to VPS
@@ -56,11 +56,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             # Pull the latest image from GHCR
-            docker pull ghcr.io/${{ toLower(github.repository) }}:latest
+            docker pull ghcr.io/${{ vars.PROJECT_NAME }}:latest
 
             # Stop and remove any existing container (ignore errors if not found)
             docker stop questions-hub || true
             docker rm questions-hub || true
 
             # Run the new container (adjust ports and options as needed)
-            docker run -d --name questions-hub -p 5000:80 ghcr.io/${{ toLower(github.repository) }}:latest
+            docker run -d --name questions-hub -p 5000:80 ghcr.io/${{ vars.PROJECT_NAME }}:latest
