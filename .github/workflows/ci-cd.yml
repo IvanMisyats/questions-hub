@@ -40,7 +40,7 @@ jobs:
 
       # 7. Build Docker image
       - name: Build Docker image
-        run: docker build -t ghcr.io/${{ vars.PROJECT_NAME }}:latest .
+        run: docker build -f QuestionsHub.Blazor/Dockerfile -t ghcr.io/${{ env.PROJECT_NAME }}:latest QuestionsHub.Blazor
 
       # 8. Push Docker image to GHCR
       - name: Push Docker image
