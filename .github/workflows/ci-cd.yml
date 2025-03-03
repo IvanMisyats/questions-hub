@@ -1,5 +1,8 @@
 name: CI/CD Pipeline
 
+env:
+  PROJECT_NAME: ivanmisyats/questions-hub
+
 on:
   push:
     branches:
@@ -36,31 +39,34 @@ jobs:
 
       # 6. Log in to GitHub Container Registry (GHCR)
       - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ env.GITHUB_ACTOR }} --password-stdin
 
       # 7. Build Docker image
       - name: Build Docker image
-        run: docker build -f QuestionsHub.Blazor/Dockerfile -t ghcr.io/${{ vars.PROJECT_NAME }}:latest QuestionsHub.Blazor
+        run: docker buildx build --load -f QuestionsHub.Blazor/Dockerfile -t ghcr.io/${{ env.PROJECT_NAME }}:latest .
 
       # 8. Push Docker image to GHCR
       - name: Push Docker image
-        run: docker push ghcr.io/${{ vars.PROJECT_NAME }}:latest
+        run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
       # 9. Deploy to VPS via SSH
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.2.1
+        uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           port: 55055
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            # Log in to GHCR on the VPS
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ env.GITHUB_ACTOR }} --password-stdin
+          
             # Pull the latest image from GHCR
-            docker pull ghcr.io/${{ vars.PROJECT_NAME }}:latest
+            docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
             # Stop and remove any existing container (ignore errors if not found)
             docker stop questions-hub || true
             docker rm questions-hub || true
 
             # Run the new container (adjust ports and options as needed)
-            docker run -d --name questions-hub -p 5000:80 ghcr.io/${{ vars.PROJECT_NAME }}:latest
+            docker run -d --name questions-hub -p 5000:8080 ghcr.io/${{ env.PROJECT_NAME }}:latest
