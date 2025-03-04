@@ -40,7 +40,7 @@ jobs:
 
       # 6. Log in to GitHub Container Registry (GHCR)
       - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner || env.GITHUB_ACTOR }}" --password-stdin
+        run: echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner || env.GITHUB_ACTOR }}" --password-stdin
 
       # 7. Build Docker image
       - name: Build Docker image
@@ -60,7 +60,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             # Log in to GHCR on the VPS
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ env.GITHUB_ACTOR }} --password-stdin
+            echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ env.GITHUB_ACTOR }} --password-stdin
           
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
