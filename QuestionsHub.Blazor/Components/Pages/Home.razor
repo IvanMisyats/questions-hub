@@ -1,7 +1,70 @@
 ﻿@page "/"
-
+@using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+@inject QuestionsHubDbContext DbContext
 <PageTitle>База українських запитань Що?Де?Коли?</PageTitle>
-
-<h1>База українських запитань Що?Де?Коли?</h1>
-
-Поки нічого немає. Слідкуйте за оновленнями.
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Пакетів на сайті <strong>@_packages?.Count</strong></h4>
+    </div>
+    @if (_packages == null)
+    {
+        <p><em>Завантаження...</em></p>
+    }
+    else if (!_packages.Any())
+    {
+        <p>Поки немає пакетів. Слідкуйте за оновленнями.</p>
+    }
+    else
+    {
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            @foreach (var package in _packages)
+            {
+                <div class="col">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">@package.Title</h5>
+                            <p class="card-text text-muted mb-2">
+                                <small>
+                                    <strong>@GetQuestionsCount(package)</strong> запитань
+                                    @if (package.PlayedAt.HasValue)
+                                    {
+                                        <span> · @package.PlayedAt.Value.ToString("MMMM yyyy")</span>
+                                    }
+                                </small>
+                            </p>
+                            @if (!string.IsNullOrEmpty(package.Description))
+                            {
+                                <p class="card-text small">@package.Description</p>
+                            }
+                            @if (package.Editors.Any())
+                            {
+                                <p class="card-text">
+                                    <small class="text-muted">
+                                        <strong>Редактори:</strong> @string.Join(" · ", package.Editors)
+                                    </small>
+                                </p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+@code {
+    private List<Package>? _packages;
+    protected override async Task OnInitializedAsync()
+    {
+        _packages = await DbContext.Packages
+            .Include(p => p.Tours)
+            .ThenInclude(t => t.Questions)
+            .OrderByDescending(p => p.PlayedAt)
+            .ToListAsync();
+    }
+    private int GetQuestionsCount(Package package)
+    {
+        return package.Tours.Sum(t => t.Questions.Count);
+    }
+}
