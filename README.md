@@ -12,14 +12,8 @@ Future functionality which might be added:
 * uploading and storing the results of tournaments
 * adding comments/ratings to questions
 
-# Development stages
+## Technologies Used
 
-## Stage 1. Add authentication and authorization
-
-1. Show login form on the main page. 
-2. Add registration form. 
-3. Add roles to the user. 
-4. Add role-based access to the packages.
-
-## Stage 2. Add admin tool for managing packages
-
+* Backend: C#, ASP.NET, Blazor
+* Frontend: HTML, CSS, Bootstrap
+* DB: PostgreSQL
