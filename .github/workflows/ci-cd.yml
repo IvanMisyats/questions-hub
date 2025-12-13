@@ -50,7 +50,18 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-      # 9. Deploy to VPS via SSH
+      # 9. Copy docker-compose.yml to VPS
+      - name: Copy docker-compose to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: 55055
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/opt/questions-hub/"
+
+      # 10. Deploy to VPS via SSH
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -59,19 +70,28 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            cd /opt/questions-hub
+            
             # Log in to GHCR on the VPS
-            echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ env.GITHUB_ACTOR }} --password-stdin
+            echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
           
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-            # Stop and remove any existing container (ignore errors if not found)
-            docker stop questions-hub || true
-            docker rm questions-hub || true
+            # Create .env file with secrets
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" > .env
 
-            # Run the new container with environment variables
-            docker run -d --name questions-hub \
-              -p 5000:8080 \
-              -e ConnectionStrings__DefaultConnection="${{ secrets.DB_CONNECTION_STRING }}" \
-              -e ASPNETCORE_ENVIRONMENT=Production \
-              ghcr.io/${{ env.PROJECT_NAME }}:latest
+            # Update docker-compose to use the GHCR image
+            sed -i 's|build:|# build:|g' docker-compose.yml
+            sed -i 's|context: .|# context: .|g' docker-compose.yml
+            sed -i 's|dockerfile: QuestionsHub.Blazor/Dockerfile|# dockerfile: QuestionsHub.Blazor/Dockerfile|g' docker-compose.yml
+            sed -i '/web:/a\    image: ghcr.io/${{ env.PROJECT_NAME }}:latest' docker-compose.yml
+
+            # Stop and remove existing containers
+            docker-compose down || true
+
+            # Start services with docker-compose
+            docker-compose up -d
+
+            # Clean up old images
+            docker image prune -f
