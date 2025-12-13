@@ -69,5 +69,9 @@ jobs:
             docker stop questions-hub || true
             docker rm questions-hub || true
 
-            # Run the new container (adjust ports and options as needed)
-            docker run -d --name questions-hub -p 5000:8080 ghcr.io/${{ env.PROJECT_NAME }}:latest
+            # Run the new container with environment variables
+            docker run -d --name questions-hub \
+              -p 5000:8080 \
+              -e ConnectionStrings__DefaultConnection="${{ secrets.DB_CONNECTION_STRING }}" \
+              -e ASPNETCORE_ENVIRONMENT=Production \
+              ghcr.io/${{ env.PROJECT_NAME }}:latest
