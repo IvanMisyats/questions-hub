@@ -12,9 +12,12 @@
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 768m
 
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: questions-hub-db
     environment:
       POSTGRES_USER: questionshub
@@ -29,6 +32,17 @@
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    mem_limit: 768m
+    memswap_limit: 1g
+    # Optimized for low-memory VPS (2GB RAM)
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c effective_cache_size=256MB
+      -c max_connections=20
 
 volumes:
   postgres_data:
