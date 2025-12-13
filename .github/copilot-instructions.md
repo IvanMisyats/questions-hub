@@ -20,10 +20,8 @@ Refer to README.md for the complete technology stack. The project uses:
 
 ### Git Workflow
 
-- **Always merge using `--squash` option** - This keeps the main branch history clean by combining all commits from a feature branch into a single commit
-  ```bash
-  git merge --squash feature-branch
-  ```
+- **Always merge using `--squash` option**
+- do not push branches to remote
 
 ### Code Style and Conventions
 
@@ -67,5 +65,5 @@ Refer to README.md for the complete technology stack. The project uses:
 
 - This is a work-in-progress project with planned future features
 - Maintain backward compatibility when making database changes
-- Document any new features or significant changes in appropriate files
+- Document summary of AI changes in .github/upgrades/ folder. Do not commit files from .github/upgrades/ folder.
 

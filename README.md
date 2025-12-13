@@ -17,3 +17,10 @@ Future functionality which might be added:
 * Backend: C#, ASP.NET, Blazor
 * Frontend: HTML, CSS, Bootstrap
 * DB: PostgreSQL
+
+## Hosting
+
+The application is hosted on a VPS from OVH with the following specs:
+- **vCore**: 1
+- **RAM**: 2 GB
+- **Storage**: 20 GB
