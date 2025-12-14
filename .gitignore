@@ -7,6 +7,9 @@
 .env
 .secrets
 
+# PostgreSQL data
+postgres_data/
+
 # User-specific files
 *.rsuser
 *.suo

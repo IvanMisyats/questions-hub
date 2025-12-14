@@ -50,15 +50,15 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-      # 9. Copy docker-compose.yml to VPS
-      - name: Copy docker-compose to VPS
+      # 9. Copy docker-compose.yml and init-db.sh to VPS
+      - name: Copy docker files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           port: 55055
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,init-db.sh"
           target: "/opt/questions-hub/"
 
       # 10. Deploy to VPS via SSH
@@ -78,8 +78,19 @@ jobs:
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
+            # Ensure init-db.sh is executable
+            chmod +x init-db.sh
+
+            # Create data directory if not exists
+            sudo mkdir -p /var/lib/questions-hub/postgres_data
+            sudo chown -R 999:999 /var/lib/questions-hub/postgres_data
+
             # Create .env file with secrets
-            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" > .env
+            cat > .env << EOF
+            POSTGRES_ROOT_PASSWORD=${{ secrets.POSTGRES_ROOT_PASSWORD }}
+            QUESTIONSHUB_PASSWORD=${{ secrets.QUESTIONSHUB_PASSWORD }}
+            POSTGRES_DATA_PATH=/var/lib/questions-hub/postgres_data
+            EOF
 
             # Update docker-compose to use the GHCR image instead of building
             sed -i 's|build:|# build:|g' docker-compose.yml
