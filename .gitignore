@@ -6,6 +6,7 @@
 # dotenv files
 .env
 .secrets
+.actrc
 
 # PostgreSQL data
 postgres_data/
