@@ -50,7 +50,19 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-      # 9. Copy docker-compose.yml and init-db.sh to VPS
+      # 9. Ensure target directory exists on VPS
+      - name: Create target directory on VPS
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: 55055
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            sudo mkdir -p /opt/questions-hub
+            sudo chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} /opt/questions-hub
+
+      # 10. Copy docker-compose.yml and init-db.sh to VPS
       - name: Copy docker files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -59,9 +71,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "docker-compose.yml,init-db.sh"
-          target: "/opt/questions-hub/"
+          target: "/opt/questions-hub"
+          strip_components: 0
 
-      # 10. Deploy to VPS via SSH
+      # 11. Deploy to VPS via SSH
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v0.1.7
         with:
