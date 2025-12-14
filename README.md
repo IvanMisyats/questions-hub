@@ -31,7 +31,7 @@ Future functionality which might be added:
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/questions-hub.git
+git clone https://github.com/IvanMisyats/questions-hub.git
 cd questions-hub
 ```
 
@@ -90,7 +90,7 @@ docker-compose up -d
 #### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/your-username/questions-hub.git
+git clone https://github.com/IvanMisyats/questions-hub.git
 cd questions-hub
 
 # Create .env file
@@ -166,7 +166,7 @@ Navigate to `http://localhost:5000`
 
 ### Database Location
 
-- **Windows**: `C:\Projects\questions-hub\postgres_data\`
+- **Windows**: `questions-hub\postgres_data\`
 - **Linux/Mac**: `./postgres_data/`
 - **VPS**: `/var/lib/questions-hub/postgres_data`
 
