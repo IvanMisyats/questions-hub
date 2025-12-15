@@ -60,6 +60,8 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             mkdir -p ~/questions-hub
+            # Remove old init-db.sh to avoid permission issues
+            rm -f ~/questions-hub/init-db.sh
 
       # 10. Copy init-db.sh to VPS
       - name: Copy init script to VPS
@@ -72,6 +74,8 @@ jobs:
           source: "init-db.sh"
           target: "~/questions-hub"
           strip_components: 0
+          overwrite: true
+          rm: true
 
       # 11. Deploy to VPS via SSH
       - name: Deploy to VPS
