@@ -75,7 +75,6 @@ jobs:
           target: "~/questions-hub"
           strip_components: 0
           overwrite: true
-          rm: true
 
       # 11. Deploy to VPS via SSH
       - name: Deploy to VPS
