@@ -11,27 +11,35 @@ This guide explains how to test the GitHub Actions pipeline locally using `act`.
 
 ### 1. Configure Secrets
 
-Edit the `.secrets` file with your actual credentials:
+Copy `.secrets.template` to `.secrets` and fill in your actual values:
 
 ```bash
+# For local testing only
 VPS_HOST=your-vps-ip-or-hostname
-VPS_USER=your-ssh-username
+VPS_USER=github-actions
 VPS_SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----
 ... your SSH private key ...
 -----END OPENSSH PRIVATE KEY-----
 REPO_TOKEN=ghp_yourGitHubPersonalAccessToken
-POSTGRES_ROOT_PASSWORD=your-db-password
-QUESTIONSHUB_PASSWORD=your-app-db-password
 ```
 
-**Important**: Never commit `.secrets` file! It's already in `.gitignore`.
+**Important Notes:**
+- Never commit `.secrets` file! It's already in `.gitignore`.
+- Database passwords (`POSTGRES_ROOT_PASSWORD`, `QUESTIONSHUB_PASSWORD`) are stored in `.env` file on the VPS, not in GitHub Secrets.
+- The VPS user should be `github-actions` (created during VPS setup).
 
 ### 2. Configuration File
 
-The `.actrc` file is already configured with sensible defaults:
-- Uses `catthehacker/ubuntu:act-latest` Docker image
+Copy `.actrc.example` to `.actrc` for optimized settings:
+
+```bash
+cp .actrc.example .actrc
+```
+
+The configuration includes:
+- Uses `catthehacker/ubuntu:act-latest` Docker image (includes Docker and more tools)
 - Reads secrets from `.secrets` file
-- Optimized for faster runs
+- Optimized for faster runs with `--pull=false` and `--rm`
 
 ## Running the Pipeline
 
@@ -103,9 +111,10 @@ act push --rm
 
 When running locally with `act`:
 
-1. **VPS Deployment**: The SSH/SCP steps will try to connect to your actual VPS
-2. **GHCR Push**: Will try to push to GitHub Container Registry
+1. **VPS Deployment**: The SSH/SCP steps will try to connect to your actual VPS and deploy
+2. **GHCR Push**: Will try to push to GitHub Container Registry (requires authentication)
 3. **Resource Usage**: Docker builds can be resource-intensive
+4. **VPS .env Required**: The deployment script expects `.env` file to exist on VPS at `~/questions-hub/.env`
 
 ## Testing Without Full Deployment
 
@@ -167,6 +176,64 @@ act push --env PROJECT_NAME=myuser/myproject
 ### Out of disk space
 - Clean Docker: `docker system prune -a`
 - Use smaller image: `-P ubuntu-latest=ubuntu:latest`
+
+## VPS Setup Requirements
+
+Before running the pipeline (locally or on GitHub), ensure the VPS is configured:
+
+### 1. Create Deployment User
+
+```bash
+# SSH to VPS as root or admin user
+sudo adduser github-actions
+sudo usermod -aG docker github-actions
+```
+
+### 2. Setup SSH Key
+
+Add your deployment SSH public key to the user's authorized_keys:
+
+```bash
+sudo -u github-actions mkdir -p /home/github-actions/.ssh
+sudo -u github-actions nano /home/github-actions/.ssh/authorized_keys
+# Paste your public key, save and exit
+sudo chmod 700 /home/github-actions/.ssh
+sudo chmod 600 /home/github-actions/.ssh/authorized_keys
+sudo chown -R github-actions:github-actions /home/github-actions/.ssh
+```
+
+### 3. Create .env File on VPS
+
+```bash
+# As root, create the .env file for github-actions user
+sudo -u github-actions mkdir -p /home/github-actions/questions-hub
+sudo -u github-actions bash -c 'cat > /home/github-actions/questions-hub/.env << EOF
+POSTGRES_ROOT_PASSWORD=your_secure_root_password
+QUESTIONSHUB_PASSWORD=your_secure_app_password
+EOF'
+
+# Set proper permissions
+sudo chmod 600 /home/github-actions/questions-hub/.env
+```
+
+### 4. Create Docker Network
+
+```bash
+sudo -u github-actions docker network create questions-hub-network
+```
+
+### 5. Verify Setup
+
+```bash
+# Test SSH connection
+ssh -p 55055 github-actions@your-vps-host
+
+# Verify docker access
+docker ps
+
+# Verify .env file exists
+cat ~/questions-hub/.env
+```
 
 ## Additional Resources
 

@@ -1,0 +1,10 @@
+# Act configuration for local CI/CD testing
+# Copy this to .actrc for use: cp .actrc.example .actrc
+# Use larger image with more tools (includes Docker)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+# Read secrets from .secrets file
+--secret-file .secrets
+# Don't pull images every time (faster)
+--pull=false
+# Remove containers after run (clean up)
+--rm

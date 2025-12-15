@@ -18,6 +18,12 @@ Future functionality which might be added:
 * Frontend: HTML, CSS, Bootstrap
 * DB: PostgreSQL
 
+## Documentation
+
+- **[Local Development Guide](docs/LOCAL_DEVELOPMENT.md)** - Set up local development environment
+- **[CI/CD Testing Guide](docs/LOCAL_TESTING.md)** - Test GitHub Actions pipeline locally
+- **[VPS Setup Guide](docs/LOCAL_TESTING.md#vps-setup-requirements)** - Configure production VPS
+
 ## Setup and Run
 
 ### Prerequisites
@@ -166,9 +172,9 @@ Navigate to `http://localhost:5000`
 
 ### Database Location
 
-- **Windows**: `questions-hub\postgres_data\`
-- **Linux/Mac**: `./postgres_data/`
-- **VPS**: `/var/lib/questions-hub/postgres_data`
+- **Local Windows**: `questions-hub\postgres_data\`
+- **Local Linux/Mac**: `./postgres_data/`
+- **VPS**: `/home/github-actions/questions-hub-data/postgres_data`
 
 The database files are stored outside Docker containers for persistence.
 
@@ -207,10 +213,33 @@ docker system prune -a
 # Then: docker-compose up -d
 ```
 
-## Hosting
+## Hosting & Deployment
 
 The application is hosted on a VPS from OVH with the following specs:
 - **vCore**: 1
 - **RAM**: 2 GB
 - **Storage**: 20 GB
 - **Deployment**: Automated via GitHub Actions CI/CD
+
+### Deployment Architecture
+
+**VPS Setup:**
+- Docker containers run directly via `docker run` (no docker-compose on VPS)
+- Deployment user: `github-actions` (minimal privileges, no sudo)
+- Application directory: `/home/github-actions/questions-hub`
+- Database storage: `/home/github-actions/questions-hub-data/postgres_data`
+- Network: Custom Docker network `questions-hub-network` for container communication
+
+**CI/CD Pipeline:**
+1. Build .NET application and run tests
+2. Build Docker image from source
+3. Push image to GitHub Container Registry (GHCR)
+4. SSH to VPS and pull latest image
+5. Deploy using `docker run` commands for both PostgreSQL and web app
+
+**Security:**
+- Database passwords stored in `.env` file on VPS (not in GitHub secrets)
+- SSH key authentication for deployment
+- Containers run with memory limits
+- Non-root deployment user
+
