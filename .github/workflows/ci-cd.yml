@@ -50,53 +50,7 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-      # 9. Copy init-db.sh to VPS using SSH (avoiding SCP permission issues)
-      - name: Copy init script to VPS
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          port: 55055
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            # Ensure directory exists with proper permissions
-            mkdir -p ~/questions-hub
-            chmod 755 ~/questions-hub
-            
-            # Create init-db.sh with content from stdin
-            cat > ~/questions-hub/init-db.sh << 'INITDB_EOF'
-            #!/bin/bash
-            set -e
-            
-            # Create questionshub user with limited privileges
-            psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-                -- Create questionshub user if not exists
-                DO
-                \$\$
-                BEGIN
-                   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
-                      CREATE USER questionshub WITH PASSWORD '$QUESTIONSHUB_PASSWORD';
-                   END IF;
-                END
-                \$\$;
-            
-                -- Grant privileges to questionshub user
-                GRANT CONNECT ON DATABASE questionshub TO questionshub;
-                GRANT USAGE, CREATE ON SCHEMA public TO questionshub;
-                GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;
-                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;
-                ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;
-                ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;
-            EOSQL
-            
-            echo "Database user 'questionshub' created successfully"
-            INITDB_EOF
-            
-            # Set proper permissions
-            chmod 755 ~/questions-hub/init-db.sh
-            chown $(whoami):$(whoami) ~/questions-hub/init-db.sh
-
-      # 11. Deploy to VPS via SSH
+      # 9. Deploy to VPS via SSH
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -105,11 +59,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ~/questions-hub
-            
             # Load environment variables from .env file
+            # Note: ~/questions-hub directory with .env file must be pre-created on VPS
             set -a
-            source .env
+            source ~/questions-hub/.env
             set +a
             
             # Log in to GHCR on the VPS
@@ -118,11 +71,8 @@ jobs:
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-            # Ensure init-db.sh is executable
-            chmod +x init-db.sh
-
-            # Create data directory
-            mkdir -p ~/questions-hub-data/postgres_data
+            # Create data directory inside questions-hub folder
+            mkdir -p ~/questions-hub/data/postgres
 
             # Create docker network if not exists
             docker network create questions-hub-network 2>/dev/null || true
@@ -140,8 +90,7 @@ jobs:
               -e POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD} \
               -e POSTGRES_DB=questionshub \
               -e QUESTIONSHUB_PASSWORD=${QUESTIONSHUB_PASSWORD} \
-              -v ~/questions-hub-data/postgres_data:/var/lib/postgresql/data \
-              -v ~/questions-hub/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro \
+              -v ~/questions-hub/data/postgres:/var/lib/postgresql/data \
               --memory=768m \
               --memory-swap=1g \
               --health-cmd="pg_isready -U postgres -d questionshub" \
@@ -161,6 +110,27 @@ jobs:
             until docker exec questions-hub-db pg_isready -U postgres -d questionshub; do
               sleep 2
             done
+
+            # Setup database user and permissions directly
+            echo "Setting up database user and permissions..."
+            docker exec questions-hub-db psql -U postgres -d questionshub <<-EOSQL
+              -- Create questionshub user if not exists
+              DO \$\$
+              BEGIN
+                 IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
+                    CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';
+                 END IF;
+              END \$\$;
+            
+              -- Grant privileges to questionshub user
+              GRANT CONNECT ON DATABASE questionshub TO questionshub;
+              GRANT USAGE, CREATE ON SCHEMA public TO questionshub;
+              GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;
+              GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;
+              ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;
+              ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;
+            EOSQL
+            echo "Database user 'questionshub' created successfully"
 
             # Start web app container
             docker run -d \
