@@ -60,9 +60,9 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             # Load environment variables from .env file
-            # Note: ~/questions-hub directory with .env file must be pre-created on VPS
+            # Note: ~/.env file must be pre-created on VPS with POSTGRES_ROOT_PASSWORD and QUESTIONSHUB_PASSWORD
             set -a
-            source ~/questions-hub/.env
+            source ~/.env
             set +a
             
             # Log in to GHCR on the VPS
@@ -139,6 +139,7 @@ jobs:
               --restart unless-stopped \
               -p 8080:8080 \
               -e ASPNETCORE_ENVIRONMENT=Production \
+              -e ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
               -e "ConnectionStrings__DefaultConnection=Host=questions-hub-db;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}" \
               --memory=512m \
               --memory-swap=768m \
