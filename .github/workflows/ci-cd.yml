@@ -111,26 +111,24 @@ jobs:
               sleep 2
             done
 
-            # Setup database user and permissions directly
+            # Setup database user and permissions directly (using -c flag to avoid heredoc issues)
             echo "Setting up database user and permissions..."
-            docker exec questions-hub-db psql -U postgres -d questionshub <<-EOSQL
-              -- Create questionshub user if not exists
-              DO \$\$
-              BEGIN
-                 IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
-                    CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';
-                 END IF;
-              END \$\$;
             
-              -- Grant privileges to questionshub user
-              GRANT CONNECT ON DATABASE questionshub TO questionshub;
-              GRANT USAGE, CREATE ON SCHEMA public TO questionshub;
-              GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;
-              GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;
-              ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;
-              ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;
-            EOSQL
-            echo "Database user 'questionshub' created successfully"
+            # Create user if not exists
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}'; END IF; END \$\$;"
+            
+            # Always update password from .env to ensure it's in sync
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';"
+            
+            # Grant privileges to questionshub user
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT CONNECT ON DATABASE questionshub TO questionshub;"
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT USAGE, CREATE ON SCHEMA public TO questionshub;"
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;"
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;"
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;"
+            docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;"
+            
+            echo "Database user 'questionshub' configured successfully"
 
             # Start web app container
             docker run -d \
