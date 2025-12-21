@@ -20,7 +20,9 @@ Future functionality which might be added:
 
 ## Documentation
 
-- **[Local Development Guide](docs/LOCAL_DEVELOPMENT.md)** - Set up local development environment
+- **[Local Development Guide](docs/LOCAL_DEVELOPMENT.md)** - Set up local development environment (Blazor in Rider + PostgreSQL in Docker)
+- **[Docker Profiles Guide](docs/DOCKER_PROFILES.md)** - Understanding dev, production, and full profiles
+- **[Testing Setup Guide](docs/TESTING_LOCAL_SETUP.md)** - Verify your local development setup
 - **[CI/CD Testing Guide](docs/LOCAL_TESTING.md)** - Test GitHub Actions pipeline locally
 - **[VPS Setup Guide](docs/LOCAL_TESTING.md#vps-setup-requirements)** - Configure production VPS
 
@@ -33,6 +35,27 @@ Future functionality which might be added:
 - Git
 
 ### Local Development (Windows)
+
+**Quick Start (Recommended):**
+
+For local development with Blazor running in your IDE and PostgreSQL in Docker:
+
+```powershell
+# 1. Start database
+.\start-dev-db.ps1
+
+# 2. Run Blazor app from your IDE (F5 in Rider/VS)
+# App connects to localhost:5432 automatically
+
+# 3. Stop database when done
+.\stop-dev-db.ps1
+```
+
+See [Local Development Guide](docs/LOCAL_DEVELOPMENT.md) for detailed setup instructions.
+
+**Full Stack in Docker:**
+
+To run everything in Docker (for testing the complete containerized setup):
 
 #### 1. Clone the Repository
 
@@ -61,11 +84,11 @@ POSTGRES_DATA_PATH=./postgres_data
 
 ```powershell
 # Build and start all services (web app + PostgreSQL)
-docker-compose up -d
+docker-compose --profile full up -d
 
 # Check logs to verify successful startup
-docker logs questions-hub-web
-docker logs questions-hub-db
+docker-compose logs web
+docker-compose logs postgres
 ```
 
 #### 4. Access the Application

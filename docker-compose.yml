@@ -1,5 +1,6 @@
 ﻿services:
   web:
+    profiles: ["production", "full"]
     build:
       context: .
       dockerfile: QuestionsHub.Blazor/Dockerfile
@@ -24,12 +25,14 @@
         max-file: "3"
 
   postgres:
+    profiles: ["dev", "production", "full"]
     image: postgres:16-alpine
     container_name: questions-hub-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:-root_dev_password}
       POSTGRES_DB: questionshub
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
     ports:
       - "5432:5432"
     volumes:
@@ -57,12 +60,14 @@
       -c max_connections=20
 
   db-setup:
+    profiles: ["dev", "production", "full"]
     image: postgres:16-alpine
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       PGPASSWORD: ${POSTGRES_ROOT_PASSWORD:-root_dev_password}
+      QUESTIONSHUB_PASSWORD: ${QUESTIONSHUB_PASSWORD:-dev_password_123}
     command: >
       psql -h postgres -U postgres -d questionshub -c "
       DO \$\$
