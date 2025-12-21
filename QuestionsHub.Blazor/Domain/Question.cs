@@ -1,4 +1,4 @@
-﻿namespace QuestionsHub.Blazor.Domain;
+﻿﻿namespace QuestionsHub.Blazor.Domain;
 
 /// <summary>
 /// Represents a single question in the game.
@@ -88,6 +88,9 @@ public class Package
 
     /// <summary>Package description or notes.</summary>
     public string? Description { get; set; }
+
+    /// <summary>Total number of questions in the package.</summary>
+    public int TotalQuestions { get; set; }
 
     // Navigation properties
     public List<Tour> Tours { get; set; } = [];
