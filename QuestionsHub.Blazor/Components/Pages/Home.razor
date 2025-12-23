@@ -22,32 +22,34 @@
             @foreach (var package in _packages)
             {
                 <div class="col">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title">@package.Title</h5>
-                            <p class="card-text text-muted mb-2">
-                                <small>
-                                    <strong>@GetQuestionsCount(package)</strong> запитань
-                                    @if (package.PlayedAt.HasValue)
-                                    {
-                                        <span> · @package.PlayedAt.Value.ToString("MMMM yyyy")</span>
-                                    }
-                                </small>
-                            </p>
-                            @if (!string.IsNullOrEmpty(package.Description))
-                            {
-                                <p class="card-text small">@package.Description</p>
-                            }
-                            @if (package.Editors.Any())
-                            {
-                                <p class="card-text">
-                                    <small class="text-muted">
-                                        <strong>Редактори:</strong> @string.Join(" · ", package.Editors)
+                    <a href="/package/@package.Id" class="text-decoration-none text-reset">
+                        <div class="card h-100 package-card">
+                            <div class="card-body">
+                                <h5 class="card-title">@package.Title</h5>
+                                <p class="card-text text-muted mb-2">
+                                    <small>
+                                        <strong>@GetQuestionsCount(package)</strong> запитань
+                                        @if (package.PlayedAt.HasValue)
+                                        {
+                                            <span> · @package.PlayedAt.Value.ToString("MMMM yyyy")</span>
+                                        }
                                     </small>
                                 </p>
-                            }
+                                @if (!string.IsNullOrEmpty(package.Description))
+                                {
+                                    <p class="card-text small">@package.Description</p>
+                                }
+                                @if (package.Editors.Any())
+                                {
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <strong>Редактори:</strong> @string.Join(" · ", package.Editors)
+                                        </small>
+                                    </p>
+                                }
+                            </div>
                         </div>
-                    </div>
+                    </a>
                 </div>
             }
         </div>

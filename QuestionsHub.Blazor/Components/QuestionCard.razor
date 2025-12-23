@@ -1,0 +1,109 @@
+﻿@using QuestionsHub.Blazor.Domain
+
+<div class="question-card">
+    <div class="question-header">
+        <span class="question-number">Питання @Question.Number</span>
+    </div>
+    
+    @if (!string.IsNullOrEmpty(Question.HandoutText))
+    {
+        <div class="handout">
+            <strong>Роздатковий матеріал:</strong>
+            <div>@Question.HandoutText</div>
+        </div>
+    }
+    
+    @if (!string.IsNullOrEmpty(Question.HandoutUrl))
+    {
+        <div class="handout">
+            <strong>Роздатковий матеріал:</strong>
+            <div>
+                <img src="@Question.HandoutUrl" alt="Handout" class="img-fluid mt-2" style="max-height: 300px;" />
+            </div>
+        </div>
+    }
+    
+    <div class="question-text">
+        @Question.Text
+    </div>
+
+    <div class="answer-toggle-section mt-3">
+        <button class="btn btn-link answer-toggle p-0" @onclick="ToggleAnswer">
+            @if (_showAnswer)
+            {
+                <text>Сховати відповідь</text>
+            }
+            else
+            {
+                <text>Показати відповідь</text>
+            }
+        </button>
+    </div>
+
+    @if (_showAnswer)
+    {
+        <div class="answer-section">
+            <div class="answer-field">
+                <span class="answer-label">Відповідь:</span> @Question.Answer
+            </div>
+
+            @if (!string.IsNullOrEmpty(Question.AcceptedAnswers))
+            {
+                <div class="answer-field">
+                    <span class="answer-label">Залік:</span> @Question.AcceptedAnswers
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Question.RejectedAnswers))
+            {
+                <div class="answer-field">
+                    <span class="answer-label">Незалік:</span> @Question.RejectedAnswers
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Question.Comment))
+            {
+                <div class="answer-field">
+                    <span class="answer-label">Коментар:</span> @Question.Comment
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Question.CommentAttachmentUrl))
+            {
+                <div class="answer-field">
+                    <span class="answer-label">Зображення до коментаря:</span>
+                    <div>
+                        <img src="@Question.CommentAttachmentUrl" alt="Comment attachment" class="img-fluid mt-2" style="max-height: 300px;" />
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Question.Source))
+            {
+                <div class="answer-field">
+                    <span class="answer-label">Джерело:</span> @Question.Source
+                </div>
+            }
+
+            @if (Question.Authors.Any())
+            {
+                <div class="answer-field">
+                    <span class="answer-label">Автор(и):</span> @string.Join(", ", Question.Authors)
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public required Question Question { get; set; }
+
+    private bool _showAnswer;
+
+    private void ToggleAnswer()
+    {
+        _showAnswer = !_showAnswer;
+    }
+}
+

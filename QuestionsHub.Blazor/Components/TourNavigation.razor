@@ -1,0 +1,37 @@
+﻿@using QuestionsHub.Blazor.Domain
+@inject IJSRuntime JSRuntime
+
+<nav class="tour-navigation">
+    <div class="nav-header mb-3">
+        <button type="button" class="nav-link fw-bold" @onclick="@(() => ScrollToElementAsync("top"))">@Package.Title</button>
+    </div>
+    @foreach (var tour in Package.Tours)
+    {
+        var tourElementId = $"tour-{tour.Id}";
+        <div class="tour-group mb-3">
+            <button type="button" class="nav-link tour-link" @onclick="@(() => ScrollToElementAsync(tourElementId))">
+                Тур @tour.Number@(string.IsNullOrEmpty(tour.Title) ? "" : $": {tour.Title}")
+            </button>
+            <div class="question-links">
+                @foreach (var question in tour.Questions)
+                {
+                    var questionElementId = $"question-{question.Id}";
+                    <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                        @question.Number
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</nav>
+
+@code {
+    [Parameter]
+    public required Package Package { get; set; }
+
+    private async Task ScrollToElementAsync(string elementId)
+    {
+        await JSRuntime.InvokeVoidAsync("scrollToElement", elementId);
+    }
+}
+

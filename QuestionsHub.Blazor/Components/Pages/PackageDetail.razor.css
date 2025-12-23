@@ -1,0 +1,39 @@
+﻿/* Two-column layout */
+.package-container {
+    display: flex;
+    gap: 2rem;
+}
+
+.sidebar {
+    flex: 0 0 250px;
+    min-width: 200px;
+}
+
+.main-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Responsive: hide sidebar on mobile */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+}
+
+/* Tour sections */
+.tour-section {
+    margin-bottom: 3rem;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Add padding for anchor links (account for sticky header if any) */
+[id^="tour-"],
+[id^="question-"] {
+    scroll-margin-top: 1rem;
+}
+
