@@ -27,6 +27,16 @@ main {
     color: #333;
 }
 
+.title-link {
+    color: #333;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.title-link:hover {
+    color: #555;
+}
+
 .search-bar {
     flex: 1;
     display: flex;
