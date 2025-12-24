@@ -1,7 +1,13 @@
 # Use Alpine-based images for smaller size (~100MB vs ~200MB)
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS base
-# Install Kerberos libraries required by Npgsql
-RUN apk add --no-cache krb5-libs
+
+# ICU provides cultures like uk-UA; tzdata is often useful too
+# Also install Kerberos libraries required by Npgsql
+RUN apk add --no-cache icu-libs icu-data-full tzdata krb5-libs
+
+# Ensure invariant mode is OFF
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+
 WORKDIR /app
 EXPOSE 8080
 
