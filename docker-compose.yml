@@ -10,6 +10,8 @@
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD:-dev_password_123}
+    volumes:
+      - ${MEDIA_PATH:-./media}:/app/media:ro
     depends_on:
       postgres:
         condition: service_healthy

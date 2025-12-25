@@ -131,6 +131,8 @@ public static class DbSeeder
                 Answer = template.Answer,
                 AcceptedAnswers = template.AcceptedAnswers,
                 Comment = template.Comment,
+                HandoutUrl = template.HandoutUrl,
+                CommentAttachmentUrl = template.CommentAttachmentUrl,
                 Source = "https://uk.wikipedia.org/wiki/Lorem_ipsum",
                 Authors = [editor]
             });
@@ -143,6 +145,34 @@ public static class DbSeeder
     {
         return
         [
+            // Sample question with image handout
+            new("На роздатковому матеріалі ви бачите репродукцію картини. Назвіть художника.",
+                "Пабло Пікассо", "Пікассо", "Це одна з найвідоміших робіт художника.")
+            {
+                HandoutUrl = "/media/handout1.jpg"
+            },
+
+            // Sample question with image in comment
+            new("Це слово походить від грецького 'золотий'. Назвіть це слово.",
+                "Хризантема", null, "На зображенні ви бачите цю квітку.")
+            {
+                CommentAttachmentUrl = "/media/comment1.png"
+            },
+
+            // Sample question with video handout
+            new("У відео фрагменті ви бачите уривок з відомого фільму. Назвіть режисера цього фільму.",
+                "Стенлі Кубрік", "Кубрік", "Це культовий фільм жанру наукової фантастики.")
+            {
+                HandoutUrl = "/media/sample-video.mp4"
+            },
+
+            // Sample question with audio handout
+            new("Прослухайте музичний фрагмент. Назвіть композитора цього твору.",
+                "Людвіг ван Бетховен", "Бетховен", "Це один з найвідоміших творів класичної музики.")
+            {
+                HandoutUrl = "/media/sample-audio.mp3"
+            },
+
             new("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore. Назвіть ІКС.",
                 "Dolor", null, "Lorem ipsum - класичний текст-заповнювач."),
 
@@ -253,5 +283,9 @@ public static class DbSeeder
         ];
     }
 
-    private record QuestionTemplate(string Text, string Answer, string? AcceptedAnswers, string Comment);
+    private record QuestionTemplate(string Text, string Answer, string? AcceptedAnswers, string Comment)
+    {
+        public string? HandoutUrl { get; init; }
+        public string? CommentAttachmentUrl { get; init; }
+    }
 }

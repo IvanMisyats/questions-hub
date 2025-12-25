@@ -74,6 +74,20 @@ jobs:
             # Create data directory inside questions-hub folder
             mkdir -p ~/questions-hub/data/postgres
 
+            # Create media directory for storing question media files
+            mkdir -p ~/questions-hub/media
+
+            # Set secure permissions for media directory
+            # 755 for directory (read + execute for traversal)
+            chmod 755 ~/questions-hub/media
+
+            # Set read-only permissions for media files (644) if any exist
+            if [ -n "$(ls -A ~/questions-hub/media 2>/dev/null)" ]; then
+              find ~/questions-hub/media -type f -exec chmod 644 {} \;
+            fi
+
+            echo "Media directory initialized successfully"
+
             # Create docker network if not exists
             docker network create questions-hub-network 2>/dev/null || true
 
@@ -139,6 +153,7 @@ jobs:
               -e ASPNETCORE_ENVIRONMENT=Production \
               -e ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
               -e "ConnectionStrings__DefaultConnection=Host=questions-hub-db;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}" \
+              -v ~/questions-hub/media:/app/media:ro \
               --memory=512m \
               --memory-swap=768m \
               ghcr.io/${{ env.PROJECT_NAME }}:latest

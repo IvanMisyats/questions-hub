@@ -30,6 +30,21 @@
     border-left: 4px solid #ffc107;
 }
 
+.media-container {
+    margin-top: 0.5rem;
+}
+
+.media-container video,
+.media-container audio {
+    max-width: 100%;
+    margin-top: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.media-container img {
+    border-radius: 0.25rem;
+}
+
 .answer-toggle-section {
     border-top: 1px solid #e0e0e0;
     padding-top: 0.75rem;

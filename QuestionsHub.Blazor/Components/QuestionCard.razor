@@ -1,4 +1,5 @@
 ﻿@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 
 <div class="question-card">
     <div class="question-header">
@@ -17,8 +18,28 @@
     {
         <div class="handout">
             <strong>Роздатковий матеріал:</strong>
-            <div>
-                <img src="@Question.HandoutUrl" alt="Handout" class="img-fluid mt-2" style="max-height: 300px;" />
+            <div class="media-container">
+                @{
+                    var handoutMediaType = MediaSecurityOptions.GetMediaType(Question.HandoutUrl);
+                }
+                @switch (handoutMediaType)
+                {
+                    case MediaType.Image:
+                        <img src="@Question.HandoutUrl" alt="Handout" class="img-fluid mt-2" style="max-height: 300px;" />
+                        break;
+                    case MediaType.Video:
+                        <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
+                            <source src="@Question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.HandoutUrl)" />
+                            Ваш браузер не підтримує відтворення відео.
+                        </video>
+                        break;
+                    case MediaType.Audio:
+                        <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
+                            <source src="@Question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.HandoutUrl)" />
+                            Ваш браузер не підтримує відтворення аудіо.
+                        </audio>
+                        break;
+                }
             </div>
         </div>
     }
@@ -71,9 +92,29 @@
             @if (!string.IsNullOrEmpty(Question.CommentAttachmentUrl))
             {
                 <div class="answer-field">
-                    <span class="answer-label">Зображення до коментаря:</span>
-                    <div>
-                        <img src="@Question.CommentAttachmentUrl" alt="Comment attachment" class="img-fluid mt-2" style="max-height: 300px;" />
+                    <span class="answer-label">Матеріал до коментаря:</span>
+                    <div class="media-container">
+                        @{
+                            var commentMediaType = MediaSecurityOptions.GetMediaType(Question.CommentAttachmentUrl);
+                        }
+                        @switch (commentMediaType)
+                        {
+                            case MediaType.Image:
+                                <img src="@Question.CommentAttachmentUrl" alt="Comment attachment" class="img-fluid mt-2" style="max-height: 300px;" />
+                                break;
+                            case MediaType.Video:
+                                <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
+                                    <source src="@Question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.CommentAttachmentUrl)" />
+                                    Ваш браузер не підтримує відтворення відео.
+                                </video>
+                                break;
+                            case MediaType.Audio:
+                                <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
+                                    <source src="@Question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.CommentAttachmentUrl)" />
+                                    Ваш браузер не підтримує відтворення аудіо.
+                                </audio>
+                                break;
+                        }
                     </div>
                 </div>
             }

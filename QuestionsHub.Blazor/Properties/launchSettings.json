@@ -10,11 +10,31 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "http (reset-db)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5018",
+      "commandLineArgs": "--reset-db",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
       "applicationUrl": "https://localhost:7290;http://localhost:5019",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "https (reset-db)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:7290;http://localhost:5019",
+      "commandLineArgs": "--reset-db",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
