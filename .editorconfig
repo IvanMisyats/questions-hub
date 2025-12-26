@@ -1,0 +1,73 @@
+﻿root = true
+
+# --------------------------
+# Global defaults
+# --------------------------
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Windows scripts should remain CRLF
+[*.{bat,cmd}]
+end_of_line = crlf
+
+# Markdown: trailing spaces may be meaningful
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2
+
+# --------------------------
+# C# / .NET
+# --------------------------
+[*.{cs,csx}]
+indent_size = 4
+
+# Using directives
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = true
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# Namespace style (matches your codebase)
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+# 'var' preferences (pick one style; this matches your current usage)
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# Small consistency wins
+dotnet_style_require_accessibility_modifiers = always:suggestion
+dotnet_style_readonly_field = true:suggestion
+
+# Optional: make IDE analyzers show as warnings (not errors) by default
+dotnet_analyzer_diagnostic.severity = warning
+
+# Generated EF migrations: don't nag
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = silent
+
+# --------------------------
+# Razor / web
+# --------------------------
+[*.razor]
+indent_size = 4
+
+[*.{css,scss}]
+indent_size = 4
+
+# --------------------------
+# Data / config
+# --------------------------
+[*.{json,jsonc,yml,yaml}]
+indent_size = 2
+
+[Dockerfile]
+indent_size = 2
+
+[*.sh]
+end_of_line = lf

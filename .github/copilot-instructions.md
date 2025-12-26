@@ -25,6 +25,7 @@ Refer to README.md for the complete technology stack. The project uses:
 
 ### Code Style and Conventions
 
+- Always write files as **UTF-8 without BOM** (no `EF BB BF` at the start).
 - Follow C# naming conventions and .NET best practices
 - Use async/await patterns for asynchronous operations
 - Maintain consistent code formatting across the project
