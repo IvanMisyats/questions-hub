@@ -68,10 +68,10 @@ jobs:
             set -a
             source ~/.env
             set +a
-            
+
             # Log in to GHCR on the VPS
             echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-          
+
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
@@ -131,13 +131,13 @@ jobs:
 
             # Setup database user and permissions directly (using -c flag to avoid heredoc issues)
             echo "Setting up database user and permissions..."
-            
+
             # Create user if not exists
             docker exec questions-hub-db psql -U postgres -d questionshub -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}'; END IF; END \$\$;"
-            
+
             # Always update password from .env to ensure it's in sync
             docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';"
-            
+
             # Grant privileges to questionshub user
             docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT CONNECT ON DATABASE questionshub TO questionshub;"
             docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT USAGE, CREATE ON SCHEMA public TO questionshub;"
@@ -145,7 +145,7 @@ jobs:
             docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;"
             docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;"
             docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;"
-            
+
             echo "Database user 'questionshub' configured successfully"
 
             # Start web app container
@@ -157,8 +157,8 @@ jobs:
               -e ASPNETCORE_ENVIRONMENT=Production \
               -e ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
               -e "ConnectionStrings__DefaultConnection=Host=questions-hub-db;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}" \
-              -e "ADMIN_EMAIL=${ADMIN_EMAIL}" \
-              -e "ADMIN_PASSWORD=${ADMIN_PASSWORD}" \
+              -e "AdminCredentials__Email=${ADMIN_EMAIL}" \
+              -e "AdminCredentials__Password=${ADMIN_PASSWORD}" \
               -v ~/questions-hub/media:/app/media:ro \
               --memory=512m \
               --memory-swap=768m \
