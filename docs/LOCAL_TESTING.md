@@ -1,4 +1,4 @@
-﻿# Local CI/CD Testing with Act
+﻿﻿# Local CI/CD Testing with Act
 
 This guide explains how to test the GitHub Actions pipeline locally using `act`.
 
@@ -210,11 +210,18 @@ sudo -u github-actions mkdir -p /home/github-actions/questions-hub
 sudo -u github-actions bash -c 'cat > /home/github-actions/questions-hub/.env << EOF
 POSTGRES_ROOT_PASSWORD=your_secure_root_password
 QUESTIONSHUB_PASSWORD=your_secure_app_password
+ADMIN_EMAIL=admin@yourdomain.com
+ADMIN_PASSWORD=YourSecureAdminPassword123!
 EOF'
 
 # Set proper permissions
 sudo chmod 600 /home/github-actions/questions-hub/.env
 ```
+
+**Important**: 
+- Change `ADMIN_EMAIL` and `ADMIN_PASSWORD` to your actual admin credentials
+- Admin password must meet requirements: 8+ chars, digit, uppercase, lowercase, special char
+- These credentials are required for application startup
 
 ### 4. Create Docker Network
 

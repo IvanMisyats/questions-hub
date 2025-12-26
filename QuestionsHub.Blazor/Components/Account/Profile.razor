@@ -1,0 +1,137 @@
+﻿@page "/Account/Profile"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using QuestionsHub.Blazor.Domain
+@attribute [Authorize]
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Мій профіль</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="card-title mb-4">Редагувати профіль</h3>
+
+                    @if (_successMessage != null)
+                    {
+                        <div class="alert alert-success" role="alert">
+                            @_successMessage
+                        </div>
+                    }
+
+                    @if (_errorMessage != null)
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+
+                    @if (_profileModel != null)
+                    {
+                        <EditForm Model="@_profileModel" OnValidSubmit="@HandleUpdateProfile" FormName="ProfileForm">
+                            <DataAnnotationsValidator />
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="firstName" class="form-label">Ім'я</label>
+                                    <InputText id="firstName" @bind-Value="_profileModel.FirstName" class="form-control" disabled />
+                                    <small class="form-text text-muted">Ім'я не можна змінити</small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="lastName" class="form-label">Прізвище</label>
+                                    <InputText id="lastName" @bind-Value="_profileModel.LastName" class="form-control" disabled />
+                                    <small class="form-text text-muted">Прізвище не можна змінити</small>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="city" class="form-label">Місто</label>
+                                    <InputText id="city" @bind-Value="_profileModel.City" class="form-control" />
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="team" class="form-label">Команда</label>
+                                    <InputText id="team" @bind-Value="_profileModel.Team" class="form-control" />
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <InputText id="email" @bind-Value="_profileModel.Email" class="form-control" disabled />
+                                <small class="form-text text-muted">Email не можна змінити</small>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+                                <a href="/" class="btn btn-outline-secondary">Скасувати</a>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ProfileModel? _profileModel;
+    private string? _successMessage;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var appUser = await UserManager.GetUserAsync(user);
+            if (appUser != null)
+            {
+                _profileModel = new ProfileModel
+                {
+                    FirstName = appUser.FirstName,
+                    LastName = appUser.LastName,
+                    City = appUser.City,
+                    Team = appUser.Team,
+                    Email = appUser.Email ?? ""
+                };
+            }
+        }
+    }
+
+    private async Task HandleUpdateProfile()
+    {
+        _successMessage = null;
+        _errorMessage = null;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var appUser = await UserManager.GetUserAsync(user);
+
+        if (appUser != null && _profileModel != null)
+        {
+            appUser.City = _profileModel.City;
+            appUser.Team = _profileModel.Team;
+
+            var result = await UserManager.UpdateAsync(appUser);
+
+            if (result.Succeeded)
+            {
+                _successMessage = "Профіль успішно оновлено!";
+            }
+            else
+            {
+                _errorMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+            }
+        }
+    }
+}
+

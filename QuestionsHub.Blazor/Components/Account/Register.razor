@@ -1,0 +1,219 @@
+﻿@page "/Account/Register"
+@inject NavigationManager NavigationManager
+
+<PageTitle>Реєстрація</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">Реєстрація</h3>
+
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+
+                    <div id="clientValidationError" class="alert alert-danger d-none" role="alert"></div>
+
+                    <form method="post" action="/api/Auth/register" id="registerForm" onsubmit="return validateRegisterForm()">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="firstName" class="form-label">Ім'я *</label>
+                                <input type="text" id="firstName" name="firstName" class="form-control" required maxlength="50" value="@FirstName" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="lastName" class="form-label">Прізвище *</label>
+                                <input type="text" id="lastName" name="lastName" class="form-control" required maxlength="50" value="@LastName" />
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="city" class="form-label">Місто</label>
+                                <input type="text" id="city" name="city" class="form-control" placeholder="Необов'язково" maxlength="100" value="@City" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="team" class="form-label">Команда</label>
+                                <input type="text" id="team" name="team" class="form-control" placeholder="Необов'язково" maxlength="100" value="@Team" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email *</label>
+                            <input type="email" id="email" name="email" class="form-control" required value="@Email" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Пароль *</label>
+                            <input type="password" id="password" name="password" class="form-control" required minlength="8" oninput="validatePasswords()" />
+                            <small class="form-text text-muted">
+                                Мінімум 8 символів, включаючи цифру, велику/малу літеру та спеціальний символ
+                            </small>
+                            <div id="passwordError" class="invalid-feedback"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Підтвердження пароля *</label>
+                            <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" required minlength="8" oninput="validatePasswords()" />
+                            <div id="confirmPasswordError" class="invalid-feedback"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Зареєструватися</button>
+                    </form>
+
+                    <hr class="my-4" />
+
+                    <div class="text-center">
+                        <p>Вже маєте обліковий запис?</p>
+                        <a href="/Account/Login" class="btn btn-outline-secondary w-100">Увійти</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function validatePasswords() {
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirmPassword');
+        const confirmError = document.getElementById('confirmPasswordError');
+        const passwordError = document.getElementById('passwordError');
+
+        let isValid = true;
+
+        // Validate password strength
+        const pwd = password.value;
+        if (pwd.length > 0) {
+            const errors = [];
+            if (pwd.length < 8) errors.push('мінімум 8 символів');
+            if (!/[0-9]/.test(pwd)) errors.push('цифру');
+            if (!/[a-z]/.test(pwd)) errors.push('малу літеру');
+            if (!/[A-Z]/.test(pwd)) errors.push('велику літеру');
+            if (!/[^a-zA-Z0-9]/.test(pwd)) errors.push('спеціальний символ');
+
+            if (errors.length > 0) {
+                password.classList.add('is-invalid');
+                password.classList.remove('is-valid');
+                passwordError.textContent = 'Пароль повинен містити: ' + errors.join(', ');
+                passwordError.style.display = 'block';
+                isValid = false;
+            } else {
+                password.classList.remove('is-invalid');
+                password.classList.add('is-valid');
+                passwordError.style.display = 'none';
+            }
+        }
+
+        // Validate password confirmation
+        if (confirmPassword.value.length > 0) {
+            if (password.value !== confirmPassword.value) {
+                confirmPassword.classList.add('is-invalid');
+                confirmPassword.classList.remove('is-valid');
+                confirmError.textContent = 'Паролі не співпадають';
+                confirmError.style.display = 'block';
+                isValid = false;
+            } else {
+                confirmPassword.classList.remove('is-invalid');
+                confirmPassword.classList.add('is-valid');
+                confirmError.style.display = 'none';
+            }
+        }
+
+        return isValid;
+    }
+
+    function validateRegisterForm() {
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirmPassword');
+        const clientError = document.getElementById('clientValidationError');
+
+        // Check password match
+        if (password.value !== confirmPassword.value) {
+            clientError.textContent = 'Паролі не співпадають';
+            clientError.classList.remove('d-none');
+            confirmPassword.classList.add('is-invalid');
+            confirmPassword.focus();
+            return false;
+        }
+
+        // Check password strength
+        const pwd = password.value;
+        const errors = [];
+        if (pwd.length < 8) errors.push('мінімум 8 символів');
+        if (!/[0-9]/.test(pwd)) errors.push('цифру');
+        if (!/[a-z]/.test(pwd)) errors.push('малу літеру');
+        if (!/[A-Z]/.test(pwd)) errors.push('велику літеру');
+        if (!/[^a-zA-Z0-9]/.test(pwd)) errors.push('спеціальний символ');
+
+        if (errors.length > 0) {
+            clientError.textContent = 'Пароль повинен містити: ' + errors.join(', ');
+            clientError.classList.remove('d-none');
+            password.classList.add('is-invalid');
+            password.focus();
+            return false;
+        }
+
+        clientError.classList.add('d-none');
+        return true;
+    }
+</script>
+
+@code {
+    private string? _errorMessage;
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "firstName")]
+    public string? FirstName { get; set; }
+
+    [SupplyParameterFromQuery(Name = "lastName")]
+    public string? LastName { get; set; }
+
+    [SupplyParameterFromQuery(Name = "city")]
+    public string? City { get; set; }
+
+    [SupplyParameterFromQuery(Name = "team")]
+    public string? Team { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? Email { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrEmpty(Error))
+        {
+            _errorMessage = ParseErrors(Error);
+        }
+    }
+
+    private string ParseErrors(string errorCodes)
+    {
+        var errors = errorCodes.Split(',');
+        var messages = errors.Select(code => code switch
+        {
+            "DuplicateUserName" => "Користувач з таким email вже існує.",
+            "DuplicateEmail" => "Користувач з таким email вже існує.",
+            "PasswordTooShort" => "Пароль занадто короткий.",
+            "PasswordRequiresDigit" => "Пароль повинен містити цифру.",
+            "PasswordRequiresLower" => "Пароль повинен містити малу літеру.",
+            "PasswordRequiresUpper" => "Пароль повинен містити велику літеру.",
+            "PasswordRequiresNonAlphanumeric" => "Пароль повинен містити спеціальний символ.",
+            "PasswordMismatch" => "Паролі не співпадають.",
+            "FirstNameRequired" => "Ім'я обов'язкове.",
+            "LastNameRequired" => "Прізвище обов'язкове.",
+            "EmailRequired" => "Email обов'язковий.",
+            "PasswordRequired" => "Пароль обов'язковий.",
+            _ => $"Помилка: {code}"
+        }).Distinct(); // Remove duplicate messages
+        return string.Join(" ", messages);
+    }
+}
+

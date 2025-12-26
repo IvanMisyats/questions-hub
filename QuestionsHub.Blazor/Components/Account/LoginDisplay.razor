@@ -1,0 +1,53 @@
+﻿@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<AuthorizeView>
+    <Authorized>
+        <div class="dropdown">
+            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                @_userName
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+                <li><a class="dropdown-item" href="/Account/Profile">Мій профіль</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <form method="post" action="/api/Auth/logout">
+                        <button type="submit" class="dropdown-item">Вийти</button>
+                    </form>
+                </li>
+            </ul>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <a href="/Account/Login" class="btn btn-primary me-2">Увійти</a>
+        <a href="/Account/Register" class="btn btn-outline-primary">Реєстрація</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string _userName = "Користувач";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            // Get name from claims to avoid database query (prevents DbContext concurrency issues)
+            var firstName = user.FindFirst("FirstName")?.Value;
+            var lastName = user.FindFirst("LastName")?.Value;
+
+            if (!string.IsNullOrEmpty(firstName) || !string.IsNullOrEmpty(lastName))
+            {
+                _userName = $"{firstName} {lastName}".Trim();
+            }
+            else
+            {
+                // Fallback to email if claims not set
+                _userName = user.Identity.Name ?? "Користувач";
+            }
+        }
+    }
+}
+

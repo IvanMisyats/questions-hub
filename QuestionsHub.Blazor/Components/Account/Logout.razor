@@ -1,0 +1,11 @@
+﻿@page "/Account/Logout"
+@inject NavigationManager NavigationManager
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Redirect to the logout API endpoint which will clear cookies and redirect to home
+        NavigationManager.NavigateTo("/api/Auth/logout", forceLoad: true);
+    }
+}
+

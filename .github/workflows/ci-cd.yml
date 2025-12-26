@@ -60,7 +60,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             # Load environment variables from .env file
-            # Note: ~/.env file must be pre-created on VPS with POSTGRES_ROOT_PASSWORD and QUESTIONSHUB_PASSWORD
+            # Note: ~/.env file must be pre-created on VPS with:
+            #   - POSTGRES_ROOT_PASSWORD
+            #   - QUESTIONSHUB_PASSWORD
+            #   - ADMIN_EMAIL
+            #   - ADMIN_PASSWORD
             set -a
             source ~/.env
             set +a
@@ -153,6 +157,8 @@ jobs:
               -e ASPNETCORE_ENVIRONMENT=Production \
               -e ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
               -e "ConnectionStrings__DefaultConnection=Host=questions-hub-db;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}" \
+              -e "ADMIN_EMAIL=${ADMIN_EMAIL}" \
+              -e "ADMIN_PASSWORD=${ADMIN_PASSWORD}" \
               -v ~/questions-hub/media:/app/media:ro \
               --memory=512m \
               --memory-swap=768m \

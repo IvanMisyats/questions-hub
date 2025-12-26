@@ -9,7 +9,9 @@
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD:-dev_password_123}
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
+      - AdminCredentials__Email=${ADMIN_EMAIL}
+      - AdminCredentials__Password=${ADMIN_PASSWORD}
     volumes:
       - ${MEDIA_PATH:-./media}:/app/media:ro
     depends_on:
@@ -32,7 +34,7 @@
     container_name: questions-hub-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:-root_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
       POSTGRES_DB: questionshub
       POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
     ports:
@@ -68,14 +70,14 @@
       postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: ${POSTGRES_ROOT_PASSWORD:-root_dev_password}
-      QUESTIONSHUB_PASSWORD: ${QUESTIONSHUB_PASSWORD:-dev_password_123}
+      PGPASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      QUESTIONSHUB_PASSWORD: ${QUESTIONSHUB_PASSWORD}
     command: >
       psql -h postgres -U postgres -d questionshub -c "
       DO \$\$
       BEGIN
         IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
-          CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD:-dev_password_123}';
+          CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';
         END IF;
       END \$\$;
       GRANT CONNECT ON DATABASE questionshub TO questionshub;

@@ -1,9 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Data;
 
-public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> options) : DbContext(options)
+public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> options) 
+    : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<Package> Packages => Set<Package>();
     public DbSet<Tour> Tours => Set<Tour>();
