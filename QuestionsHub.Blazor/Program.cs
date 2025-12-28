@@ -72,6 +72,7 @@ builder.Services.AddCascadingAuthenticationState();
 var app = builder.Build();
 
 // Handle database reset in development mode (via --reset-db argument)
+#pragma warning disable CA1848 // Use LoggerMessage delegates - startup logging runs once, performance is not critical
 if (app.Environment.IsDevelopment() && args.Contains("--reset-db"))
 {
     using var scope = app.Services.CreateScope();
@@ -110,6 +111,7 @@ if (app.Environment.IsDevelopment() && args.Contains("--reset-db"))
         app.Logger.LogInformation("All tables and sequences dropped successfully.");
     }
 }
+#pragma warning restore CA1848
 
 // Apply migrations and seed the database
 using (var scope = app.Services.CreateScope())

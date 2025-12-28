@@ -101,12 +101,12 @@ public static class DbSeeder
             .ThenInclude(t => t.Questions)
             .ToListAsync();
 
-        if (existingPackages.Any())
+        if (existingPackages.Count > 0)
         {
             // Check if any packages have tours without questions
             var needsQuestionSeeding = existingPackages
                 .SelectMany(p => p.Tours)
-                .Any(t => !t.Questions.Any());
+                .Any(t => t.Questions.Count == 0);
 
             if (needsQuestionSeeding)
             {
@@ -115,7 +115,7 @@ public static class DbSeeder
 
             // Update any packages without an owner (migration scenario)
             var packagesWithoutOwner = existingPackages.Where(p => p.OwnerId == null).ToList();
-            if (packagesWithoutOwner.Any())
+            if (packagesWithoutOwner.Count > 0)
             {
                 foreach (var package in packagesWithoutOwner)
                 {
@@ -139,7 +139,7 @@ public static class DbSeeder
     {
         foreach (var package in packages)
         {
-            foreach (var tour in package.Tours.Where(t => !t.Questions.Any()))
+            foreach (var tour in package.Tours.Where(t => t.Questions.Count == 0))
             {
                 var tourNumber = int.TryParse(tour.Number, out var num) ? num : 1;
                 var questions = GenerateQuestionsForTour(tourNumber, tour.Editors.FirstOrDefault() ?? "Редактор");

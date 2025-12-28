@@ -102,7 +102,7 @@ public class AuthController : ControllerBase
         return Redirect(BuildErrorRedirect(errors, firstName, lastName, city, team, email));
     }
 
-    private string BuildErrorRedirect(string errorCode, string? firstName, string? lastName, string? city, string? team, string? email)
+    private static string BuildErrorRedirect(string errorCode, string? firstName, string? lastName, string? city, string? team, string? email)
     {
         var queryParams = new List<string>
         {

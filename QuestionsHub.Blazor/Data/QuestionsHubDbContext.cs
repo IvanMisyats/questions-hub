@@ -11,11 +11,11 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<Tour> Tours => Set<Tour>();
     public DbSet<Question> Questions => Set<Question>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
-        base.OnModelCreating(modelBuilder);
+        base.OnModelCreating(builder);
 
-        modelBuilder.Entity<Package>(entity =>
+        builder.Entity<Package>(entity =>
         {
             entity.HasKey(p => p.Id);
             entity.Property(p => p.Title).IsRequired().HasMaxLength(500);
@@ -33,7 +33,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<Tour>(entity =>
+        builder.Entity<Tour>(entity =>
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Number).IsRequired().HasMaxLength(50);
@@ -46,7 +46,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<Question>(entity =>
+        builder.Entity<Question>(entity =>
         {
             entity.HasKey(q => q.Id);
             entity.Property(q => q.Number).IsRequired().HasMaxLength(20);
