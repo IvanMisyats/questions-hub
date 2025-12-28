@@ -60,6 +60,7 @@
     protected override async Task OnInitializedAsync()
     {
         _packages = await DbContext.Packages
+            .Where(p => p.Status == PackageStatus.Published)
             .Include(p => p.Tours)
             .ThenInclude(t => t.Questions)
             .OrderByDescending(p => p.PlayedAt)
