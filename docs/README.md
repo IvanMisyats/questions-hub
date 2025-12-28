@@ -4,6 +4,14 @@ This folder contains documentation for the Questions Hub project.
 
 ## Files
 
+### [SITE_SPECIFICATION.md](SITE_SPECIFICATION.md)
+Complete site specification and feature list:
+- Purpose and overview of the project
+- Domain model (Package, Tour, Question, User)
+- All implemented features with details
+- Future features (planned but not implemented)
+- Quick reference for what works and what doesn't
+
 ### [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)
 Guide for setting up local development environment:
 - Running the app locally with Docker Compose
