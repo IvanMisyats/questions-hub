@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using QuestionsHub.Blazor.Domain;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Controllers;
 
 /// <summary>
 /// Handles authentication actions that require HTTP context (cookies).

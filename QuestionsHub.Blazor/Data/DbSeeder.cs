@@ -19,10 +19,10 @@ public static class DbSeeder
         await SeedRolesAsync(roleManager);
 
         // Then, seed admin user
-        await SeedAdminUserAsync(userManager, configuration);
+        var adminUserId = await SeedAdminUserAsync(userManager, configuration);
 
         // Finally, seed questions if needed
-        await SeedQuestionsAsync(context);
+        await SeedQuestionsAsync(context, adminUserId);
     }
 
     /// <summary>
@@ -44,8 +44,9 @@ public static class DbSeeder
     /// <summary>
     /// Seeds the initial admin user from configuration.
     /// Fails if AdminCredentials are not set.
+    /// Returns the admin user ID.
     /// </summary>
-    private static async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager, IConfiguration configuration)
+    private static async Task<string> SeedAdminUserAsync(UserManager<ApplicationUser> userManager, IConfiguration configuration)
     {
         var adminEmail = configuration["AdminCredentials:Email"];
         var adminPassword = configuration["AdminCredentials:Password"];
@@ -62,7 +63,7 @@ public static class DbSeeder
         var existingAdmin = await userManager.FindByEmailAsync(adminEmail);
         if (existingAdmin != null)
         {
-            return; // Admin already exists
+            return existingAdmin.Id; // Admin already exists
         }
 
         // Create admin user
@@ -85,12 +86,14 @@ public static class DbSeeder
 
         // Assign Admin role
         await userManager.AddToRoleAsync(adminUser, "Admin");
+
+        return adminUser.Id;
     }
 
     /// <summary>
     /// Seeds sample questions and packages if database is empty.
     /// </summary>
-    private static async Task SeedQuestionsAsync(QuestionsHubDbContext context)
+    private static async Task SeedQuestionsAsync(QuestionsHubDbContext context, string ownerId)
     {
         // Check if we need to seed questions for existing packages (handles case where packages were added without questions)
         var existingPackages = await context.Packages
@@ -109,11 +112,24 @@ public static class DbSeeder
             {
                 await SeedQuestionsForExistingToursAsync(context, existingPackages);
             }
+
+            // Update any packages without an owner (migration scenario)
+            var packagesWithoutOwner = existingPackages.Where(p => p.OwnerId == null).ToList();
+            if (packagesWithoutOwner.Any())
+            {
+                foreach (var package in packagesWithoutOwner)
+                {
+                    package.OwnerId = ownerId;
+                    package.Status = PackageStatus.Published; // Existing packages should be published
+                }
+                await context.SaveChangesAsync();
+            }
+
             return;
         }
 
         // Full seed - no packages exist
-        var packages = CreatePackages();
+        var packages = CreatePackages(ownerId);
 
         context.Packages.AddRange(packages);
         await context.SaveChangesAsync();
@@ -137,7 +153,7 @@ public static class DbSeeder
         await context.SaveChangesAsync();
     }
 
-    private static List<Package> CreatePackages()
+    private static List<Package> CreatePackages(string ownerId)
     {
         return
         [
@@ -148,7 +164,9 @@ public static class DbSeeder
                 PlayedAt = new DateOnly(2025, 3, 15),
                 Description = "Весняний синхронний турнір для команд різного рівня підготовки.",
                 Tours = CreateToursForPackage(["Іван Петренко", "Марія Коваленко", "Олексій Шевченко"]),
-                TotalQuestions = 36
+                TotalQuestions = 36,
+                OwnerId = ownerId,
+                Status = PackageStatus.Published
             },
             new Package
             {
@@ -157,7 +175,9 @@ public static class DbSeeder
                 PlayedAt = new DateOnly(2024, 11, 20),
                 Description = "Офіційний чемпіонат України серед команд Що?Де?Коли?",
                 Tours = CreateToursForPackage(["Андрій Мельник", "Катерина Бондаренко", "Сергій Литвиненко"]),
-                TotalQuestions = 36
+                TotalQuestions = 36,
+                OwnerId = ownerId,
+                Status = PackageStatus.Published
             },
             new Package
             {
@@ -166,7 +186,9 @@ public static class DbSeeder
                 PlayedAt = new DateOnly(2024, 10, 5),
                 Description = "Традиційний осінній турнір у Львові для команд західного регіону.",
                 Tours = CreateToursForPackage(["Олена Ткаченко", "Василь Гончаренко", "Наталія Кравчук"]),
-                TotalQuestions = 36
+                TotalQuestions = 36,
+                OwnerId = ownerId,
+                Status = PackageStatus.Published
             }
         ];
     }
@@ -211,6 +233,7 @@ public static class DbSeeder
 
             questions.Add(new Question
             {
+                OrderIndex = i - 1, // 0-based index
                 Number = i.ToString(),
                 Text = template.Text,
                 Answer = template.Answer,

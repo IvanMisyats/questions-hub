@@ -4,7 +4,7 @@ using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Data;
 
-public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> options) 
+public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> options)
     : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<Package> Packages => Set<Package>();
@@ -20,6 +20,12 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasKey(p => p.Id);
             entity.Property(p => p.Title).IsRequired().HasMaxLength(500);
             entity.Property(p => p.Description).HasMaxLength(2000);
+            entity.Property(p => p.Status).HasDefaultValue(PackageStatus.Draft);
+
+            entity.HasOne(p => p.Owner)
+                .WithMany()
+                .HasForeignKey(p => p.OwnerId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasMany(p => p.Tours)
                 .WithOne(t => t.Package)

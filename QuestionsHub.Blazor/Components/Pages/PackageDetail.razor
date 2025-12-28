@@ -1,6 +1,7 @@
 ﻿@page "/package/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
 @inject QuestionsHubDbContext DbContext
@@ -12,7 +13,7 @@
     <div class="container mt-4">
         <div class="alert alert-warning">
             <h4>Пакет не знайдено</h4>
-            <p>Пакет з ідентифікатором @Id не існує.</p>
+            <p>Пакет з ідентифікатором @Id не існує або недоступний.</p>
             <a href="/" class="btn btn-primary">Повернутися на головну</a>
         </div>
     </div>
@@ -36,19 +37,19 @@ else
             <div class="col-md-9 col-lg-10 main-content">
                 <div id="top">
                     <h1>@_package.Title</h1>
-                    
+
                     @if (!string.IsNullOrEmpty(_package.Description))
                     {
                         <p class="lead">@_package.Description</p>
                     }
-                    
+
                     @if (_package.Editors.Any())
                     {
                         <p class="text-muted">
                             <strong>Редактори пакету:</strong> @string.Join(", ", _package.Editors)
                         </p>
                     }
-                    
+
                     @if (_package.PlayedAt.HasValue)
                     {
                         <p class="text-muted">
@@ -69,14 +70,14 @@ else
                                 <span>: @tour.Title</span>
                             }
                         </h2>
-                        
+
                         @if (tour.Editors.Any())
                         {
                             <p class="text-muted">
                                 <small><strong>Редактори туру:</strong> @string.Join(", ", tour.Editors)</small>
                             </p>
                         }
-                        
+
                         @if (!string.IsNullOrEmpty(tour.Comment))
                         {
                             <p class="text-muted small">@tour.Comment</p>
@@ -102,6 +103,9 @@ else
     private Package? _package;
     private bool _notFound;
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         _package = await DbContext.Packages
@@ -113,23 +117,59 @@ else
         if (_package == null)
         {
             _notFound = true;
+            return;
         }
-        else
+
+        // Check visibility based on package status
+        var canView = await CanViewPackageAsync(_package);
+        if (!canView)
         {
-            // Sort tours and questions in memory using numeric sorting
-            _package.Tours = _package.Tours
-                .OrderBy(t => int.TryParse(t.Number, out var num) ? num : int.MaxValue)
-                .ThenBy(t => t.Number)
-                .ToList();
-            
-            foreach (var tour in _package.Tours)
-            {
-                tour.Questions = tour.Questions
-                    .OrderBy(q => int.TryParse(q.Number, out var num) ? num : int.MaxValue)
-                    .ThenBy(q => q.Number)
-                    .ToList();
-            }
+            _package = null;
+            _notFound = true;
+            return;
         }
+
+        // Sort tours by Number and questions by OrderIndex
+        _package.Tours = _package.Tours
+            .OrderBy(t => int.TryParse(t.Number, out var num) ? num : int.MaxValue)
+            .ThenBy(t => t.Number)
+            .ToList();
+
+        foreach (var tour in _package.Tours)
+        {
+            tour.Questions = tour.Questions
+                .OrderBy(q => q.OrderIndex)
+                .ToList();
+        }
+    }
+
+    private async Task<bool> CanViewPackageAsync(Package package)
+    {
+        // Published packages are visible to everyone
+        if (package.Status == PackageStatus.Published)
+            return true;
+
+        // Archived packages are accessible via direct link
+        if (package.Status == PackageStatus.Archived)
+            return true;
+
+        // Draft packages require authentication
+        if (AuthenticationState == null)
+            return false;
+
+        var authState = await AuthenticationState;
+        var user = authState.User;
+
+        if (!user.Identity?.IsAuthenticated ?? true)
+            return false;
+
+        // Admins can see all packages
+        if (user.IsInRole("Admin"))
+            return true;
+
+        // Owners can see their own draft packages
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return package.OwnerId == userId;
     }
 }
 

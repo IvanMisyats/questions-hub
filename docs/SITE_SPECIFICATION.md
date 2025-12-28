@@ -35,8 +35,12 @@
 ### Core Entities
 
 - **Package (Пакет запитань)** - A collection of questions prepared for a tournament
+  - Has owner (User who created it)
+  - Has status: Draft, Published, or Archived
 - **Tour (Тур)** - A round within a package, typically prepared by a specific editor
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
+  - Has OrderIndex for physical ordering within tour
+  - Has Number for display (can be non-numeric, e.g., "F" for hexadecimal)
 - **User (Користувач)** - Application user with profile information
 
 ---
@@ -93,10 +97,10 @@ Responsive design with sidebar and main content area. Fixed header with site tit
 
 | Role | Description |
 |------|-------------|
-| Anonymous | View public packages |
-| User | View all packages, edit own profile (default for new users) |
-| Editor | Create/edit packages (planned) |
-| Admin | Manage users, full access |
+| Anonymous | View published packages |
+| User | View all published packages, edit own profile (default for new users) |
+| Editor | Create/edit own packages, view own draft packages |
+| Admin | Manage all packages regardless of owner, full access |
 
 ### 7. Media Support
 
@@ -105,6 +109,45 @@ Supports images (.jpg, .jpeg, .png, .gif, .webp, .svg), videos (.mp4, .webm, .og
 ### 8. Database Seeding
 
 On startup: creates roles (Admin, Editor, User), creates admin user from environment variables, seeds sample packages if database is empty.
+
+### 9. Package Management (CRUD)
+
+**Authorization**: Requires Editor or Admin role
+
+#### 9.1 Package List (Мої пакети)
+**Route**: `/manage/packages`
+
+Displays list of packages owned by the current user (Editors see only their own; Admins see all). Shows package title, play date, tour count, question count, status, and owner (for Admins). Actions: create new, edit, delete with confirmation.
+
+#### 9.2 Package Editor (Редагування пакету)
+**Route**: `/manage/package/{id}`
+
+Single-page editor for complete package management:
+
+**Package Properties**:
+- Title, description, editors list, play date, status (Draft/Published/Archived)
+- Auto-save on field blur
+
+**Tours Management**:
+- Collapsible accordion showing all tours
+- Inline editing of tour number, title, editors
+- Add/delete tours with confirmation
+
+**Questions Management**:
+- List of questions within each tour, ordered by OrderIndex
+- Add/delete questions with confirmation
+- Question count auto-calculated
+
+**Question Editor Modal**:
+- Full question editing: number, text, answer, accepted/rejected answers, comment, source, authors
+- Prev/Next navigation buttons (including cross-tour navigation)
+- Auto-save on field blur
+- Handout text field (media upload not yet implemented)
+
+**Package Status**:
+- **Draft** - Only visible to owner and admins
+- **Published** - Visible to all users
+- **Archived** - Hidden from main list, accessible via direct link
 
 ---
 
@@ -121,8 +164,11 @@ On startup: creates roles (Admin, Editor, User), creates admin user from environ
 ### Search Functionality
 UI placeholder exists, not implemented. Will include full-text search across questions, packages, and authors with filters.
 
-### Package Management (CRUD)
-Not implemented. Editors will be able to create, edit, and delete packages. Access control for package visibility (private, by link, registered users, public).
+### Media Upload
+Not implemented. Editors will be able to upload images, audio, and video for question handouts and comments.
+
+### Package Reordering
+Not implemented. Drag-and-drop or button-based reordering of tours within packages and questions within tours.
 
 ### Author/Editor Search
 Not implemented. Search for packages by author, author profile pages, editor statistics.
@@ -151,23 +197,47 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 ├── Components/
 │   ├── Account/           # Authentication pages (Login, Register, Profile, etc.)
 │   ├── Layout/            # Layout components (MainLayout, NavMenu)
-│   ├── Pages/             # Main pages (Home, PackageDetail, Error)
+│   ├── Pages/             # Main pages (Home, PackageDetail, ManagePackages, etc.)
 │   ├── QuestionCard.razor # Question display component
 │   └── TourNavigation.razor # Tour sidebar navigation
+├── Controllers/           # API controllers
+│   ├── AuthController.cs  # Authentication endpoints
+│   ├── PackageManagementController.cs # Package CRUD API
+│   └── Dto/               # Data transfer objects
 ├── Data/                  # Database context, seeding, migrations
 ├── Domain/                # Domain models (User, Package, Tour, Question)
-└── Infrastructure/        # Auth API, utilities
+└── Infrastructure/        # Utilities and helpers
 ```
 
 ---
 
 ## API Endpoints
 
+### Authentication API
+
 | Method | Route | Description |
 |--------|-------|-------------|
 | POST | `/api/Auth/login` | User login |
 | POST | `/api/Auth/register` | User registration |
 | POST/GET | `/api/Auth/logout` | User logout |
+
+### Package Management API
+
+**Authorization**: All endpoints require Editor or Admin role
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/manage/packages` | List packages (filtered by owner for Editors) |
+| GET | `/api/manage/packages/{id}` | Get package with tours and questions |
+| POST | `/api/manage/packages` | Create new package |
+| PUT | `/api/manage/packages/{id}` | Update package properties |
+| DELETE | `/api/manage/packages/{id}` | Delete package |
+| POST | `/api/manage/packages/{id}/tours` | Add tour to package |
+| PUT | `/api/manage/tours/{id}` | Update tour |
+| DELETE | `/api/manage/tours/{id}` | Delete tour |
+| POST | `/api/manage/tours/{id}/questions` | Add question to tour |
+| PUT | `/api/manage/questions/{id}` | Update question |
+| DELETE | `/api/manage/questions/{id}` | Delete question |
 
 ---
 
@@ -184,8 +254,12 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | User login/logout | ✅ Working |
 | User profile view/edit | ✅ Working |
 | Role-based authorization | ✅ Working |
+| Create/edit/delete packages | ✅ Working |
+| Create/edit/delete tours | ✅ Working |
+| Create/edit/delete questions | ✅ Working |
+| Package ownership & status | ✅ Working |
 | Search | ⏳ UI only, not functional |
-| Create/edit packages | ❌ Not implemented |
+| Media upload | ❌ Not implemented |
 | Admin user management | ❌ Not implemented |
 | Interactive play mode | ❌ Not implemented |
 | Comments/ratings | ❌ Not implemented |

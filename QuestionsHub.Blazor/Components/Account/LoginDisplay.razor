@@ -9,6 +9,11 @@
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
                 <li><a class="dropdown-item" href="/Account/Profile">Мій профіль</a></li>
+                <AuthorizeView Roles="Editor,Admin" Context="roleContext">
+                    <Authorized>
+                        <li><a class="dropdown-item" href="/manage/packages">Мої пакети</a></li>
+                    </Authorized>
+                </AuthorizeView>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                     <form method="post" action="/api/Auth/logout">

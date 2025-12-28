@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuestionsHub.Blazor.Data;
@@ -12,9 +13,11 @@ using QuestionsHub.Blazor.Data;
 namespace QuestionsHub.Blazor.Data.Migrations
 {
     [DbContext(typeof(QuestionsHubDbContext))]
-    partial class QuestionsHubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251228190449_AddPackageOwnershipAndStatus")]
+    partial class AddPackageOwnershipAndStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -314,9 +317,6 @@ namespace QuestionsHub.Blazor.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("integer");
 
                     b.Property<string>("RejectedAnswers")
                         .HasMaxLength(1000)

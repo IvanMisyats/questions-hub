@@ -24,6 +24,10 @@ builder.Services.AddLocalization();
 builder.Services.AddDbContext<QuestionsHubDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Add DbContextFactory for Blazor Server components (avoids DbContext concurrency issues)
+builder.Services.AddDbContextFactory<QuestionsHubDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")), ServiceLifetime.Scoped);
+
 // Configure ASP.NET Core Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {

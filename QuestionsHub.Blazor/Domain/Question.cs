@@ -1,4 +1,4 @@
-﻿﻿namespace QuestionsHub.Blazor.Domain;
+﻿namespace QuestionsHub.Blazor.Domain;
 
 /// <summary>
 /// Represents a single question in the game.
@@ -7,7 +7,10 @@ public class Question
 {
     public int Id { get; set; }
 
-    /// <summary>Question number within the tour (e.g., "1", "2", or "0" for warm-up).</summary>
+    /// <summary>Physical order of the question within the tour (0-based).</summary>
+    public int OrderIndex { get; set; }
+
+    /// <summary>Question number for display (e.g., "1", "2", "F" for hexadecimal, "0" for warm-up).</summary>
     public required string Number { get; set; }
 
     /// <summary>The main question text.</summary>
@@ -91,6 +94,15 @@ public class Package
 
     /// <summary>Total number of questions in the package.</summary>
     public int TotalQuestions { get; set; }
+
+    /// <summary>Package visibility status.</summary>
+    public PackageStatus Status { get; set; } = PackageStatus.Draft;
+
+    /// <summary>The ID of the user who owns this package.</summary>
+    public string? OwnerId { get; set; }
+
+    /// <summary>The user who owns this package.</summary>
+    public ApplicationUser? Owner { get; set; }
 
     // Navigation properties
     public List<Tour> Tours { get; set; } = [];

@@ -1,0 +1,308 @@
+﻿@page "/manage/packages"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using QuestionsHub.Blazor.Controllers.Dto
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+@attribute [Authorize(Roles = "Editor,Admin")]
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject NavigationManager Navigation
+
+<PageTitle>Мої пакети - QuestionsHub</PageTitle>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Мої пакети</h1>
+        <button class="btn btn-success" @onclick="CreateNewPackage">
+            <i class="bi bi-plus-lg me-2"></i>Створити пакет
+        </button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+        </div>
+    }
+    else if (_packages == null || _packages.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">
+            <i class="bi bi-info-circle me-2"></i>У вас ще немає пакетів. Натисніть "Створити пакет", щоб почати.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Назва</th>
+                        <th>Дата проведення</th>
+                        <th>Турів</th>
+                        <th>Питань</th>
+                        <th>Статус</th>
+                        @if (_isAdmin)
+                        {
+                            <th>Власник</th>
+                        }
+                        <th class="text-end">Дії</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var package in _packages)
+                    {
+                        <tr>
+                            <td>
+                                <a href="/manage/package/@package.Id" class="text-decoration-none fw-medium">
+                                    @package.Title
+                                </a>
+                            </td>
+                            <td>@(package.PlayedAt?.ToString("dd.MM.yyyy") ?? "—")</td>
+                            <td>@package.TourCount</td>
+                            <td>@package.QuestionCount</td>
+                            <td>
+                                <span class="badge @GetStatusBadgeClass(package.Status)">
+                                    @GetStatusDisplayName(package.Status)
+                                </span>
+                            </td>
+                            @if (_isAdmin)
+                            {
+                                <td>@(package.OwnerName ?? "—")</td>
+                            }
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="/manage/package/@package.Id" class="btn btn-outline-primary" title="Редагувати">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <button class="btn btn-outline-danger" @onclick="() => ConfirmDelete(package)" title="Видалити">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (_showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Підтвердження видалення</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Ви впевнені, що хочете видалити пакет <strong>"@_packageToDelete?.Title"</strong>?</p>
+                    <p class="text-danger mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Ця дія незворотня. Всі тури та питання пакету будуть видалені.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeletePackage" disabled="@_isDeleting">
+                        @if (_isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        Видалити
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PackageListItemDto>? _packages;
+    private bool _isLoading = true;
+    private bool _isAdmin;
+    private string? _userId;
+    private string? _errorMessage;
+
+    // Delete modal state
+    private bool _showDeleteModal;
+    private PackageListItemDto? _packageToDelete;
+    private bool _isDeleting;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckUserAsync();
+        await LoadPackagesAsync();
+    }
+
+    private async Task CheckUserAsync()
+    {
+        if (AuthenticationState != null)
+        {
+            var authState = await AuthenticationState;
+            _isAdmin = authState.User.IsInRole("Admin");
+            _userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+    }
+
+    private async Task LoadPackagesAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var query = context.Packages
+                .Include(p => p.Owner)
+                .Include(p => p.Tours)
+                .AsQueryable();
+
+            if (!_isAdmin)
+            {
+                query = query.Where(p => p.OwnerId == _userId);
+            }
+
+            _packages = await query
+                .OrderByDescending(p => p.PlayedAt)
+                .ThenBy(p => p.Title)
+                .Select(p => new PackageListItemDto(
+                    p.Id,
+                    p.Title,
+                    p.PlayedAt,
+                    p.Tours.Count,
+                    p.TotalQuestions,
+                    p.Status,
+                    p.Owner != null ? p.Owner.FirstName + " " + p.Owner.LastName : null
+                ))
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Помилка завантаження: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateNewPackage()
+    {
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var newPackage = new Package
+            {
+                Title = "Новий пакет",
+                Description = null,
+                Editors = new List<string>(),
+                PlayedAt = null,
+                Status = PackageStatus.Draft,
+                OwnerId = _userId,
+                TotalQuestions = 0
+            };
+
+            context.Packages.Add(newPackage);
+            await context.SaveChangesAsync();
+
+            Navigation.NavigateTo($"/manage/package/{newPackage.Id}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Помилка створення пакету: {ex.Message}";
+        }
+    }
+
+    private void ConfirmDelete(PackageListItemDto package)
+    {
+        _packageToDelete = package;
+        _showDeleteModal = true;
+    }
+
+    private void CancelDelete()
+    {
+        _packageToDelete = null;
+        _showDeleteModal = false;
+    }
+
+    private async Task DeletePackage()
+    {
+        if (_packageToDelete == null) return;
+
+        _isDeleting = true;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var package = await context.Packages
+                .Include(p => p.Tours)
+                    .ThenInclude(t => t.Questions)
+                .FirstOrDefaultAsync(p => p.Id == _packageToDelete.Id);
+
+            if (package != null)
+            {
+                // Check access
+                if (!_isAdmin && package.OwnerId != _userId)
+                {
+                    _errorMessage = "Ви не маєте прав на видалення цього пакету.";
+                    return;
+                }
+
+                context.Packages.Remove(package);
+                await context.SaveChangesAsync();
+
+                _packages?.Remove(_packageToDelete);
+                _showDeleteModal = false;
+                _packageToDelete = null;
+            }
+            else
+            {
+                _errorMessage = "Пакет не знайдено.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Помилка видалення: {ex.Message}";
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private static string GetStatusBadgeClass(PackageStatus status) => status switch
+    {
+        PackageStatus.Draft => "bg-secondary",
+        PackageStatus.Published => "bg-success",
+        PackageStatus.Archived => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetStatusDisplayName(PackageStatus status) => status switch
+    {
+        PackageStatus.Draft => "Чернетка",
+        PackageStatus.Published => "Опубліковано",
+        PackageStatus.Archived => "Архів",
+        _ => "Невідомо"
+    };
+}
+

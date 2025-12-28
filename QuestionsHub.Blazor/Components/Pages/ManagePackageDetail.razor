@@ -1,0 +1,902 @@
+﻿@page "/manage/package/{Id:int?}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+@attribute [Authorize(Roles = "Editor,Admin")]
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject NavigationManager Navigation
+
+<PageTitle>@(_package?.Title ?? "Новий пакет") - QuestionsHub</PageTitle>
+
+<div class="container py-4">
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+        </div>
+        <a href="/manage/packages" class="btn btn-secondary">Повернутися до списку</a>
+    }
+    else if (_package != null)
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/manage/packages">Мої пакети</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">@_package.Title</li>
+                </ol>
+            </nav>
+            <div>
+                @if (_saveStatus != null)
+                {
+                    <span class="text-muted me-3">
+                        <i class="bi @(_isSaving ? "bi-arrow-repeat" : "bi-check-circle") me-1"></i>
+                        @_saveStatus
+                    </span>
+                }
+            </div>
+        </div>
+
+        <!-- Package Details Section -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Інформація про пакет</h5>
+                <span class="badge @GetStatusBadgeClass(_package.Status)">@GetStatusDisplayName(_package.Status)</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label for="packageTitle" class="form-label">Назва пакету</label>
+                        <input type="text" class="form-control" id="packageTitle"
+                               @bind="_package.Title" @onblur="SavePackageAsync" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="packagePlayedAt" class="form-label">Дата проведення</label>
+                        <input type="date" class="form-control" id="packagePlayedAt"
+                               value="@(_package.PlayedAt?.ToString("yyyy-MM-dd"))"
+                               @onchange="OnPlayedAtChanged" @onblur="SavePackageAsync" />
+                    </div>
+                    <div class="col-12">
+                        <label for="packageDescription" class="form-label">Опис</label>
+                        <textarea class="form-control" id="packageDescription" rows="2"
+                                  @bind="_package.Description" @onblur="SavePackageAsync"></textarea>
+                    </div>
+                    <div class="col-md-8">
+                        <label for="packageEditors" class="form-label">Редактори (через кому)</label>
+                        <input type="text" class="form-control" id="packageEditors"
+                               value="@string.Join(", ", _package.Editors)"
+                               @onchange="OnEditorsChanged" @onblur="SavePackageAsync" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="packageStatus" class="form-label">Статус</label>
+                        <select class="form-select" id="packageStatus"
+                                @bind="_package.Status" @onblur="SavePackageAsync">
+                            <option value="@PackageStatus.Draft">Чернетка</option>
+                            <option value="@PackageStatus.Published">Опубліковано</option>
+                            <option value="@PackageStatus.Archived">Архів</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tours Section -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Тури <span class="badge bg-secondary ms-2">@_package.Tours.Count</span></h5>
+                <button class="btn btn-success btn-sm" @onclick="AddTourAsync">
+                    <i class="bi bi-plus-lg me-1"></i>Додати тур
+                </button>
+            </div>
+            <div class="card-body">
+                @if (_package.Tours.Count == 0)
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-collection fs-1 d-block mb-2"></i>
+                        <p>Пакет ще не має турів. Натисніть "Додати тур", щоб почати.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="accordion" id="toursAccordion">
+                        @foreach (var tour in _package.Tours.OrderBy(t => t.Number))
+                        {
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button @(IsExpanded(tour.Id) ? "" : "collapsed")" type="button"
+                                            @onclick="() => ToggleExpand(tour.Id)">
+                                        <span class="me-2">
+                                            <strong>Тур @tour.Number</strong>
+                                            @if (!string.IsNullOrEmpty(tour.Title))
+                                            {
+                                                <span class="text-muted">: @tour.Title</span>
+                                            }
+                                        </span>
+                                        <span class="badge bg-info ms-auto me-2">@tour.Questions.Count питань</span>
+                                    </button>
+                                </h2>
+                                <div class="accordion-collapse collapse @(IsExpanded(tour.Id) ? "show" : "")"
+                                     id="tour-@tour.Id">
+                                    <div class="accordion-body">
+                                        <!-- Tour Edit Controls -->
+                                        <div class="row g-2 mb-3 pb-3 border-bottom">
+                                            <div class="col-md-2">
+                                                <label class="form-label small">Номер</label>
+                                                <input type="text" class="form-control form-control-sm"
+                                                       @bind="tour.Number" @onblur="() => SaveTourAsync(tour)" />
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Назва туру</label>
+                                                <input type="text" class="form-control form-control-sm"
+                                                       @bind="tour.Title" @onblur="() => SaveTourAsync(tour)" />
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Редактори туру</label>
+                                                <input type="text" class="form-control form-control-sm"
+                                                       value="@string.Join(", ", tour.Editors)"
+                                                       @onchange="e => OnTourEditorsChanged(tour, e)"
+                                                       @onblur="() => SaveTourAsync(tour)" />
+                                            </div>
+                                            <div class="col-md-2 d-flex align-items-end">
+                                                <button class="btn btn-outline-danger btn-sm w-100"
+                                                        @onclick="() => ConfirmDeleteTour(tour)">
+                                                    <i class="bi bi-trash"></i> Видалити
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Questions List -->
+                                        @if (tour.Questions.Count == 0)
+                                        {
+                                            <div class="text-center py-3 text-muted">
+                                                <p class="mb-2">Тур ще не має питань.</p>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="list-group mb-3">
+                                                @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
+                                                {
+                                                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                                        <div class="d-flex align-items-center" style="cursor: pointer;"
+                                                             @onclick="() => OpenQuestionEditor(tour, question)">
+                                                            <span class="badge bg-primary me-3">@question.Number</span>
+                                                            <span class="text-truncate" style="max-width: 500px;">
+                                                                @TruncateText(question.Text, 80)
+                                                            </span>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm">
+                                                            <button class="btn btn-outline-primary"
+                                                                    @onclick="() => OpenQuestionEditor(tour, question)"
+                                                                    title="Редагувати">
+                                                                <i class="bi bi-pencil"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-danger"
+                                                                    @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                    title="Видалити">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+
+                                        <button class="btn btn-outline-success btn-sm"
+                                                @onclick="() => AddQuestionAsync(tour)">
+                                            <i class="bi bi-plus-lg me-1"></i>Додати питання
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Delete Tour Modal -->
+@if (_showDeleteTourModal && _tourToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Видалити тур</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDeleteTour"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Ви впевнені, що хочете видалити <strong>Тур @_tourToDelete.Number</strong>?</p>
+                    <p class="text-danger mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Всі @_tourToDelete.Questions.Count питань туру будуть видалені.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDeleteTour">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeleteTourAsync">Видалити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Question Modal -->
+@if (_showDeleteQuestionModal && _questionToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Видалити питання</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDeleteQuestion"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Ви впевнені, що хочете видалити <strong>Питання @_questionToDelete.Number</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDeleteQuestion">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeleteQuestionAsync">Видалити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Question Editor Modal -->
+@if (_showQuestionEditor && _editingQuestion != null && _editingTour != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        Питання @_editingQuestion.Number
+                        <span class="text-muted">(Тур @_editingTour.Number)</span>
+                    </h5>
+                    <div class="ms-auto me-3">
+                        <button class="btn btn-outline-secondary btn-sm me-1"
+                                @onclick="NavigateToPrevQuestion"
+                                disabled="@(!CanNavigatePrev())">
+                            <i class="bi bi-chevron-left"></i> Попереднє
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm"
+                                @onclick="NavigateToNextQuestion"
+                                disabled="@(!CanNavigateNext())">
+                            Наступне <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="CloseQuestionEditor"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Номер</label>
+                            <input type="text" class="form-control"
+                                   @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync" />
+                        </div>
+                        <div class="col-md-10">
+                            <label class="form-label">Автори (через кому)</label>
+                            <input type="text" class="form-control"
+                                   value="@string.Join(", ", _editingQuestion.Authors)"
+                                   @onchange="OnQuestionAuthorsChanged" @onblur="SaveEditingQuestionAsync" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Текст питання <span class="text-danger">*</span></label>
+                            <textarea class="form-control" rows="4"
+                                      @bind="_editingQuestion.Text" @onblur="SaveEditingQuestionAsync"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Текст роздавального матеріалу</label>
+                            <textarea class="form-control" rows="2"
+                                      @bind="_editingQuestion.HandoutText" @onblur="SaveEditingQuestionAsync"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Відповідь <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control"
+                                   @bind="_editingQuestion.Answer" @onblur="SaveEditingQuestionAsync" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Залік (альтернативні відповіді)</label>
+                            <input type="text" class="form-control"
+                                   @bind="_editingQuestion.AcceptedAnswers" @onblur="SaveEditingQuestionAsync" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Незалік</label>
+                            <input type="text" class="form-control"
+                                   @bind="_editingQuestion.RejectedAnswers" @onblur="SaveEditingQuestionAsync" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Джерело</label>
+                            <input type="text" class="form-control"
+                                   @bind="_editingQuestion.Source" @onblur="SaveEditingQuestionAsync" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Коментар</label>
+                            <textarea class="form-control" rows="2"
+                                      @bind="_editingQuestion.Comment" @onblur="SaveEditingQuestionAsync"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (_questionSaveStatus != null)
+                    {
+                        <span class="text-muted me-auto">
+                            <i class="bi bi-check-circle me-1"></i>@_questionSaveStatus
+                        </span>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="CloseQuestionEditor">Закрити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private Package? _package;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private string? _userId;
+    private bool _isAdmin;
+    private bool _isSaving;
+    private string? _saveStatus;
+
+    // Accordion state
+    private HashSet<int> _expandedTours = new();
+
+    // Delete tour modal
+    private bool _showDeleteTourModal;
+    private Tour? _tourToDelete;
+
+    // Delete question modal
+    private bool _showDeleteQuestionModal;
+    private Question? _questionToDelete;
+    private Tour? _questionToDeleteTour;
+
+    // Question editor modal
+    private bool _showQuestionEditor;
+    private Question? _editingQuestion;
+    private Tour? _editingTour;
+    private string? _questionSaveStatus;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckUserAsync();
+        await LoadPackageAsync();
+    }
+
+    private async Task CheckUserAsync()
+    {
+        if (AuthenticationState != null)
+        {
+            var authState = await AuthenticationState;
+            _isAdmin = authState.User.IsInRole("Admin");
+            _userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+    }
+
+    private async Task LoadPackageAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (Id == null)
+            {
+                // Create new package
+                await using var context = await DbContextFactory.CreateDbContextAsync();
+                _package = new Package
+                {
+                    Title = "Новий пакет",
+                    Description = null,
+                    Editors = new List<string>(),
+                    PlayedAt = null,
+                    Status = PackageStatus.Draft,
+                    OwnerId = _userId,
+                    TotalQuestions = 0,
+                    Tours = new List<Tour>()
+                };
+
+                context.Packages.Add(_package);
+                await context.SaveChangesAsync();
+
+                // Redirect to the new package's URL
+                Navigation.NavigateTo($"/manage/package/{_package.Id}", replace: true);
+            }
+            else
+            {
+                await using var context = await DbContextFactory.CreateDbContextAsync();
+                _package = await context.Packages
+                    .Include(p => p.Tours)
+                        .ThenInclude(t => t.Questions)
+                    .FirstOrDefaultAsync(p => p.Id == Id);
+
+                if (_package == null)
+                {
+                    _errorMessage = "Пакет не знайдено.";
+                }
+                else if (!_isAdmin && _package.OwnerId != _userId)
+                {
+                    _errorMessage = "Ви не маєте доступу до цього пакету.";
+                    _package = null;
+                }
+                else
+                {
+                    // Expand first tour by default
+                    if (_package.Tours.Count > 0)
+                    {
+                        _expandedTours.Add(_package.Tours.First().Id);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Помилка завантаження: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SavePackageAsync()
+    {
+        if (_package == null) return;
+
+        _isSaving = true;
+        _saveStatus = "Збереження...";
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbPackage = await context.Packages.FindAsync(_package.Id);
+            if (dbPackage != null)
+            {
+                dbPackage.Title = _package.Title;
+                dbPackage.Description = _package.Description;
+                dbPackage.Editors = _package.Editors;
+                dbPackage.PlayedAt = _package.PlayedAt;
+                dbPackage.Status = _package.Status;
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPlayedAtChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var date))
+        {
+            _package!.PlayedAt = date;
+        }
+        else
+        {
+            _package!.PlayedAt = null;
+        }
+    }
+
+    private void OnEditorsChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        _package!.Editors = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    private void OnTourEditorsChanged(Tour tour, ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        tour.Editors = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    private async Task SaveTourAsync(Tour tour)
+    {
+        _saveStatus = "Збереження туру...";
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbTour = await context.Tours.FindAsync(tour.Id);
+            if (dbTour != null)
+            {
+                dbTour.Number = tour.Number;
+                dbTour.Title = tour.Title;
+                dbTour.Editors = tour.Editors;
+                dbTour.Comment = tour.Comment;
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
+    }
+
+    private async Task AddTourAsync()
+    {
+        if (_package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var newNumber = (_package.Tours.Count + 1).ToString();
+            var tour = new Tour
+            {
+                PackageId = _package.Id,
+                Number = newNumber,
+                Title = null,
+                Editors = new List<string>(),
+                Comment = null,
+                Questions = new List<Question>()
+            };
+
+            context.Tours.Add(tour);
+            await context.SaveChangesAsync();
+
+            _package.Tours.Add(tour);
+            _expandedTours.Add(tour.Id);
+            _saveStatus = "Тур додано";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteTour(Tour tour)
+    {
+        _tourToDelete = tour;
+        _showDeleteTourModal = true;
+    }
+
+    private void CancelDeleteTour()
+    {
+        _tourToDelete = null;
+        _showDeleteTourModal = false;
+    }
+
+    private async Task DeleteTourAsync()
+    {
+        if (_tourToDelete == null || _package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbTour = await context.Tours
+                .Include(t => t.Questions)
+                .FirstOrDefaultAsync(t => t.Id == _tourToDelete.Id);
+
+            if (dbTour != null)
+            {
+                // Update package total questions
+                var dbPackage = await context.Packages.FindAsync(_package.Id);
+                if (dbPackage != null)
+                {
+                    dbPackage.TotalQuestions -= dbTour.Questions.Count;
+                }
+
+                context.Tours.Remove(dbTour);
+                await context.SaveChangesAsync();
+
+                _package.Tours.Remove(_tourToDelete);
+                _package.TotalQuestions -= _tourToDelete.Questions.Count;
+            }
+
+            _showDeleteTourModal = false;
+            _tourToDelete = null;
+            _saveStatus = "Тур видалено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task AddQuestionAsync(Tour tour)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var newOrderIndex = tour.Questions.Count; // 0-based
+            var newNumber = (newOrderIndex + 1).ToString(); // Display as 1-based
+            var question = new Question
+            {
+                TourId = tour.Id,
+                OrderIndex = newOrderIndex,
+                Number = newNumber,
+                Text = "",
+                Answer = "",
+                Authors = new List<string>()
+            };
+
+            context.Questions.Add(question);
+
+            // Update package total
+            var dbPackage = await context.Packages.FindAsync(_package.Id);
+            if (dbPackage != null)
+            {
+                dbPackage.TotalQuestions++;
+            }
+
+            await context.SaveChangesAsync();
+
+            tour.Questions.Add(question);
+            _package.TotalQuestions++;
+
+            // Open the question editor
+            OpenQuestionEditor(tour, question);
+
+            _saveStatus = "Питання додано";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteQuestion(Tour tour, Question question)
+    {
+        _questionToDelete = question;
+        _questionToDeleteTour = tour;
+        _showDeleteQuestionModal = true;
+    }
+
+    private void CancelDeleteQuestion()
+    {
+        _questionToDelete = null;
+        _questionToDeleteTour = null;
+        _showDeleteQuestionModal = false;
+    }
+
+    private async Task DeleteQuestionAsync()
+    {
+        if (_questionToDelete == null || _questionToDeleteTour == null || _package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbQuestion = await context.Questions.FindAsync(_questionToDelete.Id);
+
+            if (dbQuestion != null)
+            {
+                // Update package total
+                var dbPackage = await context.Packages.FindAsync(_package.Id);
+                if (dbPackage != null)
+                {
+                    dbPackage.TotalQuestions--;
+                }
+
+                context.Questions.Remove(dbQuestion);
+                await context.SaveChangesAsync();
+
+                _questionToDeleteTour.Questions.Remove(_questionToDelete);
+                _package.TotalQuestions--;
+            }
+
+            _showDeleteQuestionModal = false;
+            _questionToDelete = null;
+            _questionToDeleteTour = null;
+            _saveStatus = "Питання видалено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private void OpenQuestionEditor(Tour tour, Question question)
+    {
+        _editingTour = tour;
+        _editingQuestion = question;
+        _showQuestionEditor = true;
+        _questionSaveStatus = null;
+    }
+
+    private void CloseQuestionEditor()
+    {
+        _editingTour = null;
+        _editingQuestion = null;
+        _showQuestionEditor = false;
+        _questionSaveStatus = null;
+    }
+
+    private async Task SaveEditingQuestionAsync()
+    {
+        if (_editingQuestion == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbQuestion = await context.Questions.FindAsync(_editingQuestion.Id);
+            if (dbQuestion != null)
+            {
+                dbQuestion.Number = _editingQuestion.Number;
+                dbQuestion.Text = _editingQuestion.Text;
+                dbQuestion.Answer = _editingQuestion.Answer;
+                dbQuestion.HandoutText = _editingQuestion.HandoutText;
+                dbQuestion.AcceptedAnswers = _editingQuestion.AcceptedAnswers;
+                dbQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers;
+                dbQuestion.Comment = _editingQuestion.Comment;
+                dbQuestion.Source = _editingQuestion.Source;
+                dbQuestion.Authors = _editingQuestion.Authors;
+                await context.SaveChangesAsync();
+            }
+            _questionSaveStatus = "Збережено";
+        }
+        catch
+        {
+            _questionSaveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
+    }
+
+    private void OnQuestionAuthorsChanged(ChangeEventArgs e)
+    {
+        if (_editingQuestion == null) return;
+        var value = e.Value?.ToString() ?? "";
+        _editingQuestion.Authors = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    private bool CanNavigatePrev()
+    {
+        if (_editingQuestion == null || _editingTour == null || _package == null) return false;
+
+        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
+
+        // Can navigate prev if not first question, or if there's a previous tour
+        if (currentIndex > 0) return true;
+
+        var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+        var tourIndex = orderedTours.IndexOf(_editingTour);
+        return tourIndex > 0 && orderedTours[tourIndex - 1].Questions.Count > 0;
+    }
+
+    private bool CanNavigateNext()
+    {
+        if (_editingQuestion == null || _editingTour == null || _package == null) return false;
+
+        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
+
+        // Can navigate next if not last question, or if there's a next tour
+        if (currentIndex < orderedQuestions.Count - 1) return true;
+
+        var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+        var tourIndex = orderedTours.IndexOf(_editingTour);
+        return tourIndex < orderedTours.Count - 1 && orderedTours[tourIndex + 1].Questions.Count > 0;
+    }
+
+    private async Task NavigateToPrevQuestion()
+    {
+        if (_editingQuestion == null || _editingTour == null || _package == null) return;
+
+        // Save current question first
+        await SaveEditingQuestionAsync();
+
+        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
+
+        if (currentIndex > 0)
+        {
+            _editingQuestion = orderedQuestions[currentIndex - 1];
+        }
+        else
+        {
+            // Go to previous tour
+            var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+            var tourIndex = orderedTours.IndexOf(_editingTour);
+            if (tourIndex > 0)
+            {
+                _editingTour = orderedTours[tourIndex - 1];
+                _editingQuestion = _editingTour.Questions.OrderBy(q => q.OrderIndex).LastOrDefault();
+            }
+        }
+
+        _questionSaveStatus = null;
+        StateHasChanged();
+    }
+
+    private async Task NavigateToNextQuestion()
+    {
+        if (_editingQuestion == null || _editingTour == null || _package == null) return;
+
+        // Save current question first
+        await SaveEditingQuestionAsync();
+
+        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
+
+        if (currentIndex < orderedQuestions.Count - 1)
+        {
+            _editingQuestion = orderedQuestions[currentIndex + 1];
+        }
+        else
+        {
+            // Go to next tour
+            var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+            var tourIndex = orderedTours.IndexOf(_editingTour);
+            if (tourIndex < orderedTours.Count - 1)
+            {
+                _editingTour = orderedTours[tourIndex + 1];
+                _editingQuestion = _editingTour.Questions.OrderBy(q => q.OrderIndex).FirstOrDefault();
+            }
+        }
+
+        _questionSaveStatus = null;
+        StateHasChanged();
+    }
+
+    private bool IsExpanded(int tourId) => _expandedTours.Contains(tourId);
+
+    private void ToggleExpand(int tourId)
+    {
+        if (_expandedTours.Contains(tourId))
+            _expandedTours.Remove(tourId);
+        else
+            _expandedTours.Add(tourId);
+    }
+
+    private static string TruncateText(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "—";
+        return text.Length <= maxLength ? text : text[..maxLength] + "...";
+    }
+
+    private static string GetStatusBadgeClass(PackageStatus status) => status switch
+    {
+        PackageStatus.Draft => "bg-secondary",
+        PackageStatus.Published => "bg-success",
+        PackageStatus.Archived => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetStatusDisplayName(PackageStatus status) => status switch
+    {
+        PackageStatus.Draft => "Чернетка",
+        PackageStatus.Published => "Опубліковано",
+        PackageStatus.Archived => "Архів",
+        _ => "Невідомо"
+    };
+}
+
