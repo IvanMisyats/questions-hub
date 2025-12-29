@@ -1,12 +1,12 @@
-﻿# Media Files Setup Guide
+﻿﻿# Media Files Setup Guide
 
 This guide explains how to set up and manage media files (images, videos, audio) for the Questions Hub application.
 
 ## Overview
 
-Media files are stored on the VPS filesystem and mounted into Docker containers as read-only volumes. This approach:
+Media files are stored on the VPS filesystem and mounted into Docker containers. This approach:
 - Keeps media files outside the container for easy management
-- Prevents the application from modifying or deleting media files
+- The `/uploads/` folder is writable for the media upload feature
 - Allows direct file management via SFTP/SCP
 - Supports future CDN integration
 
@@ -14,11 +14,10 @@ Media files are stored on the VPS filesystem and mounted into Docker containers 
 
 ### 1. Create Media Directory Structure
 
-On your VPS, create the media directory structure:
+On your VPS, create the media directory:
 
 ```bash
-# Create main media directories
-mkdir -p /var/www/questions-hub/media/samples
+# Create media upload directory
 mkdir -p /var/www/questions-hub/media/uploads
 
 # Verify structure
@@ -28,26 +27,25 @@ tree /var/www/questions-hub/media
 Expected structure:
 ```
 /var/www/questions-hub/media/
-├── samples/          # Sample media files for seeded questions
-└── uploads/          # Future: user-uploaded media files
+└── uploads/          # User-uploaded media files
 ```
 
 ### 2. Set Proper Permissions
 
-Set secure permissions on media directories and files:
+Set secure permissions on media directories:
 
 ```bash
 # Set directory permissions (read + execute for traversal)
 chmod 755 /var/www/questions-hub/media
-chmod 755 /var/www/questions-hub/media/samples
-chmod 755 /var/www/questions-hub/media/uploads
 
-# After uploading media files, set file permissions (read only, no execute)
-chmod 644 /var/www/questions-hub/media/samples/*
-chmod 644 /var/www/questions-hub/media/uploads/*
+# Uploads folder needs write permission for the application
+chmod 755 /var/www/questions-hub/media/uploads
+chown -R www-data:www-data /var/www/questions-hub/media/uploads
 ```
 
-**Important:** Never set execute permissions (`x`) on media files. This prevents malicious scripts from being executed even if uploaded.
+**Important:** 
+- Never set execute permissions (`x`) on media files. This prevents malicious scripts from being executed even if uploaded.
+- The `uploads/` folder must be writable by the application for the media upload feature to work.
 
 ### 3. Configure Environment Variable
 
@@ -66,56 +64,20 @@ POSTGRES_ROOT_PASSWORD=your_secure_password
 QUESTIONSHUB_PASSWORD=your_secure_password
 ```
 
-### 4. Upload Sample Media Files
-
-Upload the following sample files to `/var/www/questions-hub/media/samples/`:
-
-Required files (referenced in database seeder):
-- `handout1.jpg` - Sample handout image
-- `comment1.png` - Sample comment image
-- `sample-video.mp4` - Sample video file
-- `sample-audio.mp3` - Sample audio file
-
-Using SCP from your local machine:
-
-```bash
-scp handout1.jpg user@your-vps:/var/www/questions-hub/media/samples/
-scp comment1.png user@your-vps:/var/www/questions-hub/media/samples/
-scp sample-video.mp4 user@your-vps:/var/www/questions-hub/media/samples/
-scp sample-audio.mp3 user@your-vps:/var/www/questions-hub/media/samples/
-```
-
-Then set permissions:
-
-```bash
-ssh user@your-vps
-chmod 644 /var/www/questions-hub/media/samples/*
-```
-
 ## Local Development Setup
 
 ### Create Local Media Folder
 
 ```powershell
 # From project root (PowerShell)
-mkdir media\samples
 mkdir media\uploads
 ```
 
 Or on Unix-like systems:
 
 ```bash
-mkdir -p media/samples
 mkdir -p media/uploads
 ```
-
-### Add Sample Files
-
-Place sample media files in `media/samples/`:
-- `handout1.jpg`
-- `comment1.png`
-- `sample-video.mp4`
-- `sample-audio.mp3`
 
 The application will automatically detect and serve these files when running locally.
 
@@ -133,7 +95,7 @@ media/
 ### Images
 - **Extensions:** `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`
 - **MIME Types:** `image/jpeg`, `image/png`, `image/gif`, `image/webp`
-- **Recommended Size:** Max 2MB per file, 1920x1080px max resolution
+- **Recommended Size:** Max 5MB per file
 - **Use Cases:** Handout materials, answer illustrations
 
 ### Videos
@@ -154,9 +116,9 @@ media/
 
 ### File System Security
 
-1. **Read-Only Mount:** Docker volume is mounted with `:ro` flag
-   - Application cannot write to media directory
-   - Prevents container compromise from affecting media files
+1. **Controlled Write Access:** 
+   - `/uploads/` folder is writable for the media upload feature
+   - Uploaded files get cryptographically random names (256-bit entropy)
 
 2. **No Execute Permissions:** Files have 644 permissions
    - Owner: read/write
@@ -165,7 +127,7 @@ media/
    - Execute bit never set
 
 3. **Extension Whitelist:** Only allowed extensions are served
-   - Application validates file extensions
+   - Application validates file extensions on upload and serving
    - Requests for `.php`, `.sh`, `.exe`, etc. return 404
 
 4. **MIME Type Validation:** Content-Type headers match extensions
@@ -224,22 +186,16 @@ server {
 
 1. **Check file permissions:**
    ```bash
-   ls -la /var/www/questions-hub/media/samples/
+   ls -la /var/www/questions-hub/media/uploads/
    ```
-   Should show `rw-r--r--` (644)
+   Should show `rw-r--r--` (644) for files
 
 2. **Verify mount in container:**
    ```bash
-   docker exec questions-hub-web ls -la /app/media/samples/
+   docker exec questions-hub-web ls -la /app/media/uploads/
    ```
 
-3. **Check file exists:**
-   ```bash
-   curl -I http://localhost:8080/media/samples/handout1.jpg
-   ```
-   Should return `200 OK` with security headers
-
-4. **Review logs:**
+3. **Review logs:**
    ```bash
    docker logs questions-hub-web
    ```
@@ -256,10 +212,52 @@ server {
 - Verify disk space: `df -h`
 - Consider using Nginx for direct serving of large files
 
+## Media Upload Feature
+
+Editors and Admins can upload media files directly through the package management interface.
+
+### Accessing Media Upload
+
+1. Navigate to **Manage Packages** → Select a package
+2. Expand a tour and click on a question to edit
+3. Use the file upload controls for:
+   - **Роздатковий матеріал** (Handout) - Material shown before the question
+   - **Ілюстрація до коментаря** (Comment Attachment) - Material shown with the answer
+
+### Upload Limits
+
+File size limits are configurable in `appsettings.json`:
+
+```json
+{
+  "MediaUpload": {
+    "MaxImageSizeBytes": 5242880,    // 5 MB for images
+    "MaxVideoSizeBytes": 52428800,   // 50 MB for videos  
+    "MaxAudioSizeBytes": 10485760    // 10 MB for audio
+  }
+}
+```
+
+### Security Features
+
+- **Secure Filenames:** Uploaded files are renamed with cryptographically random names (256-bit entropy)
+- **Extension Whitelist:** Only allowed media types can be uploaded
+- **Path Traversal Protection:** Prevents directory escape attacks
+- **Authorization:** Only authenticated Editors/Admins can upload
+- **Ownership Validation:** Users can only upload to packages they own (Admins can access all)
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/media/questions/{id}/handout` | Upload handout media |
+| POST | `/api/media/questions/{id}/comment` | Upload comment attachment |
+| DELETE | `/api/media/questions/{id}/handout` | Delete handout media |
+| DELETE | `/api/media/questions/{id}/comment` | Delete comment attachment |
+
 ## Future Enhancements
 
 ### Planned Features
-- Admin interface for uploading media files
 - Automatic thumbnail generation for images
 - Video transcoding for optimal web delivery
 - CDN integration for better performance
@@ -279,7 +277,6 @@ When ready to use a CDN:
 
 - **Location:** `/var/www/questions-hub/media/` on VPS
 - **Permissions:** 755 for directories, 644 for files
-- **Mount:** Read-only Docker volume
 - **Security:** Extension whitelist, no execute, MIME validation
 - **Formats:** Images (jpg, png, gif, webp), Videos (mp4, webm), Audio (mp3, ogg, wav)
 

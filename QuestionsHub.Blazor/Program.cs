@@ -17,6 +17,12 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 // Add controllers for authentication API endpoints
 builder.Services.AddControllers();
 
+// Add HttpContextAccessor for accessing HTTP context in Blazor components
+builder.Services.AddHttpContextAccessor();
+
+// Add HttpClient factory for Blazor components to call API
+builder.Services.AddHttpClient();
+
 // Add localization services
 builder.Services.AddLocalization();
 
@@ -68,6 +74,18 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 // Add cascading authentication state for Blazor components
 builder.Services.AddCascadingAuthenticationState();
+
+// Configure media upload options
+var mediaUploadOptions = new MediaUploadOptions();
+builder.Configuration.GetSection(MediaUploadOptions.SectionName).Bind(mediaUploadOptions);
+
+// Set media path based on environment
+mediaUploadOptions.MediaPath = builder.Environment.IsDevelopment()
+    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "media")
+    : "/app/media";
+
+builder.Services.AddSingleton(mediaUploadOptions);
+builder.Services.AddScoped<MediaService>();
 
 var app = builder.Build();
 

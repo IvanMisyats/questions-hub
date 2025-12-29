@@ -1,4 +1,3 @@
-﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +32,7 @@ public class PackageManagementController : ControllerBase
     [HttpGet("packages")]
     public async Task<ActionResult<List<PackageListItemDto>>> GetPackages()
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var isAdmin = User.IsInRole("Admin");
 
         var query = _context.Packages
@@ -80,7 +79,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(package))
+        if (!User.CanAccessPackage(package))
         {
             return Forbid();
         }
@@ -95,7 +94,7 @@ public class PackageManagementController : ControllerBase
     [HttpPost("packages")]
     public async Task<ActionResult<CreatedEntityDto>> CreatePackage([FromBody] PackageUpsertDto dto)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
 
         var package = new Package
         {
@@ -127,7 +126,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(package))
+        if (!User.CanAccessPackage(package))
         {
             return Forbid();
         }
@@ -159,7 +158,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(package))
+        if (!User.CanAccessPackage(package))
         {
             return Forbid();
         }
@@ -185,7 +184,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(package))
+        if (!User.CanAccessPackage(package))
         {
             return Forbid();
         }
@@ -220,7 +219,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(tour.Package))
+        if (!User.CanAccessPackage(tour.Package))
         {
             return Forbid();
         }
@@ -251,7 +250,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(tour.Package))
+        if (!User.CanAccessPackage(tour.Package))
         {
             return Forbid();
         }
@@ -283,7 +282,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(tour.Package))
+        if (!User.CanAccessPackage(tour.Package))
         {
             return Forbid();
         }
@@ -336,7 +335,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(question.Tour.Package))
+        if (!User.CanAccessPackage(question.Tour.Package))
         {
             return Forbid();
         }
@@ -374,7 +373,7 @@ public class PackageManagementController : ControllerBase
             return NotFound();
         }
 
-        if (!CanAccessPackage(question.Tour.Package))
+        if (!User.CanAccessPackage(question.Tour.Package))
         {
             return Forbid();
         }
@@ -390,21 +389,6 @@ public class PackageManagementController : ControllerBase
 
     // ==================== Helper Methods ====================
 
-    private string? GetUserId()
-    {
-        return User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-    }
-
-    private bool CanAccessPackage(Package package)
-    {
-        if (User.IsInRole("Admin"))
-        {
-            return true;
-        }
-
-        var userId = GetUserId();
-        return package.OwnerId == userId;
-    }
 
     private static PackageDetailDto MapToPackageDetailDto(Package package)
     {
@@ -449,4 +433,6 @@ public class PackageManagementController : ControllerBase
         );
     }
 }
+
+
 

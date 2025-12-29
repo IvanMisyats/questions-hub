@@ -22,6 +22,7 @@ Refer to README.md for the complete technology stack. The project uses:
 
 - **Always merge using `--squash` option**
 - do not push branches to remote
+- commit changes only on explicit command
 
 ### Code Style and Conventions
 

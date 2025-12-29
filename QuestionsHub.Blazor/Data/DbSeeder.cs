@@ -253,33 +253,18 @@ public static class DbSeeder
     {
         return
         [
-            // Sample question with image handout
+            // Sample questions - media can be added via the upload feature
             new("На роздатковому матеріалі ви бачите репродукцію картини. Назвіть художника.",
-                "Пабло Пікассо", "Пікассо", "Це одна з найвідоміших робіт художника.")
-            {
-                HandoutUrl = "/media/handout1.jpg"
-            },
+                "Пабло Пікассо", "Пікассо", "Це одна з найвідоміших робіт художника."),
 
-            // Sample question with image in comment
             new("Це слово походить від грецького 'золотий'. Назвіть це слово.",
-                "Хризантема", null, "На зображенні ви бачите цю квітку.")
-            {
-                CommentAttachmentUrl = "/media/comment1.png"
-            },
+                "Хризантема", null, "На зображенні ви бачите цю квітку."),
 
-            // Sample question with video handout
             new("У відео фрагменті ви бачите уривок з відомого фільму. Назвіть режисера цього фільму.",
-                "Стенлі Кубрік", "Кубрік", "Це культовий фільм жанру наукової фантастики.")
-            {
-                HandoutUrl = "/media/sample-video.mp4"
-            },
+                "Стенлі Кубрік", "Кубрік", "Це культовий фільм жанру наукової фантастики."),
 
-            // Sample question with audio handout
             new("Прослухайте музичний фрагмент. Назвіть композитора цього твору.",
-                "Людвіг ван Бетховен", "Бетховен", "Це один з найвідоміших творів класичної музики.")
-            {
-                HandoutUrl = "/media/sample-audio.mp3"
-            },
+                "Людвіг ван Бетховен", "Бетховен", "Це один з найвідоміших творів класичної музики."),
 
             new("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore. Назвіть ІКС.",
                 "Dolor", null, "Lorem ipsum - класичний текст-заповнювач."),
