@@ -631,6 +631,10 @@
 
         try
         {
+            // Trim whitespaces from text fields
+            _package.Title = _package.Title.Trim();
+            _package.Description = _package.Description?.Trim();
+
             await using var context = await DbContextFactory.CreateDbContextAsync();
             var dbPackage = await context.Packages.FindAsync(_package.Id);
             if (dbPackage != null)
@@ -686,6 +690,11 @@
 
         try
         {
+            // Trim whitespaces from text fields
+            tour.Number = tour.Number.Trim();
+            tour.Title = tour.Title?.Trim();
+            tour.Comment = tour.Comment?.Trim();
+
             await using var context = await DbContextFactory.CreateDbContextAsync();
             var dbTour = await context.Tours.FindAsync(tour.Id);
             if (dbTour != null)
@@ -907,6 +916,16 @@
 
         try
         {
+            // Trim whitespaces from text fields
+            _editingQuestion.Number = _editingQuestion.Number.Trim();
+            _editingQuestion.Text = _editingQuestion.Text.Trim();
+            _editingQuestion.Answer = _editingQuestion.Answer.Trim();
+            _editingQuestion.HandoutText = _editingQuestion.HandoutText?.Trim();
+            _editingQuestion.AcceptedAnswers = _editingQuestion.AcceptedAnswers?.Trim();
+            _editingQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers?.Trim();
+            _editingQuestion.Comment = _editingQuestion.Comment?.Trim();
+            _editingQuestion.Source = _editingQuestion.Source?.Trim();
+
             await using var context = await DbContextFactory.CreateDbContextAsync();
             var dbQuestion = await context.Questions.FindAsync(_editingQuestion.Id);
             if (dbQuestion != null)
