@@ -66,7 +66,7 @@
                     </div>
                     <div class="col-md-4">
                         <label for="packagePlayedAt" class="form-label">Дата проведення</label>
-                        <input type="date" class="form-control" id="packagePlayedAt"
+                        <input type="date" class="form-control" id="packagePlayedAt" lang="uk"
                                value="@(_package.PlayedAt?.ToString("yyyy-MM-dd"))"
                                @onchange="OnPlayedAtChanged" @onblur="SavePackageAsync" />
                     </div>

@@ -8,6 +8,11 @@ using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
 
+// Set Ukrainian culture as default for the entire application
+var ukrainianCulture = new CultureInfo("uk-UA");
+CultureInfo.DefaultThreadCurrentCulture = ukrainianCulture;
+CultureInfo.DefaultThreadCurrentUICulture = ukrainianCulture;
+
 var builder = WebApplication.CreateBuilder(args);
 
 
