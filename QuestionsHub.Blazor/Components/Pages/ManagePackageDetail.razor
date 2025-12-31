@@ -72,7 +72,7 @@
                     </div>
                     <div class="col-12">
                         <label for="packageDescription" class="form-label">Опис</label>
-                        <textarea class="form-control" id="packageDescription" rows="2"
+                        <textarea class="form-control auto-expand" id="packageDescription"
                                   @bind="_package.Description" @onblur="SavePackageAsync"></textarea>
                     </div>
                     <div class="col-md-8">
@@ -263,7 +263,7 @@
 @if (_showQuestionEditor && _editingQuestion != null && _editingTour != null)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -285,115 +285,123 @@
                     <button type="button" class="btn-close" @onclick="CloseQuestionEditor"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row g-3">
+                    <div class="row g-2">
                         <div class="col-md-2">
-                            <label class="form-label">Номер</label>
-                            <input type="text" class="form-control"
-                                   @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync" />
+                            <label class="col-form-label">Номер</label>
                         </div>
                         <div class="col-md-10">
-                            <label class="form-label">Автори (через кому)</label>
-                            <input type="text" class="form-control"
-                                   value="@string.Join(", ", _editingQuestion.Authors)"
-                                   @onchange="OnQuestionAuthorsChanged" @onblur="SaveEditingQuestionAsync" />
+                            <input type="text" class="form-control" style="max-width: 100px;"
+                                   @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync" />
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Текст питання <span class="text-danger">*</span></label>
-                            <textarea class="form-control" rows="4"
+                        <div class="col-md-2">
+                            <label class="col-form-label">Роздатковий матеріал</label>
+                        </div>
+                        <div class="col-md-10">
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <textarea class="form-control auto-expand" placeholder="Текст роздавального матеріалу"
+                                              @bind="_editingQuestion.HandoutText" @onblur="SaveEditingQuestionAsync"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    @if (!string.IsNullOrEmpty(_editingQuestion.HandoutUrl))
+                                    {
+                                        <div class="mb-2 p-2 border rounded bg-light">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <a href="@_editingQuestion.HandoutUrl" target="_blank" class="text-truncate small">
+                                                    <i class="bi bi-box-arrow-up-right me-1"></i>@GetFileName(_editingQuestion.HandoutUrl)
+                                                </a>
+                                                <button type="button" class="btn btn-danger btn-sm"
+                                                        @onclick="DeleteHandoutMediaAsync"
+                                                        disabled="@_isUploadingHandout">
+                                                    <i class="bi bi-trash me-1"></i>Видалити
+                                                </button>
+                                            </div>
+                                            @{
+                                                var handoutMediaType = MediaSecurityOptions.GetMediaType(_editingQuestion.HandoutUrl);
+                                            }
+                                            @switch (handoutMediaType)
+                                            {
+                                                case MediaType.Image:
+                                                    <img src="@_editingQuestion.HandoutUrl" alt="Роздатковий матеріал"
+                                                         class="img-fluid rounded" style="max-height: 200px;" />
+                                                    break;
+                                                case MediaType.Video:
+                                                    <video controls class="rounded" style="max-width: 100%; max-height: 200px;">
+                                                        <source src="@_editingQuestion.HandoutUrl"
+                                                                type="@MediaSecurityOptions.GetContentTypeFromPath(_editingQuestion.HandoutUrl)" />
+                                                        Ваш браузер не підтримує відтворення відео.
+                                                    </video>
+                                                    break;
+                                                case MediaType.Audio:
+                                                    <audio controls style="width: 100%; max-width: 400px;">
+                                                        <source src="@_editingQuestion.HandoutUrl"
+                                                                type="@MediaSecurityOptions.GetContentTypeFromPath(_editingQuestion.HandoutUrl)" />
+                                                        Ваш браузер не підтримує відтворення аудіо.
+                                                    </audio>
+                                                    break;
+                                            }
+                                        </div>
+                                    }
+                                    <div class="input-group">
+                                        <InputFile class="form-control"
+                                                   OnChange="OnHandoutFileSelected"
+                                                   accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav"
+                                                   disabled="@_isUploadingHandout" />
+                                        @if (_isUploadingHandout)
+                                        {
+                                            <span class="input-group-text">
+                                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(_handoutUploadError))
+                                    {
+                                        <div class="text-danger small mt-1">
+                                            <i class="bi bi-exclamation-circle me-1"></i>@_handoutUploadError
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="col-form-label">Текст питання <span class="text-danger">*</span></label>
+                        </div>
+                        <div class="col-md-10">
+                            <textarea class="form-control auto-expand"
                                       @bind="_editingQuestion.Text" @onblur="SaveEditingQuestionAsync"></textarea>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Текст роздавального матеріалу</label>
-                            <textarea class="form-control" rows="2"
-                                      @bind="_editingQuestion.HandoutText" @onblur="SaveEditingQuestionAsync"></textarea>
+                        <div class="col-md-2">
+                            <label class="col-form-label">Відповідь <span class="text-danger">*</span></label>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Роздатковий матеріал</label>
-                            @if (!string.IsNullOrEmpty(_editingQuestion.HandoutUrl))
-                            {
-                                <div class="mb-2 p-2 border rounded bg-light">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <a href="@_editingQuestion.HandoutUrl" target="_blank" class="text-truncate small">
-                                            <i class="bi bi-box-arrow-up-right me-1"></i>@GetFileName(_editingQuestion.HandoutUrl)
-                                        </a>
-                                        <button type="button" class="btn btn-danger btn-sm"
-                                                @onclick="DeleteHandoutMediaAsync"
-                                                disabled="@_isUploadingHandout">
-                                            <i class="bi bi-trash me-1"></i>Видалити
-                                        </button>
-                                    </div>
-                                    @{
-                                        var handoutMediaType = MediaSecurityOptions.GetMediaType(_editingQuestion.HandoutUrl);
-                                    }
-                                    @switch (handoutMediaType)
-                                    {
-                                        case MediaType.Image:
-                                            <img src="@_editingQuestion.HandoutUrl" alt="Роздатковий матеріал"
-                                                 class="img-fluid rounded" style="max-height: 200px;" />
-                                            break;
-                                        case MediaType.Video:
-                                            <video controls class="rounded" style="max-width: 100%; max-height: 200px;">
-                                                <source src="@_editingQuestion.HandoutUrl"
-                                                        type="@MediaSecurityOptions.GetContentTypeFromPath(_editingQuestion.HandoutUrl)" />
-                                                Ваш браузер не підтримує відтворення відео.
-                                            </video>
-                                            break;
-                                        case MediaType.Audio:
-                                            <audio controls style="width: 100%; max-width: 400px;">
-                                                <source src="@_editingQuestion.HandoutUrl"
-                                                        type="@MediaSecurityOptions.GetContentTypeFromPath(_editingQuestion.HandoutUrl)" />
-                                                Ваш браузер не підтримує відтворення аудіо.
-                                            </audio>
-                                            break;
-                                    }
-                                </div>
-                            }
-                            <div class="input-group">
-                                <InputFile class="form-control"
-                                           OnChange="OnHandoutFileSelected"
-                                           accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav"
-                                           disabled="@_isUploadingHandout" />
-                                @if (_isUploadingHandout)
-                                {
-                                    <span class="input-group-text">
-                                        <span class="spinner-border spinner-border-sm" role="status"></span>
-                                    </span>
-                                }
-                            </div>
-                            @if (!string.IsNullOrEmpty(_handoutUploadError))
-                            {
-                                <div class="text-danger small mt-1">
-                                    <i class="bi bi-exclamation-circle me-1"></i>@_handoutUploadError
-                                </div>
-                            }
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Відповідь <span class="text-danger">*</span></label>
+                        <div class="col-md-10">
                             <input type="text" class="form-control"
                                    @bind="_editingQuestion.Answer" @onblur="SaveEditingQuestionAsync" />
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Залік (альтернативні відповіді)</label>
-                            <input type="text" class="form-control"
+                        <div class="col-md-2">
+                            <label class="col-form-label">Залік</label>
+                        </div>
+                        <div class="col-md-10">
+                            <input type="text" class="form-control" placeholder="альтернативні відповіді"
                                    @bind="_editingQuestion.AcceptedAnswers" @onblur="SaveEditingQuestionAsync" />
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Незалік</label>
+                        <div class="col-md-2">
+                            <label class="col-form-label">Незалік</label>
+                        </div>
+                        <div class="col-md-10">
                             <input type="text" class="form-control"
                                    @bind="_editingQuestion.RejectedAnswers" @onblur="SaveEditingQuestionAsync" />
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Джерело</label>
-                            <input type="text" class="form-control"
-                                   @bind="_editingQuestion.Source" @onblur="SaveEditingQuestionAsync" />
+                        <div class="col-md-2">
+                            <label class="col-form-label">Коментар</label>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Коментар</label>
-                            <textarea class="form-control" rows="2"
+                        <div class="col-md-10">
+                            <textarea class="form-control auto-expand"
                                       @bind="_editingQuestion.Comment" @onblur="SaveEditingQuestionAsync"></textarea>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Ілюстрація до коментаря</label>
+                        <div class="col-md-2">
+                            <label class="col-form-label">Ілюстрація</label>
+                        </div>
+                        <div class="col-md-10">
                             @if (!string.IsNullOrEmpty(_editingQuestion.CommentAttachmentUrl))
                             {
                                 <div class="mb-2 p-2 border rounded bg-light">
@@ -451,6 +459,21 @@
                                     <i class="bi bi-exclamation-circle me-1"></i>@_commentUploadError
                                 </div>
                             }
+                        </div>
+                        <div class="col-md-2">
+                            <label class="col-form-label">Джерело</label>
+                        </div>
+                        <div class="col-md-10">
+                            <textarea class="form-control auto-expand" placeholder="Джерела інформації (кожне з нового рядка)"
+                                      @bind="_editingQuestion.Source" @onblur="SaveEditingQuestionAsync"></textarea>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="col-form-label">Автори</label>
+                        </div>
+                        <div class="col-md-10">
+                            <input type="text" class="form-control" placeholder="через кому"
+                                   value="@string.Join(", ", _editingQuestion.Authors)"
+                                   @onchange="OnQuestionAuthorsChanged" @onblur="SaveEditingQuestionAsync" />
                         </div>
                     </div>
                 </div>

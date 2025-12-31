@@ -62,3 +62,11 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Auto-expandable textareas - grows with content */
+.auto-expand {
+    field-sizing: content;
+    min-height: calc(1.5em + 0.75rem + 2px); /* Match Bootstrap form-control single line height */
+    resize: none;
+}
+
