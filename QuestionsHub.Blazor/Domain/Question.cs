@@ -13,6 +13,9 @@ public class Question
     /// <summary>Question number for display (e.g., "1", "2", "F" for hexadecimal, "0" for warm-up).</summary>
     public required string Number { get; set; }
 
+    /// <summary>Instructions for the host/organizer (Вказівка ведучому).</summary>
+    public string? HostInstructions { get; set; }
+
     /// <summary>The main question text.</summary>
     public required string Text { get; set; }
 

@@ -50,6 +50,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
         {
             entity.HasKey(q => q.Id);
             entity.Property(q => q.Number).IsRequired().HasMaxLength(20);
+            entity.Property(q => q.HostInstructions).HasMaxLength(1000);
             entity.Property(q => q.Text).IsRequired();
             entity.Property(q => q.Answer).IsRequired().HasMaxLength(1000);
             entity.Property(q => q.AcceptedAnswers).HasMaxLength(1000);

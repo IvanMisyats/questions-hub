@@ -299,6 +299,7 @@ public class PackageManagementController : ControllerBase
             Number = dto.Number,
             Text = dto.Text,
             Answer = dto.Answer,
+            HostInstructions = dto.HostInstructions,
             HandoutText = dto.HandoutText,
             HandoutUrl = dto.HandoutUrl,
             AcceptedAnswers = dto.AcceptedAnswers,
@@ -343,6 +344,7 @@ public class PackageManagementController : ControllerBase
         question.Number = dto.Number;
         question.Text = dto.Text;
         question.Answer = dto.Answer;
+        question.HostInstructions = dto.HostInstructions;
         question.HandoutText = dto.HandoutText;
         question.HandoutUrl = dto.HandoutUrl;
         question.AcceptedAnswers = dto.AcceptedAnswers;
@@ -418,6 +420,7 @@ public class PackageManagementController : ControllerBase
                             q.Number,
                             q.Text,
                             q.Answer,
+                            q.HostInstructions,
                             q.HandoutText,
                             q.HandoutUrl,
                             q.AcceptedAnswers,

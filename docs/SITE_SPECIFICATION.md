@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: December 28, 2025
+**Last Updated**: December 31, 2025
 
 ---
 
@@ -41,6 +41,7 @@
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
   - Has OrderIndex for physical ordering within tour
   - Has Number for display (can be non-numeric, e.g., "F" for hexadecimal)
+  - Has optional HostInstructions (Вказівка ведучому) for organizer guidance
 - **User (Користувач)** - Application user with profile information
 
 ---
@@ -59,7 +60,7 @@ Displays full package with all tours and questions on a single scrollable page. 
 
 ### 3. Question Card Component
 
-Displays question with handout materials (text, images, video, audio). Toggle button shows/hides answer section with correct answer, accepted/rejected alternatives, commentary, sources, and authors.
+Displays question with host instructions (Вказівка ведучому) if present, followed by handout materials (text, images, video, audio). Toggle button shows/hides answer section with correct answer, accepted/rejected alternatives, commentary, sources, and authors.
 
 ### 4. User Authentication
 

@@ -5,7 +5,15 @@
     <div class="question-header">
         <span class="question-number">Питання @Question.Number</span>
     </div>
-    
+
+    @if (!string.IsNullOrEmpty(Question.HostInstructions))
+    {
+        <div class="host-instructions">
+            <strong>Вказівка ведучому:</strong>
+            <div>@Question.HostInstructions</div>
+        </div>
+    }
+
     @if (!string.IsNullOrEmpty(Question.HandoutText))
     {
         <div class="handout">
@@ -13,7 +21,7 @@
             <div>@Question.HandoutText</div>
         </div>
     }
-    
+
     @if (!string.IsNullOrEmpty(Question.HandoutUrl))
     {
         <div class="handout">
@@ -43,7 +51,7 @@
             </div>
         </div>
     }
-    
+
     <div class="question-text">
         @Question.Text
     </div>

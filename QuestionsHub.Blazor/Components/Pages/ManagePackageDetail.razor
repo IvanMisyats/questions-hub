@@ -302,6 +302,13 @@
                                    @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync" />
                         </div>
                         <div class="col-md-2">
+                            <label class="col-form-label">Вказівка ведучому</label>
+                        </div>
+                        <div class="col-md-10">
+                            <textarea class="form-control auto-expand" placeholder="Інструкції для ведучого/організатора"
+                                      @bind="_editingQuestion.HostInstructions" @onblur="SaveEditingQuestionAsync"></textarea>
+                        </div>
+                        <div class="col-md-2">
                             <label class="col-form-label">Роздатковий матеріал</label>
                         </div>
                         <div class="col-md-10">
@@ -920,6 +927,7 @@
             _editingQuestion.Number = _editingQuestion.Number.Trim();
             _editingQuestion.Text = _editingQuestion.Text.Trim();
             _editingQuestion.Answer = _editingQuestion.Answer.Trim();
+            _editingQuestion.HostInstructions = _editingQuestion.HostInstructions?.Trim();
             _editingQuestion.HandoutText = _editingQuestion.HandoutText?.Trim();
             _editingQuestion.AcceptedAnswers = _editingQuestion.AcceptedAnswers?.Trim();
             _editingQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers?.Trim();
@@ -933,6 +941,7 @@
                 dbQuestion.Number = _editingQuestion.Number;
                 dbQuestion.Text = _editingQuestion.Text;
                 dbQuestion.Answer = _editingQuestion.Answer;
+                dbQuestion.HostInstructions = _editingQuestion.HostInstructions;
                 dbQuestion.HandoutText = _editingQuestion.HandoutText;
                 dbQuestion.AcceptedAnswers = _editingQuestion.AcceptedAnswers;
                 dbQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers;
