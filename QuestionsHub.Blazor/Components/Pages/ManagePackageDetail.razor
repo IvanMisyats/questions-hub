@@ -281,6 +281,14 @@
                                 disabled="@(!CanNavigateNext())">
                             Наступне <i class="bi bi-chevron-right"></i>
                         </button>
+                        @if (!CanNavigateNext())
+                        {
+                            <button class="btn btn-outline-success btn-sm ms-1"
+                                    @onclick="CreateAndNavigateToNextQuestion"
+                                    title="Створити нове питання в цьому турі">
+                                <i class="bi bi-plus-lg"></i> Створити наступне
+                            </button>
+                        }
                     </div>
                     <button type="button" class="btn-close" @onclick="CloseQuestionEditor"></button>
                 </div>
@@ -1017,6 +1025,54 @@
         }
 
         _questionSaveStatus = null;
+        StateHasChanged();
+    }
+
+    private async Task CreateAndNavigateToNextQuestion()
+    {
+        if (_editingTour == null || _package == null) return;
+
+        // Save current question first
+        await SaveEditingQuestionAsync();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var newOrderIndex = _editingTour.Questions.Count;
+            var newNumber = (newOrderIndex + 1).ToString();
+            var question = new Question
+            {
+                TourId = _editingTour.Id,
+                OrderIndex = newOrderIndex,
+                Number = newNumber,
+                Text = "",
+                Answer = "",
+                Authors = new List<string>()
+            };
+
+            context.Questions.Add(question);
+
+            var dbPackage = await context.Packages.FindAsync(_package.Id);
+            if (dbPackage != null)
+            {
+                dbPackage.TotalQuestions++;
+            }
+
+            await context.SaveChangesAsync();
+
+            _editingTour.Questions.Add(question);
+            _package.TotalQuestions++;
+
+            // Navigate to the new question
+            _editingQuestion = question;
+            _questionSaveStatus = null;
+            _saveStatus = "Питання додано";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
         StateHasChanged();
     }
 
