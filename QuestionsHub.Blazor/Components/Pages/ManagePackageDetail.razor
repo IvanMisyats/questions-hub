@@ -75,6 +75,12 @@
                         <textarea class="form-control auto-expand" id="packageDescription"
                                   @bind="_package.Description" @onblur="SavePackageAsync"></textarea>
                     </div>
+                    <div class="col-12">
+                        <label for="packagePreamble" class="form-label">Преамбула</label>
+                        <textarea class="form-control auto-expand" id="packagePreamble"
+                                  @bind="_package.Preamble" @onblur="SavePackageAsync"
+                                  placeholder="Інформація від редактора, подяки тестерам тощо"></textarea>
+                    </div>
                     <div class="col-md-8">
                         <label for="packageEditors" class="form-label">Редактори (через кому)</label>
                         <input type="text" class="form-control" id="packageEditors"
@@ -156,6 +162,12 @@
                                                         @onclick="() => ConfirmDeleteTour(tour)">
                                                     <i class="bi bi-trash"></i> Видалити
                                                 </button>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label small">Преамбула</label>
+                                                <textarea class="form-control form-control-sm auto-expand"
+                                                          @bind="tour.Preamble" @onblur="() => SaveTourAsync(tour)"
+                                                          placeholder="Інформація від редактора, подяки тестерам тощо"></textarea>
                                             </div>
                                         </div>
 
@@ -641,6 +653,7 @@
             // Trim whitespaces from text fields
             _package.Title = _package.Title.Trim();
             _package.Description = _package.Description?.Trim();
+            _package.Preamble = _package.Preamble?.Trim();
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
             var dbPackage = await context.Packages.FindAsync(_package.Id);
@@ -648,6 +661,7 @@
             {
                 dbPackage.Title = _package.Title;
                 dbPackage.Description = _package.Description;
+                dbPackage.Preamble = _package.Preamble;
                 dbPackage.Editors = _package.Editors;
                 dbPackage.PlayedAt = _package.PlayedAt;
                 dbPackage.Status = _package.Status;
@@ -700,6 +714,7 @@
             // Trim whitespaces from text fields
             tour.Number = tour.Number.Trim();
             tour.Title = tour.Title?.Trim();
+            tour.Preamble = tour.Preamble?.Trim();
             tour.Comment = tour.Comment?.Trim();
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
@@ -709,6 +724,7 @@
                 dbTour.Number = tour.Number;
                 dbTour.Title = tour.Title;
                 dbTour.Editors = tour.Editors;
+                dbTour.Preamble = tour.Preamble;
                 dbTour.Comment = tour.Comment;
                 await context.SaveChangesAsync();
             }
@@ -736,6 +752,7 @@
                 Number = newNumber,
                 Title = null,
                 Editors = new List<string>(),
+                Preamble = null,
                 Comment = null,
                 Questions = new List<Question>()
             };

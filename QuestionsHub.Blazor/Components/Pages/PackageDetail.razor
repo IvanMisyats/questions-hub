@@ -43,16 +43,23 @@ else
                         <p class="lead">@_package.Description</p>
                     }
 
+                    @if (!string.IsNullOrEmpty(_package.Preamble))
+                    {
+                        <div class="preamble mb-3">
+                            <p style="white-space: pre-line;">@_package.Preamble</p>
+                        </div>
+                    }
+
                     @if (_package.Editors.Any())
                     {
-                        <p class="text-muted">
+                        <p>
                             <strong>Редактори пакету:</strong> @string.Join(", ", _package.Editors)
                         </p>
                     }
 
                     @if (_package.PlayedAt.HasValue)
                     {
-                        <p class="text-muted">
+                        <p>
                             <strong>Зіграно:</strong> @_package.PlayedAt.Value.ToString("MMMM yyyy")
                         </p>
                     }
@@ -73,14 +80,21 @@ else
 
                         @if (tour.Editors.Any())
                         {
-                            <p class="text-muted">
+                            <p>
                                 <small><strong>Редактори туру:</strong> @string.Join(", ", tour.Editors)</small>
                             </p>
                         }
 
+                        @if (!string.IsNullOrEmpty(tour.Preamble))
+                        {
+                            <div class="preamble mb-3">
+                                <p style="white-space: pre-line;">@tour.Preamble</p>
+                            </div>
+                        }
+
                         @if (!string.IsNullOrEmpty(tour.Comment))
                         {
-                            <p class="text-muted small">@tour.Comment</p>
+                            <p class="small">@tour.Comment</p>
                         }
 
                         @foreach (var question in tour.Questions)

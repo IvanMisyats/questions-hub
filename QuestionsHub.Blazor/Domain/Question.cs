@@ -67,6 +67,9 @@ public class Tour
     /// <summary>Tour editors/authors.</summary>
     public List<string> Editors { get; set; } = [];
 
+    /// <summary>Preamble - information from editors about the tour, usually contains list of testers (Преамбула).</summary>
+    public string? Preamble { get; set; }
+
     /// <summary>Commentary for the entire tour.</summary>
     public string? Comment { get; set; }
 
@@ -94,6 +97,9 @@ public class Package
 
     /// <summary>Package description or notes.</summary>
     public string? Description { get; set; }
+
+    /// <summary>Preamble - information from editors about the package, usually contains list of testers (Преамбула).</summary>
+    public string? Preamble { get; set; }
 
     /// <summary>Total number of questions in the package.</summary>
     public int TotalQuestions { get; set; }
