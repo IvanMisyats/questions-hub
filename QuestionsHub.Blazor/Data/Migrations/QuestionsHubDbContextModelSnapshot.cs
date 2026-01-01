@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 using QuestionsHub.Blazor.Data;
 
 #nullable disable
@@ -328,6 +329,14 @@ namespace QuestionsHub.Blazor.Data.Migrations
                     b.Property<string>("RejectedAnswers")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("SearchTextNorm")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("text");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector");
 
                     b.Property<string>("Source")
                         .HasColumnType("text");

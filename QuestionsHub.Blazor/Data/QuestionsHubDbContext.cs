@@ -57,6 +57,13 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(q => q.RejectedAnswers).HasMaxLength(1000);
             entity.Property(q => q.HandoutUrl).HasMaxLength(500);
             entity.Property(q => q.CommentAttachmentUrl).HasMaxLength(500);
+
+            // Search columns (database-generated, read-only)
+            entity.Property(q => q.SearchTextNorm)
+                .ValueGeneratedOnAddOrUpdate();
+            entity.Property(q => q.SearchVector)
+                .HasColumnType("tsvector")
+                .ValueGeneratedOnAddOrUpdate();
         });
     }
 }

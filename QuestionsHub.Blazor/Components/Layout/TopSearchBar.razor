@@ -1,0 +1,27 @@
+﻿@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="search-bar">
+    <span class="search-icon"></span>
+    <input type="text"
+           class="search-input"
+           placeholder="введіть слова для пошуку"
+           @bind="_searchQuery"
+           @bind:event="oninput"
+           @onkeyup="OnSearchKeyUp" />
+</div>
+
+@code {
+    private string _searchQuery = "";
+
+    private void OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var encodedQuery = Uri.EscapeDataString(_searchQuery.Trim());
+            Navigation.NavigateTo($"/search/{encodedQuery}");
+            _searchQuery = "";
+        }
+    }
+}
+

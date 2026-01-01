@@ -1,0 +1,198 @@
+﻿@page "/search"
+@page "/search/{Query}"
+@using QuestionsHub.Blazor.Infrastructure
+@inject SearchService SearchService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Пошук питань</PageTitle>
+
+<div class="container-fluid">
+    <h4 class="mb-4">Пошук питань</h4>
+
+    <div class="row mb-4">
+        <div class="col-12 col-md-8 col-lg-6">
+            <div class="input-group">
+                <input type="text"
+                       class="form-control form-control-lg"
+                       placeholder="Введіть слова для пошуку..."
+                       @bind="SearchQuery"
+                       @bind:event="oninput"
+                       @onkeyup="OnKeyUp" />
+                <button class="btn btn-primary" @onclick="PerformSearch" disabled="@_isSearching">
+                    @if (_isSearching)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span>Шукаю...</span>
+                    }
+                    else
+                    {
+                        <span>Шукати</span>
+                    }
+                </button>
+            </div>
+            <small class="text-muted mt-2 d-block">
+                Підтримується: <code>слово1 слово2</code> (обидва), <code>слово1 OR слово2</code> (будь-яке),
+                <code>"точна фраза"</code>, <code>-виключити</code>
+            </small>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            @_errorMessage
+        </div>
+    }
+
+    @if (_results != null)
+    {
+        @if (_results.Count > 0)
+        {
+            <p class="text-muted mb-3">
+                Знайдено <strong>@_results.Count</strong> результат(ів)
+                @if (!string.IsNullOrEmpty(_searchedQuery))
+                {
+                    <span> за запитом «@_searchedQuery»</span>
+                }
+            </p>
+
+            <div class="row">
+                @foreach (var result in _results)
+                {
+                    <div class="col-12 mb-4">
+                        <div class="card search-result-card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <a href="/package/@result.PackageId" class="text-decoration-none fw-bold">@result.PackageTitle</a>
+                                    <span class="text-muted mx-2">·</span>
+                                    <span class="text-muted">Тур @result.TourNumber</span>
+                                    <span class="text-muted mx-2">·</span>
+                                    <span class="text-muted">Питання @result.QuestionNumber</span>
+                                </div>
+                                <a href="/package/@result.PackageId#question-@result.QuestionId"
+                                   class="btn btn-sm btn-outline-primary">
+                                    Перейти до пакету
+                                </a>
+                            </div>
+                            <div class="card-body">
+                                @* Handout if present *@
+                                @if (!string.IsNullOrEmpty(result.HandoutText))
+                                {
+                                    <div class="handout mb-3">
+                                        <strong>Роздатковий матеріал:</strong>
+                                        <div>@result.HandoutText</div>
+                                    </div>
+                                }
+
+                                @* Full question text *@
+                                <div class="question-text mb-3">
+                                    @result.Text
+                                </div>
+
+                                @* Answer section *@
+                                <div class="answer-section">
+                                    <div class="answer-field">
+                                        <span class="answer-label">Відповідь:</span> @result.Answer
+                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(result.AcceptedAnswers))
+                                    {
+                                        <div class="answer-field">
+                                            <span class="answer-label">Залік:</span> @result.AcceptedAnswers
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(result.RejectedAnswers))
+                                    {
+                                        <div class="answer-field">
+                                            <span class="answer-label">Незалік:</span> @result.RejectedAnswers
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(result.Comment))
+                                    {
+                                        <div class="answer-field">
+                                            <span class="answer-label">Коментар:</span> @result.Comment
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(result.Source))
+                                    {
+                                        <div class="answer-field source-field">
+                                            <span class="answer-label">Джерело:</span> @result.Source
+                                        </div>
+                                    }
+        else if (_hasSearched)
+        {
+            <div class="alert alert-info" role="alert">
+                <strong>Нічого не знайдено</strong> за запитом «@_searchedQuery».
+                <br />
+                <small>Спробуйте інші слова або перевірте написання.</small>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? Query { get; set; }
+
+    private string SearchQuery { get; set; } = "";
+    private List<SearchResult>? _results;
+    private bool _isSearching;
+    private bool _hasSearched;
+    private string? _errorMessage;
+    private string? _searchedQuery;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // If query passed via URL parameter, use it
+        if (!string.IsNullOrWhiteSpace(Query) && Query != SearchQuery)
+        {
+            SearchQuery = Uri.UnescapeDataString(Query);
+            await PerformSearch();
+        }
+    }
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PerformSearch();
+        }
+    }
+
+    private async Task PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            return;
+        }
+
+        _isSearching = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            _results = await SearchService.Search(SearchQuery.Trim());
+            _searchedQuery = SearchQuery.Trim();
+            _hasSearched = true;
+
+            // Update URL without full navigation
+            var encodedQuery = Uri.EscapeDataString(SearchQuery.Trim());
+            Navigation.NavigateTo($"/search/{encodedQuery}", replace: true);
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Помилка пошуку. Спробуйте ще раз пізніше.";
+            _results = null;
+        }
+        finally
+        {
+            _isSearching = false;
+        }
+    }
+}
+

@@ -91,6 +91,7 @@ mediaUploadOptions.MediaPath = builder.Environment.IsDevelopment()
 
 builder.Services.AddSingleton(mediaUploadOptions);
 builder.Services.AddScoped<MediaService>();
+builder.Services.AddScoped<SearchService>();
 
 var app = builder.Build();
 

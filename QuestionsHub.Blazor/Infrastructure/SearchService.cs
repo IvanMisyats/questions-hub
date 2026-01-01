@@ -1,0 +1,112 @@
+﻿using Microsoft.EntityFrameworkCore;
+using QuestionsHub.Blazor.Data;
+
+namespace QuestionsHub.Blazor.Infrastructure;
+
+/// <summary>
+/// Result of a search query containing full question data and metadata.
+/// </summary>
+public record SearchResult(
+    int QuestionId,
+    int TourId,
+    int PackageId,
+    string PackageTitle,
+    string TourNumber,
+    string QuestionNumber,
+    string Text,
+    string Answer,
+    string? HandoutText,
+    string? AcceptedAnswers,
+    string? RejectedAnswers,
+    string? Comment,
+    string? Source,
+    double Rank
+);
+
+/// <summary>
+/// Service for searching questions using PostgreSQL full-text search with trigram fuzzy matching.
+/// </summary>
+public class SearchService
+{
+    private readonly IDbContextFactory<QuestionsHubDbContext> _contextFactory;
+    private readonly ILogger<SearchService> _logger;
+
+    public SearchService(
+        IDbContextFactory<QuestionsHubDbContext> contextFactory,
+        ILogger<SearchService> logger)
+    {
+        _contextFactory = contextFactory;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Searches questions using hybrid FTS + trigram matching.
+    /// Supports web-style query syntax: AND (default), OR, "phrase", -exclude.
+    /// </summary>
+    /// <param name="query">Search query string</param>
+    /// <param name="limit">Maximum number of results (default 50, max 100)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of search results ordered by relevance</returns>
+    public async Task<List<SearchResult>> Search(
+        string query,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        // Clamp limit to reasonable bounds
+        limit = Math.Clamp(limit, 1, 100);
+
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var results = await context.Database
+            .SqlQuery<SearchResult>($@"
+                WITH q AS (
+                    SELECT
+                        websearch_to_tsquery('ukrainian', public.qh_normalize({query})) AS tsq,
+                        public.qh_normalize({query}) AS qnorm
+                )
+                SELECT
+                    qu.""Id"" AS ""QuestionId"",
+                    qu.""TourId"",
+                    t.""PackageId"",
+                    p.""Title"" AS ""PackageTitle"",
+                    t.""Number"" AS ""TourNumber"",
+                    qu.""Number"" AS ""QuestionNumber"",
+                    qu.""Text"",
+                    qu.""Answer"",
+                    qu.""HandoutText"",
+                    qu.""AcceptedAnswers"",
+                    qu.""RejectedAnswers"",
+                    qu.""Comment"",
+                    qu.""Source"",
+                    ts_headline(
+                        qu.""Text"",
+                        q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=false, MaxFragments=2, MaxWords=30, MinWords=15'
+                    ) AS ""Snippet"",
+                    (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) +
+                     COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank""
+                FROM ""Questions"" qu
+                JOIN ""Tours"" t ON qu.""TourId"" = t.""Id""
+                JOIN ""Packages"" p ON t.""PackageId"" = p.""Id""
+                CROSS JOIN q
+                WHERE p.""Status"" = 1
+                  AND (
+                       qu.""SearchVector"" @@ q.tsq
+                       OR qu.""SearchTextNorm"" % q.qnorm
+                  )
+                ORDER BY ""Rank"" DESC
+                LIMIT {limit}
+            ")
+            .ToListAsync(cancellationToken);
+
+        _logger.LogDebug("Search for '{Query}' returned {Count} results", query, results.Count);
+
+        return results;
+    }
+}
+

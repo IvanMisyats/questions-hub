@@ -41,6 +41,8 @@
       - "5432:5432"
     volumes:
       - ${POSTGRES_DATA_PATH:-./postgres_data}:/var/lib/postgresql/data
+      - ./dictionaries/uk_UA.dic:/usr/local/share/postgresql/tsearch_data/uk_ua.dict:ro
+      - ./dictionaries/uk_UA.aff:/usr/local/share/postgresql/tsearch_data/uk_ua.affix:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d questionshub"]
       interval: 10s
@@ -72,21 +74,29 @@
     environment:
       PGPASSWORD: ${POSTGRES_ROOT_PASSWORD}
       QUESTIONSHUB_PASSWORD: ${QUESTIONSHUB_PASSWORD}
-    command: >
-      psql -h postgres -U postgres -d questionshub -c "
-      DO \$\$
-      BEGIN
-        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
-          CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';
-        END IF;
-      END \$\$;
-      GRANT CONNECT ON DATABASE questionshub TO questionshub;
-      GRANT USAGE, CREATE ON SCHEMA public TO questionshub;
-      GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;
-      GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;
-      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;
-      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;
-      "
+    volumes:
+      - ./dictionaries/setup-fts.sql:/setup-fts.sql:ro
+    command:
+      - sh
+      - -c
+      - |
+        # Create application user
+        psql -h postgres -U postgres -d questionshub -c "
+          DO \$\$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
+              CREATE USER questionshub WITH PASSWORD '$$QUESTIONSHUB_PASSWORD';
+            END IF;
+          END \$\$;
+          GRANT CONNECT ON DATABASE questionshub TO questionshub;
+          GRANT USAGE, CREATE ON SCHEMA public TO questionshub;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;
+        "
+        # Run FTS setup script
+        psql -h postgres -U postgres -d questionshub -f /setup-fts.sql
     restart: "no"
 
 

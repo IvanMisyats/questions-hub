@@ -1,0 +1,59 @@
+﻿/* Search result highlighting */
+::deep mark {
+    background-color: #fff3cd;
+    padding: 0.1em 0.2em;
+    border-radius: 0.2em;
+}
+
+/* Make the search input more prominent */
+.form-control-lg::placeholder {
+    color: #999;
+}
+
+/* Search result card styling */
+.search-result-card {
+    border-left: 4px solid #1b6ec2;
+}
+
+.search-result-card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Match QuestionCard styling */
+.question-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.handout {
+    padding: 0.75rem;
+    background: #fff3cd;
+    border-radius: 0.25rem;
+    border-left: 4px solid #ffc107;
+    white-space: pre-line;
+}
+
+.answer-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed #ccc;
+}
+
+.answer-field {
+    margin-bottom: 0.5rem;
+    white-space: pre-line;
+}
+
+.answer-label {
+    font-weight: 600;
+    color: #555;
+}
+
+.source-field {
+    border-top: 1px solid #eee;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+}
+
