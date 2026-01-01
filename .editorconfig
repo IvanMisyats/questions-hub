@@ -46,6 +46,10 @@ dotnet_style_readonly_field = true:suggestion
 # Optional: make IDE analyzers show as warnings (not errors) by default
 dotnet_analyzer_diagnostic.severity = warning
 
+# Logging performance warnings - acceptable for this project scale
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+
 # Generated EF migrations: don't nag
 [**/Migrations/*.cs]
 generated_code = true
