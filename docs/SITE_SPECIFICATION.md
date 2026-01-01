@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: December 31, 2025
+**Last Updated**: January 1, 2026
 
 ---
 
@@ -37,7 +37,10 @@
 - **Package (Пакет запитань)** - A collection of questions prepared for a tournament
   - Has owner (User who created it)
   - Has status: Draft, Published, or Archived
+  - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
 - **Tour (Тур)** - A round within a package, typically prepared by a specific editor
+  - Has Number for display (e.g., "1", "2")
+  - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
   - Has OrderIndex for physical ordering within tour
   - Has Number for display (can be non-numeric, e.g., "F" for hexadecimal)
@@ -143,7 +146,7 @@ Single-page editor for complete package management:
 - Full question editing: number, text, answer, accepted/rejected answers, comment, source, authors
 - Prev/Next navigation buttons (including cross-tour navigation)
 - Auto-save on field blur
-- Handout text field (media upload not yet implemented)
+- Handout text field and media upload for handout and comment attachments
 
 **Package Status**:
 - **Draft** - Only visible to owner and admins
@@ -164,9 +167,6 @@ Single-page editor for complete package management:
 
 ### Search Functionality
 UI placeholder exists, not implemented. Will include full-text search across questions, packages, and authors with filters.
-
-### Media Upload
-Not implemented. Editors will be able to upload images, audio, and video for question handouts and comments.
 
 ### Package Reordering
 Not implemented. Drag-and-drop or button-based reordering of tours within packages and questions within tours.
@@ -240,6 +240,15 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | PUT | `/api/manage/questions/{id}` | Update question |
 | DELETE | `/api/manage/questions/{id}` | Delete question |
 
+### Media API
+
+**Authorization**: All endpoints require Editor or Admin role
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/media/questions/{id}/{target}` | Upload media for question handout or comment (target: 'handout' or 'comment') |
+| DELETE | `/api/media/questions/{id}/{target}` | Delete media from question handout or comment |
+
 ---
 
 ## Quick Reference: What Works Now
@@ -259,8 +268,8 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | Create/edit/delete tours | ✅ Working |
 | Create/edit/delete questions | ✅ Working |
 | Package ownership & status | ✅ Working |
+| Media upload | ✅ Working |
 | Search | ⏳ UI only, not functional |
-| Media upload | ❌ Not implemented |
 | Admin user management | ❌ Not implemented |
 | Interactive play mode | ❌ Not implemented |
 | Comments/ratings | ❌ Not implemented |
@@ -271,4 +280,5 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 2026 | 1.1 | Added Preamble to Package and Tour, removed Tour Title, Media upload implemented |
 | Dec 2025 | 1.0 | Initial specification document |

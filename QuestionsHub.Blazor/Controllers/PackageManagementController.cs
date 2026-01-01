@@ -100,6 +100,7 @@ public class PackageManagementController : ControllerBase
         {
             Title = dto.Title,
             Description = dto.Description,
+            Preamble = dto.Preamble,
             Editors = dto.Editors,
             PlayedAt = dto.PlayedAt,
             Status = dto.Status,
@@ -133,6 +134,7 @@ public class PackageManagementController : ControllerBase
 
         package.Title = dto.Title;
         package.Description = dto.Description;
+        package.Preamble = dto.Preamble;
         package.Editors = dto.Editors;
         package.PlayedAt = dto.PlayedAt;
         package.Status = dto.Status;
@@ -194,6 +196,7 @@ public class PackageManagementController : ControllerBase
             PackageId = packageId,
             Number = dto.Number,
             Editors = dto.Editors,
+            Preamble = dto.Preamble,
             Comment = dto.Comment
         };
 
@@ -225,6 +228,7 @@ public class PackageManagementController : ControllerBase
 
         tour.Number = dto.Number;
         tour.Editors = dto.Editors;
+        tour.Preamble = dto.Preamble;
         tour.Comment = dto.Comment;
 
         await _context.SaveChangesAsync();
@@ -396,6 +400,7 @@ public class PackageManagementController : ControllerBase
             package.Id,
             package.Title,
             package.Description,
+            package.Preamble,
             package.Editors,
             package.PlayedAt,
             package.Status,
@@ -407,6 +412,7 @@ public class PackageManagementController : ControllerBase
                     t.Id,
                     t.Number,
                     t.Editors,
+                    t.Preamble,
                     t.Comment,
                     t.Questions.Count,
                     t.Questions

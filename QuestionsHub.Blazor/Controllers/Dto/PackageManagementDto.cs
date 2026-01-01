@@ -10,6 +10,7 @@ namespace QuestionsHub.Blazor.Controllers.Dto;
 public record PackageUpsertDto(
     string Title,
     string? Description,
+    string? Preamble,
     List<string> Editors,
     DateOnly? PlayedAt,
     PackageStatus Status
@@ -20,8 +21,8 @@ public record PackageUpsertDto(
 /// </summary>
 public record TourUpsertDto(
     string Number,
-    string? Title,
     List<string> Editors,
+    string? Preamble,
     string? Comment
 );
 
@@ -65,6 +66,7 @@ public record PackageDetailDto(
     int Id,
     string Title,
     string? Description,
+    string? Preamble,
     List<string> Editors,
     DateOnly? PlayedAt,
     PackageStatus Status,
@@ -80,6 +82,7 @@ public record TourDetailDto(
     int Id,
     string Number,
     List<string> Editors,
+    string? Preamble,
     string? Comment,
     int QuestionCount,
     List<QuestionDetailDto> Questions
