@@ -83,11 +83,6 @@ public class SearchService
                     qu.""RejectedAnswers"",
                     qu.""Comment"",
                     qu.""Source"",
-                    ts_headline(
-                        qu.""Text"",
-                        q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=false, MaxFragments=2, MaxWords=30, MinWords=15'
-                    ) AS ""Snippet"",
                     (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) +
                      COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank""
                 FROM ""Questions"" qu
