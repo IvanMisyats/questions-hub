@@ -395,14 +395,14 @@
                         <div class="col-md-2">
                             <label class="col-form-label">Залік</label>
                         </div>
-                        <div class="col-md-10">
+                        <div class="col-md-5">
                             <input type="text" class="form-control" placeholder="альтернативні відповіді"
                                    @bind="_editingQuestion.AcceptedAnswers" @onblur="SaveEditingQuestionAsync" />
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-2 text-end">
                             <label class="col-form-label">Незалік</label>
                         </div>
-                        <div class="col-md-10">
+                        <div class="col-md-3">
                             <input type="text" class="form-control"
                                    @bind="_editingQuestion.RejectedAnswers" @onblur="SaveEditingQuestionAsync" />
                         </div>
