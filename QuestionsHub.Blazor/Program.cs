@@ -145,7 +145,7 @@ using (var scope = app.Services.CreateScope())
     var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
     await context.Database.MigrateAsync();
-    await DbSeeder.SeedAsync(context, userManager, roleManager, configuration);
+    await DbSeeder.SeedAsync(userManager, roleManager, configuration);
 }
 
 // Configure the HTTP request pipeline.
