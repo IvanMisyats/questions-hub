@@ -222,24 +222,6 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | POST | `/api/Auth/register` | User registration |
 | POST/GET | `/api/Auth/logout` | User logout |
 
-### Package Management API
-
-**Authorization**: All endpoints require Editor or Admin role
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/manage/packages` | List packages (filtered by owner for Editors) |
-| GET | `/api/manage/packages/{id}` | Get package with tours and questions |
-| POST | `/api/manage/packages` | Create new package |
-| PUT | `/api/manage/packages/{id}` | Update package properties |
-| DELETE | `/api/manage/packages/{id}` | Delete package |
-| POST | `/api/manage/packages/{id}/tours` | Add tour to package |
-| PUT | `/api/manage/tours/{id}` | Update tour |
-| DELETE | `/api/manage/tours/{id}` | Delete tour |
-| POST | `/api/manage/tours/{id}/questions` | Add question to tour |
-| PUT | `/api/manage/questions/{id}` | Update question |
-| DELETE | `/api/manage/questions/{id}` | Delete question |
-
 ### Media API
 
 **Authorization**: All endpoints require Editor or Admin role
@@ -248,6 +230,8 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 |--------|-------|-------------|
 | POST | `/api/media/questions/{id}/{target}` | Upload media for question handout or comment (target: 'handout' or 'comment') |
 | DELETE | `/api/media/questions/{id}/{target}` | Delete media from question handout or comment |
+
+> **Note**: Package, Tour, and Question management is done directly via Blazor Server components using DbContext, not via REST API.
 
 ---
 
@@ -280,5 +264,6 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 2026 | 1.2 | Removed unused Package Management REST API (Blazor uses DbContext directly) |
 | Jan 2026 | 1.1 | Added Preamble to Package and Tour, removed Tour Title, Media upload implemented |
 | Dec 2025 | 1.0 | Initial specification document |

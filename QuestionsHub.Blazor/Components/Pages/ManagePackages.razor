@@ -3,7 +3,6 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
-@using QuestionsHub.Blazor.Controllers.Dto
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
 @attribute [Authorize(Roles = "Editor,Admin")]
@@ -130,7 +129,17 @@
 }
 
 @code {
-    private List<PackageListItemDto>? _packages;
+    private record PackageListItem(
+        int Id,
+        string Title,
+        DateOnly? PlayedAt,
+        int TourCount,
+        int QuestionCount,
+        PackageStatus Status,
+        string? OwnerName
+    );
+
+    private List<PackageListItem>? _packages;
     private bool _isLoading = true;
     private bool _isAdmin;
     private string? _userId;
@@ -138,7 +147,7 @@
 
     // Delete modal state
     private bool _showDeleteModal;
-    private PackageListItemDto? _packageToDelete;
+    private PackageListItem? _packageToDelete;
     private bool _isDeleting;
 
     [CascadingParameter]
@@ -182,7 +191,7 @@
             _packages = await query
                 .OrderByDescending(p => p.PlayedAt)
                 .ThenBy(p => p.Title)
-                .Select(p => new PackageListItemDto(
+                .Select(p => new PackageListItem(
                     p.Id,
                     p.Title,
                     p.PlayedAt,
@@ -231,7 +240,7 @@
         }
     }
 
-    private void ConfirmDelete(PackageListItemDto package)
+    private void ConfirmDelete(PackageListItem package)
     {
         _packageToDelete = package;
         _showDeleteModal = true;
