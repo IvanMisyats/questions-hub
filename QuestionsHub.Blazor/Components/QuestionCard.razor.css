@@ -23,12 +23,14 @@
     border-radius: 0.25rem;
     border-left: 4px solid #6c757d;
     color: #495057;
+    white-space: pre-line;
 }
 
 .question-text {
     font-size: 1.1rem;
     line-height: 1.6;
     margin-bottom: 0.5rem;
+    white-space: pre-line;
 }
 
 .handout {
@@ -37,6 +39,7 @@
     background: #fff3cd;
     border-radius: 0.25rem;
     border-left: 4px solid #ffc107;
+    white-space: pre-line;
 }
 
 .media-container {
@@ -78,6 +81,7 @@
 
 .answer-field {
     margin-bottom: 0.5rem;
+    white-space: pre-line;
 }
 
 .answer-label {
