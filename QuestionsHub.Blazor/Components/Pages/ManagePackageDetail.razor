@@ -127,10 +127,6 @@
                                             @onclick="() => ToggleExpand(tour.Id)">
                                         <span class="me-2">
                                             <strong>Тур @tour.Number</strong>
-                                            @if (!string.IsNullOrEmpty(tour.Title))
-                                            {
-                                                <span class="text-muted">: @tour.Title</span>
-                                            }
                                         </span>
                                         <span class="badge bg-info ms-auto me-2">@tour.Questions.Count питань</span>
                                     </button>
@@ -145,12 +141,7 @@
                                                 <input type="text" class="form-control form-control-sm"
                                                        @bind="tour.Number" @onblur="() => SaveTourAsync(tour)" />
                                             </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label small">Назва туру</label>
-                                                <input type="text" class="form-control form-control-sm"
-                                                       @bind="tour.Title" @onblur="() => SaveTourAsync(tour)" />
-                                            </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-8">
                                                 <label class="form-label small">Редактори туру</label>
                                                 <input type="text" class="form-control form-control-sm"
                                                        value="@string.Join(", ", tour.Editors)"
@@ -713,7 +704,6 @@
         {
             // Trim whitespaces from text fields
             tour.Number = tour.Number.Trim();
-            tour.Title = tour.Title?.Trim();
             tour.Preamble = tour.Preamble?.Trim();
             tour.Comment = tour.Comment?.Trim();
 
@@ -722,7 +712,6 @@
             if (dbTour != null)
             {
                 dbTour.Number = tour.Number;
-                dbTour.Title = tour.Title;
                 dbTour.Editors = tour.Editors;
                 dbTour.Preamble = tour.Preamble;
                 dbTour.Comment = tour.Comment;
@@ -745,12 +734,17 @@
         {
             await using var context = await DbContextFactory.CreateDbContextAsync();
 
-            var newNumber = (_package.Tours.Count + 1).ToString();
+            // Auto-increment from the highest existing tour number
+            var maxNumber = _package.Tours
+                .Select(t => int.TryParse(t.Number, out var n) ? n : 0)
+                .DefaultIfEmpty(0)
+                .Max();
+            var newNumber = (maxNumber + 1).ToString();
+
             var tour = new Tour
             {
                 PackageId = _package.Id,
                 Number = newNumber,
-                Title = null,
                 Editors = new List<string>(),
                 Preamble = null,
                 Comment = null,

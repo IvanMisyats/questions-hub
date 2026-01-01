@@ -193,7 +193,6 @@ public class PackageManagementController : ControllerBase
         {
             PackageId = packageId,
             Number = dto.Number,
-            Title = dto.Title,
             Editors = dto.Editors,
             Comment = dto.Comment
         };
@@ -225,7 +224,6 @@ public class PackageManagementController : ControllerBase
         }
 
         tour.Number = dto.Number;
-        tour.Title = dto.Title;
         tour.Editors = dto.Editors;
         tour.Comment = dto.Comment;
 
@@ -408,7 +406,6 @@ public class PackageManagementController : ControllerBase
                 .Select(t => new TourDetailDto(
                     t.Id,
                     t.Number,
-                    t.Title,
                     t.Editors,
                     t.Comment,
                     t.Questions.Count,

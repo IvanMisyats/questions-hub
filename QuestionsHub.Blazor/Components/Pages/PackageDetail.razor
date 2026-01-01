@@ -72,10 +72,6 @@ else
                     <div id="tour-@tour.Id" class="tour-section">
                         <h2>
                             Тур @tour.Number
-                            @if (!string.IsNullOrEmpty(tour.Title))
-                            {
-                                <span>: @tour.Title</span>
-                            }
                         </h2>
 
                         @if (tour.Editors.Any())

@@ -200,21 +200,18 @@ public static class DbSeeder
             new Tour
             {
                 Number = "1",
-                Title = "Тур перший",
                 Editors = [editors[0]],
                 Questions = GenerateQuestionsForTour(1, editors[0])
             },
             new Tour
             {
                 Number = "2",
-                Title = "Тур другий",
                 Editors = [editors.Length > 1 ? editors[1] : editors[0]],
                 Questions = GenerateQuestionsForTour(2, editors.Length > 1 ? editors[1] : editors[0])
             },
             new Tour
             {
                 Number = "3",
-                Title = "Тур третій",
                 Editors = [editors.Length > 2 ? editors[2] : editors[0]],
                 Questions = GenerateQuestionsForTour(3, editors.Length > 2 ? editors[2] : editors[0])
             }

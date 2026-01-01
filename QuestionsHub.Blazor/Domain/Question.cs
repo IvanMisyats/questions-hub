@@ -58,11 +58,8 @@ public class Tour
 {
     public int Id { get; set; }
 
-    /// <summary>Tour number/name (e.g., "1", "2", "Фінал").</summary>
+    /// <summary>Tour number (e.g., "1", "2").</summary>
     public required string Number { get; set; }
-
-    /// <summary>Tour title (optional).</summary>
-    public string? Title { get; set; }
 
     /// <summary>Tour editors/authors.</summary>
     public List<string> Editors { get; set; } = [];

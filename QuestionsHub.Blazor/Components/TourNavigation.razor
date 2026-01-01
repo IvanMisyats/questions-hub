@@ -10,7 +10,7 @@
         var tourElementId = $"tour-{tour.Id}";
         <div class="tour-group mb-3">
             <button type="button" class="nav-link tour-link" @onclick="@(() => ScrollToElementAsync(tourElementId))">
-                Тур @tour.Number@(string.IsNullOrEmpty(tour.Title) ? "" : $": {tour.Title}")
+                Тур @tour.Number
             </button>
             <div class="question-links">
                 @foreach (var question in tour.Questions)

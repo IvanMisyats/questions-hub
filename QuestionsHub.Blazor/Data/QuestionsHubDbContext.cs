@@ -37,7 +37,6 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Number).IsRequired().HasMaxLength(50);
-            entity.Property(t => t.Title).HasMaxLength(200);
             entity.Property(t => t.Preamble);
             entity.Property(t => t.Comment).HasMaxLength(2000);
 

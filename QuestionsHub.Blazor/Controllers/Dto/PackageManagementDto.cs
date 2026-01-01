@@ -79,7 +79,6 @@ public record PackageDetailDto(
 public record TourDetailDto(
     int Id,
     string Number,
-    string? Title,
     List<string> Editors,
     string? Comment,
     int QuestionCount,
