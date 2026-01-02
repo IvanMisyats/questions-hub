@@ -1,9 +1,8 @@
-﻿-- Database setup script for Questions Hub
+﻿-- 03-fts-setup.sql
+-- Configures Ukrainian full-text search with hunspell dictionary
 -- Run as postgres superuser
-
--- Create extensions for full-text search
-CREATE EXTENSION IF NOT EXISTS unaccent;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- Idempotent: safe to run multiple times
+-- Requires: uk_ua.dict and uk_ua.affix files in PostgreSQL tsearch_data directory
 
 -- Create Ukrainian hunspell dictionary
 DO $$
@@ -15,6 +14,8 @@ BEGIN
       AffFile = uk_ua
     );
     RAISE NOTICE 'Created ukrainian_hunspell dictionary';
+  ELSE
+    RAISE NOTICE 'ukrainian_hunspell dictionary already exists';
   END IF;
 END $$;
 
@@ -27,6 +28,8 @@ BEGIN
       ALTER MAPPING FOR asciiword, asciihword, hword_asciipart, word, hword, hword_part
       WITH ukrainian_hunspell, simple;
     RAISE NOTICE 'Created ukrainian FTS configuration';
+  ELSE
+    RAISE NOTICE 'ukrainian FTS configuration already exists';
   END IF;
 END $$;
 

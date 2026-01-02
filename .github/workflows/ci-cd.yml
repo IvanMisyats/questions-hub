@@ -50,7 +50,18 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-      # 9. Deploy to VPS via SSH
+      # 9. Copy deployment files to VPS
+      - name: Copy deployment files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: 55055
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.yml,db/"
+          target: "~/questions-hub/"
+
+      # 10. Deploy to VPS via SSH
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -59,6 +70,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            cd ~/questions-hub
+
             # Load environment variables from .env file
             # Note: ~/.env file must be pre-created on VPS with:
             #   - POSTGRES_ROOT_PASSWORD
@@ -69,100 +82,39 @@ jobs:
             source ~/.env
             set +a
 
+            # Export variables for docker-compose
+            export POSTGRES_ROOT_PASSWORD
+            export QUESTIONSHUB_PASSWORD
+            export ADMIN_EMAIL
+            export ADMIN_PASSWORD
+            export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
+            export MEDIA_PATH=~/questions-hub/media
+
             # Log in to GHCR on the VPS
             echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-            # Create data directory inside questions-hub folder
+            # Create required directories
             mkdir -p ~/questions-hub/data/postgres
-
-            # Create media directory for storing question media files
             mkdir -p ~/questions-hub/media
 
             # Set secure permissions for media directory
-            # 755 for directory (read + execute for traversal)
             chmod 755 ~/questions-hub/media
-
-            # Set read-only permissions for media files (644) if any exist
             if [ -n "$(ls -A ~/questions-hub/media 2>/dev/null)" ]; then
               find ~/questions-hub/media -type f -exec chmod 644 {} \;
             fi
 
-            echo "Media directory initialized successfully"
+            # Stop existing containers (if any)
+            docker compose --profile production down 2>/dev/null || true
 
-            # Create docker network if not exists
-            docker network create questions-hub-network 2>/dev/null || true
-
-            # Stop and remove existing containers
-            docker stop questions-hub-web questions-hub-db 2>/dev/null || true
-            docker rm questions-hub-web questions-hub-db 2>/dev/null || true
-
-            # Start PostgreSQL container
-            docker run -d \
-              --name questions-hub-db \
-              --network questions-hub-network \
-              --restart unless-stopped \
-              -e POSTGRES_USER=postgres \
-              -e POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD} \
-              -e POSTGRES_DB=questionshub \
-              -e QUESTIONSHUB_PASSWORD=${QUESTIONSHUB_PASSWORD} \
-              -v ~/questions-hub/data/postgres:/var/lib/postgresql/data \
-              --memory=768m \
-              --memory-swap=1g \
-              --health-cmd="pg_isready -U postgres -d questionshub" \
-              --health-interval=10s \
-              --health-timeout=5s \
-              --health-retries=5 \
-              postgres:16-alpine \
-              postgres \
-                -c shared_buffers=128MB \
-                -c work_mem=4MB \
-                -c maintenance_work_mem=64MB \
-                -c effective_cache_size=256MB \
-                -c max_connections=20
-
-            # Wait for PostgreSQL to be healthy
-            echo "Waiting for PostgreSQL to be ready..."
-            until docker exec questions-hub-db pg_isready -U postgres -d questionshub; do
-              sleep 2
-            done
-
-            # Setup database user and permissions directly (using -c flag to avoid heredoc issues)
-            echo "Setting up database user and permissions..."
-
-            # Create user if not exists
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN CREATE USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}'; END IF; END \$\$;"
-
-            # Always update password from .env to ensure it's in sync
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER USER questionshub WITH PASSWORD '${QUESTIONSHUB_PASSWORD}';"
-
-            # Grant privileges to questionshub user
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT CONNECT ON DATABASE questionshub TO questionshub;"
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT USAGE, CREATE ON SCHEMA public TO questionshub;"
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;"
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;"
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;"
-            docker exec questions-hub-db psql -U postgres -d questionshub -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;"
-
-            echo "Database user 'questionshub' configured successfully"
-
-            # Start web app container
-            docker run -d \
-              --name questions-hub-web \
-              --network questions-hub-network \
-              --restart unless-stopped \
-              -p 8080:8080 \
-              -e ASPNETCORE_ENVIRONMENT=Production \
-              -e ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
-              -e "ConnectionStrings__DefaultConnection=Host=questions-hub-db;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}" \
-              -e "AdminCredentials__Email=${ADMIN_EMAIL}" \
-              -e "AdminCredentials__Password=${ADMIN_PASSWORD}" \
-              -v ~/questions-hub/media:/app/media:ro \
-              --memory=512m \
-              --memory-swap=768m \
-              ghcr.io/${{ env.PROJECT_NAME }}:latest
+            # Start services using docker-compose with production profile
+            # This runs: postgres -> db-setup -> web (in dependency order)
+            docker compose --profile production up -d
 
             # Clean up old images
             docker image prune -f
+
+            echo "Deployment complete!"
+

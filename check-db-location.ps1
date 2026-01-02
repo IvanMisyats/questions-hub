@@ -1,4 +1,4 @@
-﻿# Database Location Check Script
+# Database Location Check Script
 # Shows where your database is (or will be) stored
 
 Write-Host "========================================" -ForegroundColor Cyan
@@ -42,16 +42,16 @@ Write-Host ""
 # Check if folder exists
 if (Test-Path $dbPath) {
     Write-Host "✅ Database folder EXISTS" -ForegroundColor Green
-    
+
     # Calculate size
     $items = Get-ChildItem -Recurse $dbPath -ErrorAction SilentlyContinue
     $size = ($items | Measure-Object -Property Length -Sum).Sum
     $sizeMB = [math]::Round($size / 1MB, 2)
     $fileCount = $items.Count
-    
+
     Write-Host "📊 Size: $sizeMB MB" -ForegroundColor White
     Write-Host "📝 Files: $fileCount" -ForegroundColor White
-    
+
     # Check if Docker containers are running
     $containers = docker ps --filter "name=questions-hub" --format "{{.Names}}" 2>$null
     if ($containers) {
@@ -63,15 +63,15 @@ if (Test-Path $dbPath) {
     Write-Host "❌ Database folder DOES NOT EXIST yet" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "ℹ️  The folder will be created automatically when you run:" -ForegroundColor White
-    Write-Host "   docker-compose up -d" -ForegroundColor Cyan
+    Write-Host "   .\start-dev-db.ps1" -ForegroundColor Cyan
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Quick Commands:" -ForegroundColor Cyan
-Write-Host "  Start:   docker-compose up -d" -ForegroundColor White
-Write-Host "  Stop:    docker-compose down" -ForegroundColor White
+Write-Host "  Start:   .\start-dev-db.ps1" -ForegroundColor White
+Write-Host "  Stop:    .\stop-dev-db.ps1" -ForegroundColor White
 Write-Host "  Clean:   .\cleanup-db.ps1" -ForegroundColor White
-Write-Host "  Logs:    docker logs questions-hub-web" -ForegroundColor White
+Write-Host "  Logs:    .\dev-db-logs.ps1" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 

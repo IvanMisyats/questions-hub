@@ -1,4 +1,4 @@
-﻿# Search Functionality
+# Search Functionality
 
 ## Overview
 
@@ -65,12 +65,16 @@ The `Questions` table has generated columns:
 
 ### Dictionary Files
 
-Ukrainian dictionary files must be present in `dictionaries/` folder:
+Ukrainian dictionary files must be present in `db/dictionaries/` folder:
 - `uk_UA.dic` - Dictionary words
 - `uk_UA.aff` - Affix/morphology rules
-- `setup-fts.sql` - FTS setup script (extensions, dictionary, configuration)
 
-These are mounted into the PostgreSQL container automatically via docker-compose.
+Database setup scripts are in `db/scripts/`:
+- `01-extensions.sql` - Installs required PostgreSQL extensions
+- `02-user-permissions.sql` - Creates user and grants permissions
+- `03-fts-setup.sql` - Configures FTS dictionary and search configuration
+
+These are mounted into the PostgreSQL container automatically via Docker Compose.
 
 ### Database Setup
 
@@ -132,6 +136,6 @@ public record SearchResult(
    ```
 2. Re-run db-setup:
    ```bash
-   docker-compose --profile production run --rm db-setup
+   docker compose --profile production run --rm db-setup
    ```
 

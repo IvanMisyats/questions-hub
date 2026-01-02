@@ -1,4 +1,4 @@
-﻿# Docker Compose Profiles
+# Docker Compose Profiles
 
 This document explains the different Docker Compose profiles used in the project.
 
@@ -6,79 +6,130 @@ This document explains the different Docker Compose profiles used in the project
 
 The project uses Docker profiles to support different deployment scenarios:
 
-| Profile | Use Case | Services Started | Command |
-|---------|----------|------------------|---------|
-| **dev** | Local development in Rider | PostgreSQL only | `docker-compose --profile dev up -d` |
-| **production** | VPS deployment | PostgreSQL + Web | `docker-compose --profile production up -d` |
-| **full** | Local testing of full stack | PostgreSQL + Web | `docker-compose --profile full up -d` |
+| Profile | Use Case | Services Started |
+|---------|----------|------------------|
+| **dev** | Local development in IDE | PostgreSQL + db-setup |
+| **full** | Local testing of full stack | PostgreSQL + db-setup + web-local (builds from Dockerfile) |
+| **production** | VPS deployment | PostgreSQL + db-setup + web (pulls from GHCR) |
 
 ## Development Profile (`dev`)
 
 **Purpose:** Run only PostgreSQL in Docker while developing the Blazor app locally in your IDE.
 
 **Services:**
-- PostgreSQL (accessible at `localhost:5432`)
-- db-setup (creates users and permissions)
+- `postgres` - PostgreSQL database (accessible at `localhost:5432`)
+- `db-setup` - Creates users, permissions, and configures FTS
 
-**Workflow:**
-1. Start database: `.\start-dev-db.ps1`
-2. Run Blazor app from your IDE (F5 in Rider/VS)
-3. Stop database: `.\stop-dev-db.ps1`
+**Usage:**
+```powershell
+.\start-dev-db.ps1
+```
+
+Or manually:
+```powershell
+$env:POSTGRES_ROOT_PASSWORD = "dev_root_password"
+$env:QUESTIONSHUB_PASSWORD = "dev_password_123"
+$env:POSTGRES_HOST_AUTH_METHOD = "trust"
+
+docker-compose --profile dev up -d
+```
 
 **Connection String:**
 ```
 Host=localhost;Port=5432;Database=questionshub;Username=questionshub;Password=dev_password_123
 ```
 
-## Production Profile (`production`)
-
-**Purpose:** Deploy both PostgreSQL and the web application on a VPS.
-
-**Services:**
-- PostgreSQL (internal Docker network + exposed on 5432 for management)
-- Web application (exposed on port 8080)
-- db-setup (creates users and permissions)
-
-**Workflow:**
-```bash
-# On VPS
-docker-compose --profile production up -d
-```
-
-**Environment Variables:**
-- `QUESTIONSHUB_PASSWORD`: Password for questionshub database user (default: dev_password_123)
-- `POSTGRES_ROOT_PASSWORD`: Password for postgres superuser (default: root_dev_password)
-- `POSTGRES_DATA_PATH`: Path to database files (default: ./postgres_data)
-
 ## Full Profile (`full`)
 
-**Purpose:** Test the complete containerized stack locally.
+**Purpose:** Test the complete containerized stack locally, building the web app from source.
 
 **Services:**
-- Everything (PostgreSQL + Web)
+- `postgres` - PostgreSQL database
+- `db-setup` - Database initialization
+- `web-local` - Blazor app built from Dockerfile
 
-**Workflow:**
-```bash
-docker-compose --profile full up -d
+**Usage:**
+```powershell
+$env:POSTGRES_ROOT_PASSWORD = "dev_root_password"
+$env:QUESTIONSHUB_PASSWORD = "dev_password_123"
+
+docker-compose --profile full up -d --build
 ```
 
 Access the app at `http://localhost:8080`
 
-## Common Configuration
+**Note:** Uses `ASPNETCORE_ENVIRONMENT=Development` and default admin credentials.
 
-### Database Credentials (Development)
-- **Root User:** postgres / root_dev_password
+## Production Profile (`production`)
+
+**Purpose:** Deploy to VPS using pre-built image from GitHub Container Registry.
+
+**Services:**
+- `postgres` - PostgreSQL database
+- `db-setup` - Database initialization
+- `web` - Pre-built image from GHCR
+
+**Usage (on VPS):**
+```bash
+# Load environment variables
+set -a
+source ~/.env
+set +a
+
+export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
+export MEDIA_PATH=~/questions-hub/media
+
+docker-compose --profile production up -d
+```
+
+**Required Environment Variables:**
+- `POSTGRES_ROOT_PASSWORD` - PostgreSQL superuser password
+- `QUESTIONSHUB_PASSWORD` - Application database user password
+- `ADMIN_EMAIL` - Admin user email
+- `ADMIN_PASSWORD` - Admin user password
+
+## Service Details
+
+### postgres
+
+PostgreSQL 16 (Alpine) with:
+- Ukrainian hunspell dictionary files mounted
+- Health check enabled
+- Memory limit: 768MB
+- Optimized for low-memory VPS (2GB RAM)
+
+### db-setup
+
+Runs SQL scripts from `db/scripts/` in order:
+1. `01-extensions.sql` - Install unaccent, pg_trgm
+2. `02-user-permissions.sql` - Create user, grant permissions
+3. `03-fts-setup.sql` - Configure Ukrainian FTS
+
+Exits after completion. Scripts are idempotent.
+
+### web / web-local
+
+| Aspect | web (production) | web-local (full) |
+|--------|-----------------|------------------|
+| Image source | GHCR | Built from Dockerfile |
+| Environment | Production | Development |
+| Admin credentials | Required from env | Defaults provided |
+
+## Database Configuration
+
+### Development Credentials
+- **Root User:** postgres / dev_root_password
 - **App User:** questionshub / dev_password_123
 
-### Database Credentials (Production)
-Set via environment variables or `.env` file:
+### Production Credentials
+Set via environment variables (stored in `~/.env` on VPS):
 ```bash
 POSTGRES_ROOT_PASSWORD=your_secure_root_password
 QUESTIONSHUB_PASSWORD=your_secure_app_password
 ```
 
 ### Data Persistence
-- All profiles use the same `postgres_data/` folder
+- All profiles use `${POSTGRES_DATA_PATH:-./postgres_data}` for data
 - Data persists across container restarts
 - Folder is in `.gitignore`
 
@@ -86,60 +137,51 @@ QUESTIONSHUB_PASSWORD=your_secure_app_password
 
 ### Development
 ```powershell
-# Start
-.\start-dev-db.ps1
+.\start-dev-db.ps1    # Start
+.\stop-dev-db.ps1     # Stop
+.\dev-db-logs.ps1     # View logs
+.\cleanup-db.ps1      # Reset database
+```
 
-# Stop
-.\stop-dev-db.ps1
-
-# Logs
-.\dev-db-logs.ps1
+### Full Stack Testing
+```powershell
+docker compose --profile full up -d --build
+docker compose --profile full down
 ```
 
 ### Production (VPS)
 ```bash
-# Start
-docker-compose --profile production up -d
-
-# Stop
-docker-compose --profile production down
-
-# Logs
-docker-compose logs -f
-```
-
-### Full Stack Testing
-```bash
-# Start
-docker-compose --profile full up -d
-
-# Stop
-docker-compose --profile full down
+docker compose --profile production up -d
+docker compose --profile production down
+docker compose --profile production logs -f
 ```
 
 ## Troubleshooting
 
 ### Database won't start
-```bash
+```powershell
 # Check logs
-docker-compose logs postgres
+docker compose --profile dev logs postgres
 
-# Ensure no other service is using port 5432
+# Ensure port 5432 is free
 netstat -ano | findstr :5432
 
 # Clean restart
-docker-compose --profile dev down -v
-# Delete postgres_data/ folder
-docker-compose --profile dev up -d
+.\cleanup-db.ps1
+.\start-dev-db.ps1
 ```
 
-### Permission denied errors
-The db-setup container creates the necessary users and permissions. If you see permission errors:
-```bash
-# Restart db-setup
-docker-compose --profile dev restart db-setup
-
+### db-setup fails
+```powershell
 # Check setup logs
-docker-compose logs db-setup
+docker logs questions-hub-db-setup
+
+# Restart just the setup
+docker compose --profile dev restart db-setup
 ```
+
+### Web app can't connect to database
+- Ensure `postgres` service is healthy
+- Check that db-setup completed successfully
+- Verify environment variables are set
 

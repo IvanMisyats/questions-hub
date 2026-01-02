@@ -1,268 +1,129 @@
 # Questions Hub
-This project is a online site of the database of Ukrainian questions of game "What?Where?When?".
 
-The main functionality includes:
-* structured storage of tournaments, packages and questions with navigation between them.
-* efficient search by text over the questions
-* adding new packages into database by uploading word/pdf document
-* role system to limit access to packages
+This project is an online database of Ukrainian questions for the game "What? Where? When?" (Що? Де? Коли?).
 
-Future functionality which might be added:
-* playing questions in interactive mode with timer
-* uploading and storing the results of tournaments
-* adding comments/ratings to questions
+## Features
 
-## Technologies Used
+**Implemented:**
+- Structured storage of tournaments, packages, and questions with navigation
+- Package management (create, edit, delete) for editors
+- User authentication and role-based access control
+- Media support (images, audio, video) in questions
+- Ukrainian full-text search configuration
 
-* Backend: C#, ASP.NET, Blazor
-* Frontend: HTML, CSS, Bootstrap
-* DB: PostgreSQL
+**Planned:**
+- Efficient search by text over questions
+- Playing questions in interactive mode with timer
+- Uploading and storing tournament results
+- Comments and ratings on questions
+
+## Technology Stack
+
+- **Backend:** C#, ASP.NET Core 10, Blazor Server
+- **Frontend:** HTML, CSS, Bootstrap
+- **Database:** PostgreSQL 16 with Ukrainian FTS
+- **Containerization:** Docker, Docker Compose
+- **CI/CD:** GitHub Actions, GitHub Container Registry
 
 ## Documentation
 
-- **[Local Development Guide](docs/LOCAL_DEVELOPMENT.md)** - Set up local development environment (Blazor in Rider + PostgreSQL in Docker)
-- **[Docker Profiles Guide](docs/DOCKER_PROFILES.md)** - Understanding dev, production, and full profiles
-- **[Testing Setup Guide](docs/TESTING_LOCAL_SETUP.md)** - Verify your local development setup
-- **[CI/CD Testing Guide](docs/LOCAL_TESTING.md)** - Test GitHub Actions pipeline locally
-- **[VPS Setup Guide](docs/LOCAL_TESTING.md#vps-setup-requirements)** - Configure production VPS
+| Guide | Description |
+|-------|-------------|
+| [Local Development](docs/LOCAL_DEVELOPMENT.md) | Set up local dev environment |
+| [VPS Deployment](docs/VPS_DEPLOYMENT.md) | Deploy to production VPS |
+| [Docker Profiles](docs/DOCKER_PROFILES.md) | Understanding dev, full, and production profiles |
+| [Site Specification](docs/SITE_SPECIFICATION.md) | Complete feature specification |
 
-## Setup and Run
+## Quick Start (Local Development)
 
 ### Prerequisites
 
-- [Docker](https://www.docker.com/get-started) and Docker Compose
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download) (for local development without Docker)
-- Git
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
+- IDE (Rider, Visual Studio, or VS Code)
 
-### Local Development (Windows)
-
-**Quick Start (Recommended):**
-
-For local development with Blazor running in your IDE and PostgreSQL in Docker:
+### Start Developing
 
 ```powershell
-# 1. Start database
+# 1. Clone the repository
+git clone https://github.com/IvanMisyats/questions-hub.git
+cd questions-hub
+
+# 2. Start the database
 .\start-dev-db.ps1
 
-# 2. Run Blazor app from your IDE (F5 in Rider/VS)
-# App connects to localhost:5432 automatically
+# 3. Run Blazor app from your IDE (F5)
+#    App is available at https://localhost:5001
 
-# 3. Stop database when done
+# 4. Stop the database when done
 .\stop-dev-db.ps1
 ```
 
-See [Local Development Guide](docs/LOCAL_DEVELOPMENT.md) for detailed setup instructions.
+### Full Stack in Docker
 
-**Full Stack in Docker:**
-
-To run everything in Docker (for testing the complete containerized setup):
-
-#### 1. Clone the Repository
-
-```bash
-git clone https://github.com/IvanMisyats/questions-hub.git
-cd questions-hub
-```
-
-#### 2. Configure Environment Variables
-
-Create a `.env` file from the example:
+To test the complete containerized setup:
 
 ```powershell
-cp .env.example .env
+# Set environment variables
+$env:POSTGRES_ROOT_PASSWORD = "dev_root_password"
+$env:QUESTIONSHUB_PASSWORD = "dev_password_123"
+
+# Build and start all services
+docker compose --profile full up -d --build
+
+# Access at http://localhost:8080
 ```
 
-Edit `.env` and set your passwords:
+## Helper Scripts
 
-```env
-POSTGRES_ROOT_PASSWORD=your_local_root_password
-QUESTIONSHUB_PASSWORD=your_local_app_password
-POSTGRES_DATA_PATH=./postgres_data
+| Script | Description |
+|--------|-------------|
+| `.\start-dev-db.ps1` | Start PostgreSQL for development |
+| `.\stop-dev-db.ps1` | Stop PostgreSQL (preserves data) |
+| `.\dev-db-logs.ps1` | View PostgreSQL logs |
+| `.\cleanup-db.ps1` | Delete database and start fresh |
+| `.\check-db-location.ps1` | Check database status |
+
+## Project Structure
+
+```
+questions-hub/
+├── QuestionsHub.Blazor/         # Main Blazor application
+│   ├── Components/              # Blazor components and pages
+│   ├── Controllers/             # API controllers
+│   ├── Data/                    # EF Core context and migrations
+│   ├── Domain/                  # Domain models
+│   └── Infrastructure/          # Utilities and helpers
+├── db/                          # Database configuration
+│   ├── dictionaries/            # Ukrainian FTS dictionary files
+│   └── scripts/                 # SQL initialization scripts
+├── docs/                        # Documentation
+├── media/                       # Sample media files
+├── .github/workflows/           # CI/CD pipeline
+└── docker-compose.yml           # Docker Compose configuration
 ```
 
-#### 3. Start with Docker Compose
+## Deployment
 
-```powershell
-# Build and start all services (web app + PostgreSQL)
-docker-compose --profile full up -d
+The application is deployed automatically via GitHub Actions:
 
-# Check logs to verify successful startup
-docker-compose logs web
-docker-compose logs postgres
-```
+1. Push to `main` branch triggers the CI/CD pipeline
+2. Docker image is built and pushed to GitHub Container Registry
+3. Deployment files are copied to VPS
+4. Application is deployed using `docker compose --profile production`
 
-#### 4. Access the Application
+See [VPS Deployment Guide](docs/VPS_DEPLOYMENT.md) for setup instructions.
 
-Open your browser and navigate to: `http://localhost:8080`
+## Database
 
-#### 5. Database Management
+PostgreSQL 16 with:
+- Ukrainian hunspell dictionary for full-text search
+- Extensions: `unaccent`, `pg_trgm`
+- Optimized for low-memory VPS (2GB RAM)
 
-**Check database status:**
-```powershell
-.\check-db-location.ps1
-```
+Database scripts are in `db/scripts/` and run automatically on container start.
 
-**Clean database (deletes all data):**
-```powershell
-.\cleanup-db.ps1
-```
+## License
 
-**Manual cleanup:**
-```powershell
-docker-compose down
-Remove-Item -Recurse -Force .\postgres_data
-docker-compose up -d
-```
-
-### Local Development (Linux/Mac)
-
-#### 1. Clone and Configure
-
-```bash
-git clone https://github.com/IvanMisyats/questions-hub.git
-cd questions-hub
-
-# Create .env file
-cp .env.example .env
-# Edit .env with your passwords
-```
-
-#### 2. Start Services
-
-```bash
-# Build and start
-docker-compose up -d
-
-# Check logs
-docker logs questions-hub-web
-docker logs questions-hub-db
-```
-
-#### 3. Clean Database
-
-```bash
-docker-compose down
-rm -rf ./postgres_data
-docker-compose up -d
-```
-
-### Development without Docker
-
-#### 1. Install PostgreSQL
-
-Install PostgreSQL 16 locally and create a database named `questionshub`.
-
-#### 2. Update Connection String
-
-Edit `QuestionsHub.Blazor/appsettings.Development.json`:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=questionshub;Username=postgres;Password=your_password"
-  }
-}
-```
-
-#### 3. Run Migrations
-
-```bash
-cd QuestionsHub.Blazor
-dotnet ef database update
-```
-
-#### 4. Run the Application
-
-```bash
-dotnet run
-```
-
-Navigate to `http://localhost:5000`
-
-### Useful Commands
-
-| Command | Description |
-|---------|-------------|
-| `docker-compose up -d` | Start all services in background |
-| `docker-compose down` | Stop all services |
-| `docker-compose logs -f` | View logs (follow mode) |
-| `docker logs questions-hub-web` | View web app logs |
-| `docker logs questions-hub-db` | View database logs |
-| `docker-compose restart` | Restart all services |
-| `docker-compose build --no-cache` | Rebuild images from scratch |
-| `.\check-db-location.ps1` | Check database status (Windows) |
-| `.\cleanup-db.ps1` | Clean database with confirmation (Windows) |
-
-### Database Location
-
-- **Local Windows**: `questions-hub\postgres_data\`
-- **Local Linux/Mac**: `./postgres_data/`
-- **VPS**: `/home/github-actions/questions-hub-data/postgres_data`
-
-The database files are stored outside Docker containers for persistence.
-
-### Troubleshooting
-
-**Port already in use:**
-```bash
-# Change ports in docker-compose.yml or stop conflicting services
-docker-compose down
-# Edit docker-compose.yml to use different ports
-docker-compose up -d
-```
-
-**Permission errors:**
-```bash
-# Run with elevated privileges
-sudo docker-compose up -d  # Linux/Mac
-# Run PowerShell as Administrator (Windows)
-```
-
-**Database connection errors:**
-```bash
-# Check if PostgreSQL container is healthy
-docker ps
-# View database logs
-docker logs questions-hub-db
-# Restart services
-docker-compose restart
-```
-
-**Clean slate (delete everything):**
-```bash
-docker-compose down -v
-docker system prune -a
-# Delete postgres_data folder
-# Then: docker-compose up -d
-```
-
-## Hosting & Deployment
-
-The application is hosted on a VPS from OVH with the following specs:
-- **vCore**: 1
-- **RAM**: 2 GB
-- **Storage**: 20 GB
-- **Deployment**: Automated via GitHub Actions CI/CD
-
-### Deployment Architecture
-
-**VPS Setup:**
-- Docker containers run directly via `docker run` (no docker-compose on VPS)
-- Deployment user: `github-actions` (minimal privileges, no sudo)
-- Application directory: `/home/github-actions/questions-hub`
-- Database storage: `/home/github-actions/questions-hub-data/postgres_data`
-- Network: Custom Docker network `questions-hub-network` for container communication
-
-**CI/CD Pipeline:**
-1. Build .NET application and run tests
-2. Build Docker image from source
-3. Push image to GitHub Container Registry (GHCR)
-4. SSH to VPS and pull latest image
-5. Deploy using `docker run` commands for both PostgreSQL and web app
-
-**Security:**
-- Database passwords stored in `.env` file on VPS (not in GitHub secrets)
-- SSH key authentication for deployment
-- Containers run with memory limits
-- Non-root deployment user
+This project is private and not licensed for public use.
 

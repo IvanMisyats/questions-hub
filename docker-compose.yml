@@ -1,6 +1,36 @@
 ﻿services:
+  # Production web service - uses pre-built image from GHCR
   web:
-    profiles: ["production", "full"]
+    profiles: ["production"]
+    image: ghcr.io/ivanmisyats/questions-hub:latest
+    container_name: questions-hub-web
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
+      - AdminCredentials__Email=${ADMIN_EMAIL}
+      - AdminCredentials__Password=${ADMIN_PASSWORD}
+    volumes:
+      - ${MEDIA_PATH:-./media}:/app/media:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 768m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Local web service - builds from Dockerfile
+  web-local:
+    profiles: ["full"]
     build:
       context: .
       dockerfile: QuestionsHub.Blazor/Dockerfile
@@ -8,10 +38,11 @@
     ports:
       - "8080:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
-      - AdminCredentials__Email=${ADMIN_EMAIL}
-      - AdminCredentials__Password=${ADMIN_PASSWORD}
+      - AdminCredentials__Email=${ADMIN_EMAIL:-admin@example.com}
+      - AdminCredentials__Password=${ADMIN_PASSWORD:-Admin123!}
     volumes:
       - ${MEDIA_PATH:-./media}:/app/media:ro
     depends_on:
@@ -41,8 +72,8 @@
       - "5432:5432"
     volumes:
       - ${POSTGRES_DATA_PATH:-./postgres_data}:/var/lib/postgresql/data
-      - ./dictionaries/uk_UA.dic:/usr/local/share/postgresql/tsearch_data/uk_ua.dict:ro
-      - ./dictionaries/uk_UA.aff:/usr/local/share/postgresql/tsearch_data/uk_ua.affix:ro
+      - ./db/dictionaries/uk_UA.dic:/usr/local/share/postgresql/tsearch_data/uk_ua.dict:ro
+      - ./db/dictionaries/uk_UA.aff:/usr/local/share/postgresql/tsearch_data/uk_ua.affix:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d questionshub"]
       interval: 10s
@@ -68,6 +99,7 @@
   db-setup:
     profiles: ["dev", "production", "full"]
     image: postgres:16-alpine
+    container_name: questions-hub-db-setup
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,28 +107,22 @@
       PGPASSWORD: ${POSTGRES_ROOT_PASSWORD}
       QUESTIONSHUB_PASSWORD: ${QUESTIONSHUB_PASSWORD}
     volumes:
-      - ./dictionaries/setup-fts.sql:/setup-fts.sql:ro
+      - ./db/scripts:/scripts:ro
     command:
       - sh
       - -c
       - |
-        # Create application user
-        psql -h postgres -U postgres -d questionshub -c "
-          DO \$\$
-          BEGIN
-            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
-              CREATE USER questionshub WITH PASSWORD '$$QUESTIONSHUB_PASSWORD';
-            END IF;
-          END \$\$;
-          GRANT CONNECT ON DATABASE questionshub TO questionshub;
-          GRANT USAGE, CREATE ON SCHEMA public TO questionshub;
-          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO questionshub;
-          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO questionshub;
-          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO questionshub;
-          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO questionshub;
-        "
-        # Run FTS setup script
-        psql -h postgres -U postgres -d questionshub -f /setup-fts.sql
+        echo "Running database setup scripts..."
+        # 1. Extensions (must be first - FTS depends on these)
+        echo "Installing extensions..."
+        psql -h postgres -U postgres -d questionshub -f /scripts/01-extensions.sql
+        # 2. User and permissions
+        echo "Setting up user and permissions..."
+        psql -h postgres -U postgres -d questionshub -v QUESTIONSHUB_PASSWORD="$$QUESTIONSHUB_PASSWORD" -f /scripts/02-user-permissions.sql
+        # 3. Full-text search configuration
+        echo "Configuring full-text search..."
+        psql -h postgres -U postgres -d questionshub -f /scripts/03-fts-setup.sql
+        echo "Database setup complete!"
     restart: "no"
 
 

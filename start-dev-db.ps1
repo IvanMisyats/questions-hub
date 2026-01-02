@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env pwsh
+#!/usr/bin/env pwsh
 # Start PostgreSQL for local development
 # The Blazor app will run outside Docker and connect to this containerized database
 
@@ -11,10 +11,12 @@ Write-Host "  Username: questionshub" -ForegroundColor White
 Write-Host "  Password: dev_password_123" -ForegroundColor White
 Write-Host ""
 
-# Set trust authentication for local development (allows connections without password verification issues)
+# Set environment variables for local development
 $env:POSTGRES_HOST_AUTH_METHOD = "trust"
+$env:POSTGRES_ROOT_PASSWORD = "dev_root_password"
+$env:QUESTIONSHUB_PASSWORD = "dev_password_123"
 
-docker-compose --profile dev up -d
+docker compose --profile dev up -d
 
 Write-Host ""
 Write-Host "PostgreSQL is starting..." -ForegroundColor Green
@@ -28,7 +30,7 @@ $healthy = $false
 while ($attempt -lt $maxAttempts -and -not $healthy) {
     $attempt++
     Start-Sleep -Seconds 1
-    
+
     $status = docker inspect --format='{{.State.Health.Status}}' questions-hub-db 2>$null
     if ($status -eq "healthy") {
         $healthy = $true
@@ -45,5 +47,5 @@ while ($attempt -lt $maxAttempts -and -not $healthy) {
 if (-not $healthy) {
     Write-Host ""
     Write-Host "Warning: Database took longer than expected to start" -ForegroundColor Yellow
-    Write-Host "Check logs with: docker-compose logs postgres" -ForegroundColor Yellow
+    Write-Host "Check logs with: docker compose logs postgres" -ForegroundColor Yellow
 }

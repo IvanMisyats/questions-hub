@@ -1,4 +1,4 @@
-﻿﻿# Media Files Setup Guide
+﻿# Media Files Setup Guide
 
 This guide explains how to set up and manage media files (images, videos, audio) for the Questions Hub application.
 
@@ -49,10 +49,10 @@ chown -R www-data:www-data /var/www/questions-hub/media/uploads
 
 ### 3. Configure Environment Variable
 
-Set the `MEDIA_PATH` environment variable for docker-compose:
+Set the `MEDIA_PATH` environment variable for Docker Compose:
 
 ```bash
-# Add to your .env file or export before running docker-compose
+# Add to your .env file or export before running docker compose
 export MEDIA_PATH=/var/www/questions-hub/media
 ```
 
