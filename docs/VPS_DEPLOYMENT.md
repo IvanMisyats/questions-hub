@@ -104,7 +104,7 @@ sudo chmod 600 /home/github-actions/.env
 
 ```bash
 sudo -u github-actions mkdir -p /home/github-actions/questions-hub/data/postgres
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub/media
+sudo -u github-actions mkdir -p /home/github-actions/questions-hub/media/uploads
 sudo -u github-actions mkdir -p /home/github-actions/questions-hub/keys
 
 # Keys directory needs restricted permissions (only owner can read/write)

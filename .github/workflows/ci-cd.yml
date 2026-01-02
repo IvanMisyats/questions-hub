@@ -99,7 +99,7 @@ jobs:
 
             # Create required directories
             mkdir -p ~/questions-hub/data/postgres
-            mkdir -p ~/questions-hub/media
+            mkdir -p ~/questions-hub/media/uploads
             mkdir -p ~/questions-hub/keys
 
             # Set secure permissions for media directory
