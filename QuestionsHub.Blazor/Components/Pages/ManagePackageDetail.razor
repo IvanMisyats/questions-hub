@@ -9,7 +9,7 @@
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject NavigationManager Navigation
-@inject IHttpContextAccessor HttpContextAccessor
+@inject MediaService MediaService
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - QuestionsHub</PageTitle>
 
@@ -1195,17 +1195,55 @@
 
         try
         {
-            var result = await UploadMediaAsync(_editingQuestion.Id, target.ToString().ToLowerInvariant(), file);
+            // Validate file
+            var (isValid, validationError) = MediaService.ValidateFile(file.Name, file.Size);
+            if (!isValid)
+            {
+                SetMediaOperationState(target, isLoading: false, error: validationError);
+                return;
+            }
 
-            if (result.Success)
+            // Remember existing URL for cleanup after successful upload
+            var existingUrl = target == MediaTarget.Handout
+                ? _editingQuestion.HandoutUrl
+                : _editingQuestion.CommentAttachmentUrl;
+
+            // Upload new file
+            await using var stream = file.OpenReadStream(MaxUploadSize);
+            var result = await MediaService.UploadAsync(stream, file.Name);
+
+            if (!result.Success)
             {
-                SetMediaUrl(target, result.Url);
-                _questionSaveStatus = "Медіа завантажено";
+                SetMediaOperationState(target, isLoading: false, error: result.ErrorMessage ?? "Помилка завантаження");
+                return;
             }
-            else
+
+            // Update question with new URL
+            SetMediaUrl(target, result.RelativeUrl);
+
+            // Save to database
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var question = await context.Questions.FindAsync(_editingQuestion.Id);
+            if (question != null)
             {
-                SetMediaOperationState(target, isLoading: false, error: result.ErrorMessage);
+                if (target == MediaTarget.Handout)
+                {
+                    question.HandoutUrl = result.RelativeUrl;
+                }
+                else
+                {
+                    question.CommentAttachmentUrl = result.RelativeUrl;
+                }
+                await context.SaveChangesAsync();
             }
+
+            // Delete old file after successful save
+            if (!string.IsNullOrEmpty(existingUrl))
+            {
+                MediaService.Delete(existingUrl);
+            }
+
+            _questionSaveStatus = "Медіа завантажено";
         }
         catch (Exception ex)
         {
@@ -1230,16 +1268,39 @@
 
         try
         {
-            var result = await DeleteMediaAsync(_editingQuestion.Id, target.ToString().ToLowerInvariant());
-            if (result.Success)
+            // Get existing URL
+            var existingUrl = target == MediaTarget.Handout
+                ? _editingQuestion.HandoutUrl
+                : _editingQuestion.CommentAttachmentUrl;
+
+            if (string.IsNullOrEmpty(existingUrl))
             {
-                SetMediaUrl(target, null);
-                _questionSaveStatus = "Медіа видалено";
+                SetMediaOperationState(target, isLoading: false, error: "Немає медіа для видалення");
+                return;
             }
-            else
+
+            // Update question in database first
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var question = await context.Questions.FindAsync(_editingQuestion.Id);
+            if (question != null)
             {
-                SetMediaOperationState(target, isLoading: false, error: result.ErrorMessage);
+                if (target == MediaTarget.Handout)
+                {
+                    question.HandoutUrl = null;
+                }
+                else
+                {
+                    question.CommentAttachmentUrl = null;
+                }
+                await context.SaveChangesAsync();
             }
+
+            // Delete file from disk
+            MediaService.Delete(existingUrl);
+
+            // Update local state
+            SetMediaUrl(target, null);
+            _questionSaveStatus = "Медіа видалено";
         }
         catch (Exception ex)
         {
@@ -1285,115 +1346,5 @@
             _editingQuestion.CommentAttachmentUrl = url;
         }
     }
-
-    private async Task<(bool Success, string? Url, string? ErrorMessage)> UploadMediaAsync(
-        int questionId, string target, IBrowserFile file)
-    {
-        using var client = CreateAuthenticatedHttpClient();
-
-        using var content = new MultipartFormDataContent();
-        await using var stream = file.OpenReadStream(MaxUploadSize);
-        using var streamContent = new StreamContent(stream);
-        streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
-            file.ContentType ?? "application/octet-stream");
-
-        content.Add(streamContent, "file", file.Name);
-
-        var response = await client.PostAsync($"api/media/questions/{questionId}/{target}", content);
-        var responseContent = await response.Content.ReadAsStringAsync();
-
-        if (response.IsSuccessStatusCode)
-        {
-            try
-            {
-                var json = System.Text.Json.JsonSerializer.Deserialize<MediaUploadResponse>(responseContent, JsonOptions);
-                return (true, json?.Url, null);
-            }
-            catch (System.Text.Json.JsonException)
-            {
-                return (false, null, "Помилка сервера.");
-            }
-        }
-
-        var errorMessage = ParseErrorResponse(response.StatusCode, responseContent, "завантаження");
-        return (false, null, errorMessage);
-    }
-
-    private async Task<(bool Success, string? ErrorMessage)> DeleteMediaAsync(int questionId, string target)
-    {
-        using var client = CreateAuthenticatedHttpClient();
-
-        var response = await client.DeleteAsync($"api/media/questions/{questionId}/{target}");
-
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, null);
-        }
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-        var errorMessage = ParseErrorResponse(response.StatusCode, responseContent, "видалення");
-        return (false, errorMessage);
-    }
-
-    /// <summary>
-    /// Creates an HttpClient with authentication cookies forwarded from the current request.
-    /// </summary>
-    private HttpClient CreateAuthenticatedHttpClient()
-    {
-        var handler = new HttpClientHandler { UseCookies = true };
-        var client = new HttpClient(handler) { BaseAddress = new Uri(Navigation.BaseUri) };
-
-        var httpContext = HttpContextAccessor.HttpContext;
-        if (httpContext != null)
-        {
-            var cookies = httpContext.Request.Headers["Cookie"].ToString();
-            if (!string.IsNullOrEmpty(cookies))
-            {
-                client.DefaultRequestHeaders.Add("Cookie", cookies);
-            }
-        }
-
-        return client;
-    }
-
-    /// <summary>
-    /// Parses error response from API and returns a user-friendly message.
-    /// </summary>
-    private string ParseErrorResponse(System.Net.HttpStatusCode statusCode, string responseContent, string operation)
-    {
-        if (statusCode == System.Net.HttpStatusCode.Unauthorized ||
-            statusCode == System.Net.HttpStatusCode.Forbidden)
-        {
-            return "Сесія закінчилася. Будь ласка, увійдіть знову.";
-        }
-
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(responseContent))
-            {
-                var errorJson = System.Text.Json.JsonSerializer.Deserialize<MediaUploadError>(responseContent, JsonOptions);
-                if (errorJson?.Error != null)
-                {
-                    return errorJson.Error;
-                }
-            }
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            // Response is not valid JSON, use default error
-        }
-
-        return $"Помилка {operation} (код {(int)statusCode})";
-    }
-
-    // Shared JSON options for API responses
-    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    // DTOs for API responses
-    private record MediaUploadResponse(string FileName, string Url);
-    private record MediaUploadError(string Error);
 }
 
