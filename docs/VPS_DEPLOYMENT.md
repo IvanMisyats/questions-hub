@@ -109,6 +109,11 @@ sudo -u github-actions mkdir -p /home/github-actions/questions-hub/keys
 
 # Keys directory needs restricted permissions (only owner can read/write)
 sudo chmod 700 /home/github-actions/questions-hub/keys
+
+# Media directory needs correct ownership for Docker container
+# The container runs as UID 1000, so we need to set ownership accordingly
+sudo chown -R 1000:1000 /home/github-actions/questions-hub/media
+sudo chmod -R 755 /home/github-actions/questions-hub/media
 ```
 
 ### 6. Verify Setup
@@ -266,5 +271,6 @@ docker compose --profile production up -d
 - Database passwords in `.env` file with 600 permissions
 - `github-actions` user has no sudo access
 - Containers run with memory limits
-- Media directory has read-only mount in web container
+- Media directory has write access for file uploads (ownership must match container user)
+- Keys directory has restrictive permissions (700)
 

@@ -13,7 +13,7 @@
       - AdminCredentials__Email=${ADMIN_EMAIL}
       - AdminCredentials__Password=${ADMIN_PASSWORD}
     volumes:
-      - ${MEDIA_PATH:-./media}:/app/media:ro
+      - ${MEDIA_PATH:-./media}:/app/media
       - ${KEYS_PATH:-./keys}:/app/keys
     depends_on:
       postgres:
@@ -45,7 +45,7 @@
       - AdminCredentials__Email=${ADMIN_EMAIL:-admin@example.com}
       - AdminCredentials__Password=${ADMIN_PASSWORD:-Admin123!}
     volumes:
-      - ${MEDIA_PATH:-./media}:/app/media:ro
+      - ${MEDIA_PATH:-./media}:/app/media
       - ${KEYS_PATH:-./keys}:/app/keys
     depends_on:
       postgres:

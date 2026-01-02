@@ -102,11 +102,9 @@ jobs:
             mkdir -p ~/questions-hub/media/uploads
             mkdir -p ~/questions-hub/keys
 
-            # Set secure permissions for media directory
-            chmod 755 ~/questions-hub/media
-            if [ -n "$(ls -A ~/questions-hub/media 2>/dev/null)" ]; then
-              find ~/questions-hub/media -type f -exec chmod 644 {} \;
-            fi
+            # Set permissions for media directory (must be writable by container)
+            # Container runs as root, so just ensure directories are accessible
+            chmod -R 755 ~/questions-hub/media
 
             # Set secure permissions for keys directory (readable/writable only by owner)
             chmod 700 ~/questions-hub/keys
