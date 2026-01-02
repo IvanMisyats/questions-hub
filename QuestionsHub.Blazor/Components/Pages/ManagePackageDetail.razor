@@ -1316,15 +1316,49 @@
 
         var response = await client.PostAsync($"api/media/questions/{questionId}/{target}", content);
 
+        var responseContent = await response.Content.ReadAsStringAsync();
         if (response.IsSuccessStatusCode)
         {
-            var json = await response.Content.ReadFromJsonAsync<MediaUploadResponse>();
-            return (true, json?.Url, null);
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Deserialize<MediaUploadResponse>(responseContent,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return (true, json?.Url, null);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Server returned success but non-JSON response
+                return (false, null, "Помилка сервера.");
+            }
         }
         else
         {
-            var errorJson = await response.Content.ReadFromJsonAsync<MediaUploadError>();
-            return (false, null, errorJson?.Error ?? "Помилка завантаження");
+            // Handle specific HTTP status codes
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                return (false, null, "Сесія закінчилася. Будь ласка, увійдіть знову.");
+            }
+
+            // Try to parse error response
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(responseContent))
+                {
+                    var errorJson = System.Text.Json.JsonSerializer.Deserialize<MediaUploadError>(responseContent,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (errorJson?.Error != null)
+                    {
+                        return (false, null, errorJson.Error);
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Response is not valid JSON, ignore and use default error
+            }
+
+            return (false, null, $"Помилка завантаження (код {(int)response.StatusCode})");
         }
     }
 
@@ -1353,8 +1387,33 @@
         }
         else
         {
-            var errorJson = await response.Content.ReadFromJsonAsync<MediaUploadError>();
-            return (false, errorJson?.Error ?? "Помилка видалення");
+            // Handle specific HTTP status codes
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                return (false, "Сесія закінчилася. Будь ласка, увійдіть знову.");
+            }
+
+            // Try to parse error response
+            try
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                if (!string.IsNullOrWhiteSpace(responseContent))
+                {
+                    var errorJson = System.Text.Json.JsonSerializer.Deserialize<MediaUploadError>(responseContent,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (errorJson?.Error != null)
+                    {
+                        return (false, errorJson.Error);
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Response is not valid JSON, ignore and use default error
+            }
+
+            return (false, $"Помилка видалення (код {(int)response.StatusCode})");
         }
     }
 
