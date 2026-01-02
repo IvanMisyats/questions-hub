@@ -105,6 +105,10 @@ sudo chmod 600 /home/github-actions/.env
 ```bash
 sudo -u github-actions mkdir -p /home/github-actions/questions-hub/data/postgres
 sudo -u github-actions mkdir -p /home/github-actions/questions-hub/media
+sudo -u github-actions mkdir -p /home/github-actions/questions-hub/keys
+
+# Keys directory needs restricted permissions (only owner can read/write)
+sudo chmod 700 /home/github-actions/questions-hub/keys
 ```
 
 ### 6. Verify Setup
@@ -167,6 +171,7 @@ export ADMIN_EMAIL
 export ADMIN_PASSWORD
 export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
 export MEDIA_PATH=~/questions-hub/media
+export KEYS_PATH=~/questions-hub/keys
 
 # Pull latest image
 docker pull ghcr.io/ivanmisyats/questions-hub:latest
@@ -184,6 +189,7 @@ docker compose --profile production up -d
 | `~/questions-hub/db/` | Database scripts and dictionaries |
 | `~/questions-hub/data/postgres/` | PostgreSQL data files |
 | `~/questions-hub/media/` | Uploaded media files |
+| `~/questions-hub/keys/` | Data Protection encryption keys |
 | `~/.env` | Environment variables |
 
 ## Monitoring and Logs

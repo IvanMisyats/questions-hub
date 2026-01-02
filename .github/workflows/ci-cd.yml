@@ -89,6 +89,7 @@ jobs:
             export ADMIN_PASSWORD
             export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
             export MEDIA_PATH=~/questions-hub/media
+            export KEYS_PATH=~/questions-hub/keys
 
             # Log in to GHCR on the VPS
             echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
@@ -99,12 +100,16 @@ jobs:
             # Create required directories
             mkdir -p ~/questions-hub/data/postgres
             mkdir -p ~/questions-hub/media
+            mkdir -p ~/questions-hub/keys
 
             # Set secure permissions for media directory
             chmod 755 ~/questions-hub/media
             if [ -n "$(ls -A ~/questions-hub/media 2>/dev/null)" ]; then
               find ~/questions-hub/media -type f -exec chmod 644 {} \;
             fi
+
+            # Set secure permissions for keys directory (readable/writable only by owner)
+            chmod 700 ~/questions-hub/keys
 
             # Stop existing containers (if any)
             docker compose --profile production down 2>/dev/null || true

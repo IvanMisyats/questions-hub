@@ -14,6 +14,7 @@
       - AdminCredentials__Password=${ADMIN_PASSWORD}
     volumes:
       - ${MEDIA_PATH:-./media}:/app/media:ro
+      - ${KEYS_PATH:-./keys}:/app/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +46,7 @@
       - AdminCredentials__Password=${ADMIN_PASSWORD:-Admin123!}
     volumes:
       - ${MEDIA_PATH:-./media}:/app/media:ro
+      - ${KEYS_PATH:-./keys}:/app/keys
     depends_on:
       postgres:
         condition: service_healthy

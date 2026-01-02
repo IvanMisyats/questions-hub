@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
@@ -92,6 +93,20 @@ mediaUploadOptions.MediaPath = builder.Environment.IsDevelopment()
 builder.Services.AddSingleton(mediaUploadOptions);
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddScoped<SearchService>();
+
+// Configure Data Protection to persist keys across container restarts
+// In production, keys are stored in /app/keys (mounted from VPS)
+// In development, keys are stored locally in ../keys
+var keysPath = builder.Environment.IsDevelopment()
+    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "keys")
+    : "/app/keys";
+
+// Ensure the keys directory exists
+Directory.CreateDirectory(keysPath);
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+    .SetApplicationName("QuestionsHub");
 
 var app = builder.Build();
 
