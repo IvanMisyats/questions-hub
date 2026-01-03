@@ -85,10 +85,10 @@ builder.Services.AddCascadingAuthenticationState();
 var mediaUploadOptions = new MediaUploadOptions();
 builder.Configuration.GetSection(MediaUploadOptions.SectionName).Bind(mediaUploadOptions);
 
-// Set media path based on environment
-mediaUploadOptions.MediaPath = builder.Environment.IsDevelopment()
-    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "media")
-    : "/app/media";
+// Set uploads path based on environment
+mediaUploadOptions.UploadsPath = builder.Environment.IsDevelopment()
+    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads")
+    : "/app/uploads";
 
 builder.Services.AddSingleton(mediaUploadOptions);
 builder.Services.AddScoped<MediaService>();
@@ -183,20 +183,21 @@ app.UseRequestLocalization(new RequestLocalizationOptions
 app.UseStaticFiles();
 
 // Configure secure media file serving
-var mediaPath = app.Environment.IsDevelopment()
-    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "media")
-    : "/app/media";
+// Serve handout files from /media URL path
+var handoutsPath = app.Environment.IsDevelopment()
+    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads", "handouts")
+    : "/app/uploads/handouts";
 
-if (!Directory.Exists(mediaPath))
+if (!Directory.Exists(handoutsPath))
 {
     throw new InvalidOperationException(
-        $"Media folder not found at '{mediaPath}'. " +
-        "This is a configuration error. Please ensure the media folder is properly mounted.");
+        $"Handouts folder not found at '{handoutsPath}'. " +
+        "This is a configuration error. Please ensure the uploads folder is properly mounted.");
 }
 
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(mediaPath),
+    FileProvider = new PhysicalFileProvider(handoutsPath),
     RequestPath = "/media",
     OnPrepareResponse = ctx =>
     {

@@ -77,7 +77,7 @@ source ~/.env
 set +a
 
 export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
-export MEDIA_PATH=~/questions-hub/media
+export UPLOADS_PATH=~/questions-hub/uploads
 
 docker-compose --profile production up -d
 ```

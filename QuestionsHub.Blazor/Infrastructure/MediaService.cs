@@ -19,19 +19,19 @@ public class MediaService
 {
     private readonly MediaUploadOptions _options;
     private readonly ILogger<MediaService> _logger;
-    private readonly string _uploadsPath;
+    private readonly string _handoutsPath;
 
     public MediaService(MediaUploadOptions options, ILogger<MediaService> logger)
     {
         _options = options;
         _logger = logger;
-        _uploadsPath = Path.Combine(options.MediaPath, options.UploadsFolder);
+        _handoutsPath = Path.Combine(options.UploadsPath, options.HandoutsFolder);
 
-        // Ensure uploads directory exists
-        if (!Directory.Exists(_uploadsPath))
+        // Ensure handouts directory exists
+        if (!Directory.Exists(_handoutsPath))
         {
-            Directory.CreateDirectory(_uploadsPath);
-            _logger.LogInformation("Created uploads directory: {UploadsPath}", _uploadsPath);
+            Directory.CreateDirectory(_handoutsPath);
+            _logger.LogInformation("Created handouts directory: {HandoutsPath}", _handoutsPath);
         }
     }
 
@@ -73,13 +73,13 @@ public class MediaService
             var randomName = Convert.ToHexString(randomBytes).ToLowerInvariant();
             var newFileName = $"{randomName}{extension}";
 
-            var filePath = Path.Combine(_uploadsPath, newFileName);
+            var filePath = Path.Combine(_handoutsPath, newFileName);
 
             // Write file to disk
             await using var outputStream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
             await fileStream.CopyToAsync(outputStream);
 
-            var relativeUrl = $"/media/{_options.UploadsFolder}/{newFileName}";
+            var relativeUrl = $"/media/{newFileName}";
 
             _logger.LogInformation("Uploaded media file: {FileName} -> {NewFileName}", originalFileName, newFileName);
 
@@ -100,11 +100,11 @@ public class MediaService
         try
         {
             // Extract filename from relative URL
-            // Expected format: /media/uploads/filename.ext
-            var expectedPrefix = $"/media/{_options.UploadsFolder}/";
+            // Expected format: /media/filename.ext
+            const string expectedPrefix = "/media/";
             if (!relativeUrl.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogWarning("Attempted to delete file outside uploads folder: {Url}", relativeUrl);
+                _logger.LogWarning("Attempted to delete file outside media folder: {Url}", relativeUrl);
                 return false;
             }
 
@@ -117,7 +117,7 @@ public class MediaService
                 return false;
             }
 
-            var filePath = Path.Combine(_uploadsPath, fileName);
+            var filePath = Path.Combine(_handoutsPath, fileName);
 
             if (File.Exists(filePath))
             {
@@ -142,7 +142,7 @@ public class MediaService
 
         try
         {
-            var expectedPrefix = $"/media/{_options.UploadsFolder}/";
+            const string expectedPrefix = "/media/";
             if (!relativeUrl.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
                 return false;
 
@@ -151,7 +151,7 @@ public class MediaService
             if (fileName.Contains("..") || fileName.Contains('/') || fileName.Contains('\\'))
                 return false;
 
-            var filePath = Path.Combine(_uploadsPath, fileName);
+            var filePath = Path.Combine(_handoutsPath, fileName);
             return File.Exists(filePath);
         }
         catch

@@ -104,16 +104,17 @@ sudo chmod 600 /home/github-actions/.env
 
 ```bash
 sudo -u github-actions mkdir -p /home/github-actions/questions-hub/data/postgres
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub/media/uploads
+sudo -u github-actions mkdir -p /home/github-actions/questions-hub/uploads/handouts
+sudo -u github-actions mkdir -p /home/github-actions/questions-hub/uploads/packages
 sudo -u github-actions mkdir -p /home/github-actions/questions-hub/keys
 
 # Keys directory needs restricted permissions (only owner can read/write)
 sudo chmod 700 /home/github-actions/questions-hub/keys
 
-# Media directory needs correct ownership for Docker container
+# Uploads directory needs correct ownership for Docker container
 # The container runs as UID 1000, so we need to set ownership accordingly
-sudo chown -R 1000:1000 /home/github-actions/questions-hub/media
-sudo chmod -R 755 /home/github-actions/questions-hub/media
+sudo chown -R 1000:1000 /home/github-actions/questions-hub/uploads
+sudo chmod -R 755 /home/github-actions/questions-hub/uploads
 ```
 
 ### 6. Verify Setup
@@ -175,7 +176,7 @@ export QUESTIONSHUB_PASSWORD
 export ADMIN_EMAIL
 export ADMIN_PASSWORD
 export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
-export MEDIA_PATH=~/questions-hub/media
+export UPLOADS_PATH=~/questions-hub/uploads
 export KEYS_PATH=~/questions-hub/keys
 
 # Pull latest image
@@ -193,7 +194,7 @@ docker compose --profile production up -d
 | `~/questions-hub/docker-compose.yml` | Docker Compose configuration |
 | `~/questions-hub/db/` | Database scripts and dictionaries |
 | `~/questions-hub/data/postgres/` | PostgreSQL data files |
-| `~/questions-hub/media/` | Uploaded media files |
+| `~/questions-hub/uploads/` | Uploaded files (handouts, packages) |
 | `~/questions-hub/keys/` | Data Protection encryption keys |
 | `~/.env` | Environment variables |
 

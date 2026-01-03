@@ -11,8 +11,8 @@
 # PostgreSQL data
 postgres_data/
 
-# Media files (images, videos, audio)
-media/
+# Uploaded files (handouts, packages)
+uploads/
 
 # Data Protection keys (sensitive encryption keys)
 keys/

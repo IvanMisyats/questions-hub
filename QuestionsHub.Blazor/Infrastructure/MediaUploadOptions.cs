@@ -29,17 +29,24 @@ public class MediaUploadOptions
     public long MaxAudioSizeBytes { get; set; } = 20 * 1024 * 1024;
 
     /// <summary>
-    /// Base path for media uploads folder.
+    /// Base path for all uploads.
     /// In development, relative to project root.
-    /// In production, typically /app/media.
+    /// In production, typically /app/uploads.
     /// </summary>
-    public string MediaPath { get; set; } = string.Empty;
+    public string UploadsPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Subfolder within media path for uploaded files.
-    /// Uploaded files are stored in {MediaPath}/{UploadsFolder}/
+    /// Subfolder within uploads path for question handouts and comment attachments.
+    /// Files are stored in {UploadsPath}/{HandoutsFolder}/
     /// </summary>
-    public string UploadsFolder { get; set; } = "uploads";
+    public string HandoutsFolder { get; set; } = "handouts";
+
+    /// <summary>
+    /// Subfolder within uploads path for original package files (docx, pdf).
+    /// Files are stored in {UploadsPath}/{PackagesFolder}/
+    /// This folder is not publicly accessible.
+    /// </summary>
+    public string PackagesFolder { get; set; } = "packages";
 
     /// <summary>
     /// Gets the maximum allowed file size for a given media type.

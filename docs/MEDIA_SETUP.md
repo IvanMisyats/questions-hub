@@ -1,93 +1,98 @@
-﻿# Media Files Setup Guide
+﻿# Uploads Setup Guide
 
-This guide explains how to set up and manage media files (images, videos, audio) for the Questions Hub application.
+This guide explains how to set up and manage uploaded files (images, videos, audio, packages) for the Questions Hub application.
 
 ## Overview
 
-Media files are stored on the VPS filesystem and mounted into Docker containers. This approach:
-- Keeps media files outside the container for easy management
-- The `/uploads/` folder is writable for the media upload feature
+Uploaded files are stored on the VPS filesystem and mounted into Docker containers. This approach:
+- Keeps uploaded files outside the container for easy management
+- The `/handouts/` folder stores question media (publicly accessible via `/media/` URL)
+- The `/packages/` folder stores original package files (not publicly accessible)
 - Allows direct file management via SFTP/SCP
 - Supports future CDN integration
 
 ## VPS Setup
 
-### 1. Create Media Directory Structure
+### 1. Create Uploads Directory Structure
 
-On your VPS, create the media directory:
+On your VPS, create the uploads directory:
 
 ```bash
-# Create media upload directory
-mkdir -p /var/www/questions-hub/media/uploads
+# Create uploads directories
+mkdir -p ~/questions-hub/uploads/handouts
+mkdir -p ~/questions-hub/uploads/packages
 
 # Verify structure
-tree /var/www/questions-hub/media
+tree ~/questions-hub/uploads
 ```
 
 Expected structure:
 ```
-/var/www/questions-hub/media/
-└── uploads/          # User-uploaded media files
+~/questions-hub/uploads/
+├── handouts/         # Question media (images, audio, video) - publicly accessible
+└── packages/         # Original package files (docx, pdf) - not publicly accessible
 ```
 
 ### 2. Set Proper Permissions
 
-Set secure permissions on media directories:
+Set secure permissions on upload directories:
 
 ```bash
 # Set directory permissions (read + execute for traversal)
-chmod 755 /var/www/questions-hub/media
+chmod 755 ~/questions-hub/uploads
 
-# Uploads folder needs write permission for the application
-chmod 755 /var/www/questions-hub/media/uploads
-chown -R www-data:www-data /var/www/questions-hub/media/uploads
+# Both folders need write permission for the application
+chmod 755 ~/questions-hub/uploads/handouts
+chmod 755 ~/questions-hub/uploads/packages
+chown -R github-actions:github-actions ~/questions-hub/uploads
 ```
 
 **Important:** 
 - Never set execute permissions (`x`) on media files. This prevents malicious scripts from being executed even if uploaded.
-- The `uploads/` folder must be writable by the application for the media upload feature to work.
+- Both `handouts/` and `packages/` folders must be writable by the application.
 
 ### 3. Configure Environment Variable
 
-Set the `MEDIA_PATH` environment variable for Docker Compose:
+Set the `UPLOADS_PATH` environment variable for Docker Compose:
 
 ```bash
 # Add to your .env file or export before running docker compose
-export MEDIA_PATH=/var/www/questions-hub/media
+export UPLOADS_PATH=~/questions-hub/uploads
 ```
 
 Or create a `.env` file in the project root:
 
 ```env
-MEDIA_PATH=/var/www/questions-hub/media
+UPLOADS_PATH=~/questions-hub/uploads
 POSTGRES_ROOT_PASSWORD=your_secure_password
 QUESTIONSHUB_PASSWORD=your_secure_password
 ```
 
 ## Local Development Setup
 
-### Create Local Media Folder
+### Create Local Uploads Folder
 
 ```powershell
 # From project root (PowerShell)
-mkdir media\uploads
+mkdir uploads\handouts
+mkdir uploads\packages
 ```
 
 Or on Unix-like systems:
 
 ```bash
-mkdir -p media/uploads
+mkdir -p uploads/handouts uploads/packages
 ```
 
-The application will automatically detect and serve these files when running locally.
+The application will automatically detect and serve handout files when running locally.
 
 ### Git Ignore
 
-The `media/` folder should be in `.gitignore` to avoid committing large media files to the repository:
+The `uploads/` folder should be in `.gitignore` to avoid committing large files to the repository:
 
 ```gitignore
-# Media files
-media/
+# Uploaded files
+uploads/
 ```
 
 ## Supported File Formats
@@ -160,7 +165,7 @@ server {
 
     # Direct media serving (bypasses ASP.NET Core for better performance)
     location /media/ {
-        alias /var/www/questions-hub/media/;
+        alias /home/github-actions/questions-hub/uploads/handouts/;
         
         # Security headers
         add_header X-Content-Type-Options "nosniff" always;
@@ -186,13 +191,13 @@ server {
 
 1. **Check file permissions:**
    ```bash
-   ls -la /var/www/questions-hub/media/uploads/
+   ls -la ~/questions-hub/uploads/handouts/
    ```
    Should show `rw-r--r--` (644) for files
 
 2. **Verify mount in container:**
    ```bash
-   docker exec questions-hub-web ls -la /app/media/uploads/
+   docker exec questions-hub-web ls -la /app/uploads/handouts/
    ```
 
 3. **Review logs:**
@@ -275,7 +280,8 @@ When ready to use a CDN:
 
 ## Summary
 
-- **Location:** `/var/www/questions-hub/media/` on VPS
+- **Location:** `~/questions-hub/uploads/` on VPS
+- **Structure:** `handouts/` for public media, `packages/` for original files
 - **Permissions:** 755 for directories, 644 for files
 - **Security:** Extension whitelist, no execute, MIME validation
 - **Formats:** Images (jpg, png, gif, webp), Videos (mp4, webm), Audio (mp3, ogg, wav)
