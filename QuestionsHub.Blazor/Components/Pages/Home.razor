@@ -43,7 +43,13 @@
                                 {
                                     <p class="card-text">
                                         <small class="text-muted">
-                                            <strong>Редактори:</strong> @string.Join(" · ", package.Editors)
+                                            <strong>Редактори:</strong>
+                                            @{ var editors = package.Editors.ToList(); }
+                                            @for (var i = 0; i < editors.Count; i++)
+                                            {
+                                                var editor = editors[i];
+                                                @(" ")<a href="/editor/@editor.Id" class="text-muted">@editor.FullName</a>@(i < editors.Count - 1 ? " ·" : "")
+                                            }
                                         </small>
                                     </p>
                                 }
@@ -62,7 +68,9 @@
         _packages = await DbContext.Packages
             .Where(p => p.Status == PackageStatus.Published)
             .Include(p => p.Tours)
-            .ThenInclude(t => t.Questions)
+                .ThenInclude(t => t.Editors)
+            .Include(p => p.Tours)
+                .ThenInclude(t => t.Questions)
             .OrderByDescending(p => p.PlayedAt)
             .ToListAsync();
     }

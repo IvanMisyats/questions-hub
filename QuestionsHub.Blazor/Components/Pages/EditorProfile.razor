@@ -1,0 +1,49 @@
+﻿@page "/editor/{Id:int}"
+@using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+
+<PageTitle>@(_author?.FullName ?? "Редактор")</PageTitle>
+
+<div class="container py-4">
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else if (_author == null)
+    {
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>Редактора не знайдено
+        </div>
+        <a href="/" class="btn btn-secondary">Повернутися на головну</a>
+    }
+    else
+    {
+        <h1>@_author.FullName</h1>
+        <div class="alert alert-info mt-4" role="alert">
+            <i class="bi bi-info-circle me-2"></i>Сторінка в розробці
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Author? _author;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        _author = await context.Authors.FindAsync(Id);
+        _isLoading = false;
+    }
+}
+

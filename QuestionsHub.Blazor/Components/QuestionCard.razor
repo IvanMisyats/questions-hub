@@ -137,7 +137,12 @@
             @if (Question.Authors.Any())
             {
                 <div class="answer-field">
-                    <span class="answer-label">Автор(и):</span> @string.Join(", ", Question.Authors)
+                    <span class="answer-label">Автор(и):</span>
+                    @for (var i = 0; i < Question.Authors.Count; i++)
+                    {
+                        var author = Question.Authors[i];
+                        @(" ")<a href="/editor/@author.Id">@author.FullName</a>@(i < Question.Authors.Count - 1 ? "," : "")
+                    }
                 </div>
             }
         </div>

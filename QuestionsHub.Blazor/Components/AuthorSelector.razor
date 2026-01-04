@@ -1,0 +1,282 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+
+<div class="author-selector @(_isReadOnly ? "readonly" : "")">
+    @if (_isReadOnly)
+    {
+        @* Read-only mode: just show tags *@
+        <div class="d-flex flex-wrap gap-1">
+            @foreach (var author in SelectedAuthors)
+            {
+                <span class="badge bg-secondary">
+                    <a href="/editor/@author.Id" class="text-white text-decoration-none">
+                        @author.FullName
+                    </a>
+                </span>
+            }
+        </div>
+    }
+    else
+    {
+        @* Edit mode: tags + input in same container, using Bootstrap dropdown *@
+        <div class="dropdown">
+            <div class="form-control author-input-container d-flex flex-wrap align-items-center gap-1 p-1"
+                 style="min-height: 38px; cursor: text;"
+                 @onclick="FocusInput"
+                 data-bs-toggle="dropdown"
+                 data-bs-auto-close="outside">
+                @foreach (var author in SelectedAuthors)
+                {
+                    <span class="badge bg-secondary d-flex align-items-center">
+                        @author.FullName
+                        <button type="button" class="btn-close btn-close-white ms-1"
+                                style="font-size: 0.6rem;"
+                                @onclick="() => RemoveAuthor(author)"
+                                @onclick:preventDefault
+                                @onclick:stopPropagation></button>
+                    </span>
+                }
+                <input type="text"
+                       @ref="_inputRef"
+                       class="author-input border-0 flex-grow-1"
+                       style="outline: none; min-width: 150px;"
+                       placeholder="@(SelectedAuthors.Any() ? "" : Placeholder)"
+                       value="@_searchQuery"
+                       @oninput="OnInput"
+                       @onfocus="OnFocus"
+                       @onkeydown="OnKeyDown" />
+            </div>
+
+            @* Bootstrap dropdown menu *@
+            <ul class="dropdown-menu w-100 @(_showDropdown ? "show" : "")" style="max-height: 250px; overflow-y: auto;">
+                @if (_isSearching)
+                {
+                    <li>
+                        <span class="dropdown-item text-muted">
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            Пошук...
+                        </span>
+                    </li>
+                }
+                else if (_searchResults.Any())
+                {
+                    @foreach (var author in _searchResults)
+                    {
+                        var isSelected = SelectedAuthors.Any(a => a.Id == author.Id);
+                        <li>
+                            <button type="button"
+                                    class="dropdown-item @(isSelected ? "disabled" : "")"
+                                    @onclick="() => SelectAuthor(author)"
+                                    disabled="@isSelected">
+                                @author.FullName
+                                @if (isSelected)
+                                {
+                                    <i class="bi bi-check ms-2"></i>
+                                }
+                            </button>
+                        </li>
+                    }
+                }
+                else if (!string.IsNullOrEmpty(_searchQuery))
+                {
+                    <li>
+                        <span class="dropdown-item text-muted">
+                            Авторів не знайдено
+                        </span>
+                    </li>
+                }
+
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                    <button type="button" class="dropdown-item text-primary"
+                            @onclick="OpenAddAuthorModal">
+                        <i class="bi bi-plus-lg me-2"></i>Додати нового автора
+                    </button>
+                </li>
+            </ul>
+        </div>
+    }
+</div>
+
+<AddAuthorModal IsVisible="_showAddAuthorModal"
+                InitialFirstName="@_prefillFirstName"
+                InitialLastName="@_prefillLastName"
+                OnAuthorCreated="OnNewAuthorCreated"
+                OnClose="CloseAddAuthorModal" />
+
+@code {
+    [Parameter]
+    public List<Author> SelectedAuthors { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<List<Author>> SelectedAuthorsChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnSelectionChanged { get; set; }
+
+    [Parameter]
+    public bool IsReadOnly { get => _isReadOnly; set => _isReadOnly = value; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "Почніть вводити прізвище...";
+
+    private bool _isReadOnly;
+    private string _searchQuery = string.Empty;
+    private List<Author> _searchResults = [];
+    private bool _showDropdown;
+    private bool _isSearching;
+    private bool _showAddAuthorModal;
+    private CancellationTokenSource? _searchCts;
+    private string _prefillFirstName = string.Empty;
+    private string _prefillLastName = string.Empty;
+    private ElementReference _inputRef;
+
+    private async Task FocusInput()
+    {
+        await _inputRef.FocusAsync();
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _searchQuery = e.Value?.ToString() ?? string.Empty;
+        await SearchAuthors();
+    }
+
+    private async Task OnFocus()
+    {
+        if (!string.IsNullOrEmpty(_searchQuery))
+        {
+            _showDropdown = true;
+            await SearchAuthors();
+        }
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _showDropdown = false;
+        }
+    }
+
+    private async Task SearchAuthors()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _searchResults = [];
+            _showDropdown = false;
+            StateHasChanged();
+            return;
+        }
+
+        // Cancel previous search
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+
+        _showDropdown = true;
+        _isSearching = true;
+        StateHasChanged();
+
+        try
+        {
+            // Debounce
+            await Task.Delay(200, _searchCts.Token);
+
+            await using var context = await DbContextFactory.CreateDbContextAsync(_searchCts.Token);
+            var query = _searchQuery.Trim();
+
+            _searchResults = await context.Authors
+                .Where(a => EF.Functions.ILike(a.LastName, query + "%")
+                         || EF.Functions.ILike(a.FirstName, query + "%"))
+                .OrderBy(a => a.LastName)
+                .ThenBy(a => a.FirstName)
+                .Take(10)
+                .ToListAsync(_searchCts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            // Search was cancelled, ignore
+        }
+        catch (Exception)
+        {
+            _searchResults = [];
+        }
+        finally
+        {
+            _isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectAuthor(Author author)
+    {
+        if (SelectedAuthors.Any(a => a.Id == author.Id))
+            return;
+
+        SelectedAuthors.Add(author);
+        _searchQuery = string.Empty;
+        _searchResults = [];
+        _showDropdown = false;
+
+        await SelectedAuthorsChanged.InvokeAsync(SelectedAuthors);
+        await OnSelectionChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAuthor(Author author)
+    {
+        SelectedAuthors.Remove(author);
+        await SelectedAuthorsChanged.InvokeAsync(SelectedAuthors);
+        await OnSelectionChanged.InvokeAsync();
+    }
+
+    private void OpenAddAuthorModal()
+    {
+        // Parse search query to prefill first and last name
+        var parts = _searchQuery.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+        {
+            _prefillFirstName = parts[0];
+            _prefillLastName = parts[1];
+        }
+        else if (parts.Length == 1)
+        {
+            _prefillFirstName = string.Empty;
+            _prefillLastName = parts[0];
+        }
+        else
+        {
+            _prefillFirstName = string.Empty;
+            _prefillLastName = string.Empty;
+        }
+
+        _showAddAuthorModal = true;
+        _showDropdown = false;
+    }
+
+    private void CloseAddAuthorModal()
+    {
+        _showAddAuthorModal = false;
+        _prefillFirstName = string.Empty;
+        _prefillLastName = string.Empty;
+    }
+
+    private async Task OnNewAuthorCreated(Author author)
+    {
+        _showAddAuthorModal = false;
+        _prefillFirstName = string.Empty;
+        _prefillLastName = string.Empty;
+
+        if (!SelectedAuthors.Any(a => a.Id == author.Id))
+        {
+            SelectedAuthors.Add(author);
+            await SelectedAuthorsChanged.InvokeAsync(SelectedAuthors);
+            await OnSelectionChanged.InvokeAsync();
+        }
+
+        _searchQuery = string.Empty;
+    }
+}
+

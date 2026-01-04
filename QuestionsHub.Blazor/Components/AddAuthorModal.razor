@@ -1,0 +1,156 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Додати нового автора</h5>
+                    <button type="button" class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="firstName" class="form-label">Ім'я <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="firstName"
+                               @bind="_firstName" @bind:event="oninput"
+                               placeholder="Наприклад: Іван" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="lastName" class="form-label">Прізвище <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="lastName"
+                               @bind="_lastName" @bind:event="oninput"
+                               placeholder="Наприклад: Місяць" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Close" disabled="@_isSaving">
+                        Скасувати
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="Save"
+                            disabled="@(_isSaving || !IsValid)">
+                        @if (_isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Додати
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback<Author> OnAuthorCreated { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public string InitialFirstName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string InitialLastName { get; set; } = string.Empty;
+
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string? _errorMessage;
+    private bool _isSaving;
+    private bool _initialized;
+
+    private bool IsValid => !string.IsNullOrWhiteSpace(_firstName) && !string.IsNullOrWhiteSpace(_lastName);
+
+    protected override void OnParametersSet()
+    {
+        // Initialize fields when modal becomes visible
+        if (IsVisible && !_initialized)
+        {
+            _firstName = InitialFirstName;
+            _lastName = InitialLastName;
+            _initialized = true;
+        }
+        else if (!IsVisible)
+        {
+            _initialized = false;
+        }
+    }
+
+    private async Task Save()
+    {
+        if (!IsValid) return;
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var firstName = _firstName.Trim();
+            var lastName = _lastName.Trim();
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // Check for existing author with same name
+            var existing = await context.Authors
+                .FirstOrDefaultAsync(a => a.FirstName == firstName && a.LastName == lastName);
+
+            Author author;
+            if (existing != null)
+            {
+                author = existing;
+            }
+            else
+            {
+                author = new Author
+                {
+                    FirstName = firstName,
+                    LastName = lastName
+                };
+
+                context.Authors.Add(author);
+                await context.SaveChangesAsync();
+            }
+
+            await OnAuthorCreated.InvokeAsync(author);
+            Reset();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Помилка: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Close()
+    {
+        Reset();
+        await OnClose.InvokeAsync();
+    }
+
+    private void Reset()
+    {
+        _firstName = string.Empty;
+        _lastName = string.Empty;
+        _errorMessage = null;
+    }
+}
+

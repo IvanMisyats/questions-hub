@@ -53,7 +53,13 @@ else
                     @if (_package.Editors.Any())
                     {
                         <p>
-                            <strong>Редактори пакету:</strong> @string.Join(", ", _package.Editors)
+                            <strong>Редактори пакету:</strong>
+                            @{ var packageEditors = _package.Editors.ToList(); }
+                            @for (var i = 0; i < packageEditors.Count; i++)
+                            {
+                                var editor = packageEditors[i];
+                                @(" ")<a href="/editor/@editor.Id">@editor.FullName</a>@(i < packageEditors.Count - 1 ? "," : "")
+                            }
                         </p>
                     }
 
@@ -77,7 +83,14 @@ else
                         @if (tour.Editors.Any())
                         {
                             <p>
-                                <small><strong>Редактори туру:</strong> @string.Join(", ", tour.Editors)</small>
+                                <small>
+                                    <strong>Редактори туру:</strong>
+                                    @for (var i = 0; i < tour.Editors.Count; i++)
+                                    {
+                                        var editor = tour.Editors[i];
+                                        @(" ")<a href="/editor/@editor.Id">@editor.FullName</a>@(i < tour.Editors.Count - 1 ? "," : "")
+                                    }
+                                </small>
                             </p>
                         }
 
@@ -121,7 +134,10 @@ else
         _package = await DbContext.Packages
             .AsNoTracking()
             .Include(p => p.Tours)
-            .ThenInclude(t => t.Questions)
+                .ThenInclude(t => t.Editors)
+            .Include(p => p.Tours)
+                .ThenInclude(t => t.Questions)
+                    .ThenInclude(q => q.Authors)
             .FirstOrDefaultAsync(p => p.Id == Id);
 
         if (_package == null)

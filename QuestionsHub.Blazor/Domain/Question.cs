@@ -1,4 +1,5 @@
-﻿using NpgsqlTypes;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using NpgsqlTypes;
 
 namespace QuestionsHub.Blazor.Domain;
 
@@ -46,7 +47,7 @@ public class Question
     public string? Source { get; set; }
 
     /// <summary>Question authors.</summary>
-    public List<string> Authors { get; set; } = [];
+    public List<Author> Authors { get; set; } = [];
 
     // Navigation properties
     public int TourId { get; set; }
@@ -72,7 +73,7 @@ public class Tour
     public required string Number { get; set; }
 
     /// <summary>Tour editors/authors.</summary>
-    public List<string> Editors { get; set; } = [];
+    public List<Author> Editors { get; set; } = [];
 
     /// <summary>Preamble - information from editors about the tour, usually contains list of testers (Преамбула).</summary>
     public string? Preamble { get; set; }
@@ -95,9 +96,6 @@ public class Package
 
     /// <summary>Package title.</summary>
     public required string Title { get; set; }
-
-    /// <summary>Package editors/authors.</summary>
-    public List<string> Editors { get; set; } = [];
 
     /// <summary>Date when the package was played.</summary>
     public DateOnly? PlayedAt { get; set; }
@@ -122,4 +120,10 @@ public class Package
 
     // Navigation properties
     public List<Tour> Tours { get; set; } = [];
+
+    /// <summary>Gets all unique editors from all tours (computed, not stored in DB).</summary>
+    [NotMapped]
+    public IEnumerable<Author> Editors => Tours
+        .SelectMany(t => t.Editors)
+        .DistinctBy(a => a.Id);
 }

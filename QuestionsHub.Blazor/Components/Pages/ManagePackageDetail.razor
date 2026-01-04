@@ -79,12 +79,6 @@
                                   @bind="_package.Preamble" @onblur="SavePackageAsync"
                                   placeholder="Інформація від редактора, подяки тестерам тощо"></textarea>
                     </div>
-                    <div class="col-md-8">
-                        <label for="packageEditors" class="form-label">Редактори (через кому)</label>
-                        <input type="text" class="form-control" id="packageEditors"
-                               value="@string.Join(", ", _package.Editors)"
-                               @onchange="OnEditorsChanged" @onblur="SavePackageAsync" />
-                    </div>
                     <div class="col-md-4">
                         <label for="packageStatus" class="form-label">Статус</label>
                         <select class="form-select" id="packageStatus"
@@ -94,6 +88,16 @@
                             <option value="@PackageStatus.Archived">Архів</option>
                         </select>
                     </div>
+                    @if (_package.Editors.Any())
+                    {
+                        <div class="col-12">
+                            <label class="form-label">Редактори пакету</label>
+                            <div class="text-muted small">
+                                @string.Join(", ", _package.Editors.Select(e => e.FullName))
+                                <span class="text-muted ms-2">(визначаються з турів)</span>
+                            </div>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -141,10 +145,9 @@
                                             </div>
                                             <div class="col-md-8">
                                                 <label class="form-label small">Редактори туру</label>
-                                                <input type="text" class="form-control form-control-sm"
-                                                       value="@string.Join(", ", tour.Editors)"
-                                                       @onchange="e => OnTourEditorsChanged(tour, e)"
-                                                       @onblur="() => SaveTourAsync(tour)" />
+                                                <AuthorSelector SelectedAuthors="tour.Editors"
+                                                                OnSelectionChanged="() => SaveTourAsync(tour)"
+                                                                Placeholder="Введіть прізвище редактора..." />
                                             </div>
                                             <div class="col-md-2 d-flex align-items-end">
                                                 <button class="btn btn-outline-danger btn-sm w-100"
@@ -487,9 +490,9 @@
                             <label class="col-form-label">Автори</label>
                         </div>
                         <div class="col-md-10">
-                            <input type="text" class="form-control" placeholder="через кому"
-                                   value="@string.Join(", ", _editingQuestion.Authors)"
-                                   @onchange="OnQuestionAuthorsChanged" @onblur="SaveEditingQuestionAsync" />
+                            <AuthorSelector SelectedAuthors="_editingQuestion.Authors"
+                                            OnSelectionChanged="SaveEditingQuestionAsync"
+                                            Placeholder="Введіть прізвище автора..." />
                         </div>
                     </div>
                 </div>
@@ -578,7 +581,6 @@
                 {
                     Title = "Новий пакет",
                     Description = null,
-                    Editors = new List<string>(),
                     PlayedAt = null,
                     Status = PackageStatus.Draft,
                     OwnerId = _userId,
@@ -597,7 +599,10 @@
                 await using var context = await DbContextFactory.CreateDbContextAsync();
                 _package = await context.Packages
                     .Include(p => p.Tours)
+                        .ThenInclude(t => t.Editors)
+                    .Include(p => p.Tours)
                         .ThenInclude(t => t.Questions)
+                            .ThenInclude(q => q.Authors)
                     .FirstOrDefaultAsync(p => p.Id == Id);
 
                 if (_package == null)
@@ -651,7 +656,6 @@
                 dbPackage.Title = _package.Title;
                 dbPackage.Description = _package.Description;
                 dbPackage.Preamble = _package.Preamble;
-                dbPackage.Editors = _package.Editors;
                 dbPackage.PlayedAt = _package.PlayedAt;
                 dbPackage.Status = _package.Status;
                 await context.SaveChangesAsync();
@@ -681,18 +685,6 @@
         }
     }
 
-    private void OnEditorsChanged(ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString() ?? "";
-        _package!.Editors = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-    }
-
-    private void OnTourEditorsChanged(Tour tour, ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString() ?? "";
-        tour.Editors = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-    }
-
     private async Task SaveTourAsync(Tour tour)
     {
         _saveStatus = "Збереження туру...";
@@ -706,13 +698,26 @@
             tour.Comment = tour.Comment?.Trim();
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
-            var dbTour = await context.Tours.FindAsync(tour.Id);
+            var dbTour = await context.Tours
+                .Include(t => t.Editors)
+                .FirstOrDefaultAsync(t => t.Id == tour.Id);
             if (dbTour != null)
             {
                 dbTour.Number = tour.Number;
-                dbTour.Editors = tour.Editors;
                 dbTour.Preamble = tour.Preamble;
                 dbTour.Comment = tour.Comment;
+
+                // Update editors (many-to-many)
+                dbTour.Editors.Clear();
+                foreach (var editor in tour.Editors)
+                {
+                    var dbAuthor = await context.Authors.FindAsync(editor.Id);
+                    if (dbAuthor != null)
+                    {
+                        dbTour.Editors.Add(dbAuthor);
+                    }
+                }
+
                 await context.SaveChangesAsync();
             }
             _saveStatus = "Збережено";
@@ -743,7 +748,7 @@
             {
                 PackageId = _package.Id,
                 Number = newNumber,
-                Editors = new List<string>(),
+                Editors = new List<Author>(),
                 Preamble = null,
                 Comment = null,
                 Questions = new List<Question>()
@@ -830,10 +835,21 @@
                 Number = newNumber,
                 Text = "",
                 Answer = "",
-                Authors = new List<string>()
+                Authors = tour.Editors.Select(e => new Author
+                {
+                    Id = e.Id,
+                    FirstName = e.FirstName,
+                    LastName = e.LastName
+                }).ToList()
             };
 
             context.Questions.Add(question);
+
+            // Attach authors to context
+            foreach (var author in question.Authors)
+            {
+                context.Authors.Attach(author);
+            }
 
             // Update package total
             var dbPackage = await context.Packages.FindAsync(_package.Id);
@@ -944,7 +960,9 @@
             _editingQuestion.Source = _editingQuestion.Source?.Trim();
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
-            var dbQuestion = await context.Questions.FindAsync(_editingQuestion.Id);
+            var dbQuestion = await context.Questions
+                .Include(q => q.Authors)
+                .FirstOrDefaultAsync(q => q.Id == _editingQuestion.Id);
             if (dbQuestion != null)
             {
                 dbQuestion.Number = _editingQuestion.Number;
@@ -956,7 +974,18 @@
                 dbQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers;
                 dbQuestion.Comment = _editingQuestion.Comment;
                 dbQuestion.Source = _editingQuestion.Source;
-                dbQuestion.Authors = _editingQuestion.Authors;
+
+                // Update authors (many-to-many)
+                dbQuestion.Authors.Clear();
+                foreach (var author in _editingQuestion.Authors)
+                {
+                    var dbAuthor = await context.Authors.FindAsync(author.Id);
+                    if (dbAuthor != null)
+                    {
+                        dbQuestion.Authors.Add(dbAuthor);
+                    }
+                }
+
                 await context.SaveChangesAsync();
             }
             _questionSaveStatus = "Збережено";
@@ -968,12 +997,6 @@
         StateHasChanged();
     }
 
-    private void OnQuestionAuthorsChanged(ChangeEventArgs e)
-    {
-        if (_editingQuestion == null) return;
-        var value = e.Value?.ToString() ?? "";
-        _editingQuestion.Authors = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-    }
 
     private bool CanNavigatePrev()
     {
@@ -1085,10 +1108,21 @@
                 Number = newNumber,
                 Text = "",
                 Answer = "",
-                Authors = new List<string>()
+                Authors = _editingTour.Editors.Select(e => new Author
+                {
+                    Id = e.Id,
+                    FirstName = e.FirstName,
+                    LastName = e.LastName
+                }).ToList()
             };
 
             context.Questions.Add(question);
+
+            // Attach authors to context
+            foreach (var author in question.Authors)
+            {
+                context.Authors.Attach(author);
+            }
 
             var dbPackage = await context.Packages.FindAsync(_package.Id);
             if (dbPackage != null)

@@ -1,0 +1,46 @@
+﻿.author-selector {
+    position: relative;
+}
+
+.author-selector .badge {
+    font-weight: normal;
+    font-size: 0.85rem;
+    padding: 0.35em 0.5em;
+}
+
+.author-selector .badge a {
+    color: inherit;
+}
+
+.author-selector .badge .btn-close {
+    padding: 0;
+    margin: 0;
+    opacity: 0.7;
+}
+
+.author-selector .badge .btn-close:hover {
+    opacity: 1;
+}
+
+.author-selector .author-input-container {
+    cursor: text;
+}
+
+.author-selector .author-input-container:focus-within {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.author-selector .author-input {
+    background: transparent;
+}
+
+.author-selector .author-input::placeholder {
+    color: #6c757d;
+}
+
+.author-selector .dropdown-item.disabled {
+    color: #6c757d;
+    background-color: #f8f9fa;
+}
+

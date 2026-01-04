@@ -10,10 +10,27 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<Package> Packages => Set<Package>();
     public DbSet<Tour> Tours => Set<Tour>();
     public DbSet<Question> Questions => Set<Question>();
+    public DbSet<Author> Authors => Set<Author>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<Author>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.FirstName).IsRequired().HasMaxLength(100);
+            entity.Property(a => a.LastName).IsRequired().HasMaxLength(100);
+            entity.HasIndex(a => new { a.FirstName, a.LastName }).IsUnique();
+
+            entity.HasMany(a => a.Questions)
+                .WithMany(q => q.Authors)
+                .UsingEntity("QuestionAuthors");
+
+            entity.HasMany(a => a.Tours)
+                .WithMany(t => t.Editors)
+                .UsingEntity("TourEditors");
+        });
 
         builder.Entity<Package>(entity =>
         {
