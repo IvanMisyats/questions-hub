@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: January 1, 2026
+**Last Updated**: January 4, 2026
 
 ---
 
@@ -38,13 +38,20 @@
   - Has owner (User who created it)
   - Has status: Draft, Published, or Archived
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
+  - Editors are computed from all tour editors (not stored directly)
 - **Tour (Тур)** - A round within a package, typically prepared by a specific editor
   - Has Number for display (e.g., "1", "2")
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
+  - Has many-to-many relationship with Authors (as Editors)
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
   - Has OrderIndex for physical ordering within tour
   - Has Number for display (can be non-numeric, e.g., "F" for hexadecimal)
   - Has optional HostInstructions (Вказівка ведучому) for organizer guidance
+  - Has many-to-many relationship with Authors
+- **Author (Автор/Редактор)** - A person who creates questions or edits tours
+  - Has FirstName (Ім'я) and LastName (Прізвище)
+  - Unique constraint on (FirstName, LastName)
+  - Can be linked to multiple Questions and Tours
 - **User (Користувач)** - Application user with profile information
 
 ---
@@ -129,12 +136,13 @@ Displays list of packages owned by the current user (Editors see only their own;
 Single-page editor for complete package management:
 
 **Package Properties**:
-- Title, description, editors list, play date, status (Draft/Published/Archived)
+- Title, description, play date, status (Draft/Published/Archived)
+- Editors list displayed as read-only (computed from all tour editors)
 - Auto-save on field blur
 
 **Tours Management**:
 - Collapsible accordion showing all tours
-- Inline editing of tour number, title, editors
+- Inline editing of tour number, editors (via AuthorSelector component)
 - Add/delete tours with confirmation
 
 **Questions Management**:
@@ -143,7 +151,8 @@ Single-page editor for complete package management:
 - Question count auto-calculated
 
 **Question Editor Modal**:
-- Full question editing: number, text, answer, accepted/rejected answers, comment, source, authors
+- Full question editing: number, text, answer, accepted/rejected answers, comment, source, authors (via AuthorSelector)
+- Authors prefilled from tour editors when creating new question
 - Prev/Next navigation buttons (including cross-tour navigation)
 - Auto-save on field blur
 - Handout text field and media upload for handout and comment attachments
@@ -172,7 +181,7 @@ UI placeholder exists, not implemented. Will include full-text search across que
 Not implemented. Drag-and-drop or button-based reordering of tours within packages and questions within tours.
 
 ### Author/Editor Search
-Not implemented. Search for packages by author, author profile pages, editor statistics.
+Partially implemented. Authors are now stored as separate entities with unique profiles. Author names are clickable links to `/editor/{id}` profile page. Profile page shows placeholder "Сторінка в розробці". Future: search for packages by author, author statistics, list of author's works.
 
 ### Interactive Play Mode
 Not implemented. Timer-based question display, one question at a time, score tracking for practice sessions.
@@ -198,7 +207,9 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 ├── Components/
 │   ├── Account/           # Authentication pages (Login, Register, Profile, etc.)
 │   ├── Layout/            # Layout components (MainLayout, NavMenu)
-│   ├── Pages/             # Main pages (Home, PackageDetail, ManagePackages, etc.)
+│   ├── Pages/             # Main pages (Home, PackageDetail, ManagePackages, EditorProfile, etc.)
+│   ├── AddAuthorModal.razor # Modal for creating new authors
+│   ├── AuthorSelector.razor # Multi-select autocomplete for authors/editors
 │   ├── QuestionCard.razor # Question display component
 │   └── TourNavigation.razor # Tour sidebar navigation
 ├── Controllers/           # API controllers
@@ -206,7 +217,7 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 │   ├── PackageManagementController.cs # Package CRUD API
 │   └── Dto/               # Data transfer objects
 ├── Data/                  # Database context, seeding, migrations
-├── Domain/                # Domain models (User, Package, Tour, Question)
+├── Domain/                # Domain models (User, Package, Tour, Question, Author)
 └── Infrastructure/        # Utilities and helpers
 ```
 
@@ -253,6 +264,8 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | Create/edit/delete questions | ✅ Working |
 | Package ownership & status | ✅ Working |
 | Media upload | ✅ Working |
+| Authors management | ✅ Working |
+| Author profile page | ⏳ Placeholder only |
 | Search | ⏳ UI only, not functional |
 | Admin user management | ❌ Not implemented |
 | Interactive play mode | ❌ Not implemented |
@@ -264,6 +277,7 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 2026 | 1.3 | Added Authors as separate entity with many-to-many relationships, AuthorSelector component, EditorProfile page placeholder |
 | Jan 2026 | 1.2 | Removed unused Package Management REST API (Blazor uses DbContext directly) |
 | Jan 2026 | 1.1 | Added Preamble to Package and Tour, removed Tour Title, Media upload implemented |
 | Dec 2025 | 1.0 | Initial specification document |

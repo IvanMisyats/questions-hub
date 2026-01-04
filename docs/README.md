@@ -29,7 +29,7 @@ Understanding Docker Compose profiles:
 ### [SITE_SPECIFICATION.md](SITE_SPECIFICATION.md)
 Complete site specification and feature list:
 - Project overview and purpose
-- Domain model (Package, Tour, Question, User)
+- Domain model (Package, Tour, Question, Author, User)
 - All implemented features with details
 - API endpoints
 - Future features (planned)
