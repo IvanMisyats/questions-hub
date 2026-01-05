@@ -5,6 +5,7 @@ namespace QuestionsHub.Blazor.Infrastructure;
 
 /// <summary>
 /// Result of a search query containing full question data and metadata.
+/// Highlighted versions of text fields contain &lt;mark&gt; tags around matched terms.
 /// </summary>
 public record SearchResult(
     int QuestionId,
@@ -20,6 +21,13 @@ public record SearchResult(
     string? RejectedAnswers,
     string? Comment,
     string? Source,
+    string TextHighlighted,
+    string AnswerHighlighted,
+    string? HandoutTextHighlighted,
+    string? AcceptedAnswersHighlighted,
+    string? RejectedAnswersHighlighted,
+    string? CommentHighlighted,
+    string? SourceHighlighted,
     double Rank
 );
 
@@ -83,6 +91,20 @@ public class SearchService
                     qu.""RejectedAnswers"",
                     qu.""Comment"",
                     qu.""Source"",
+                    ts_headline('ukrainian', COALESCE(qu.""Text"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""TextHighlighted"",
+                    ts_headline('ukrainian', COALESCE(qu.""Answer"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""AnswerHighlighted"",
+                    ts_headline('ukrainian', COALESCE(qu.""HandoutText"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""HandoutTextHighlighted"",
+                    ts_headline('ukrainian', COALESCE(qu.""AcceptedAnswers"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""AcceptedAnswersHighlighted"",
+                    ts_headline('ukrainian', COALESCE(qu.""RejectedAnswers"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""RejectedAnswersHighlighted"",
+                    ts_headline('ukrainian', COALESCE(qu.""Comment"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""CommentHighlighted"",
+                    ts_headline('ukrainian', COALESCE(qu.""Source"", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""SourceHighlighted"",
                     (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) +
                      COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank""
                 FROM ""Questions"" qu

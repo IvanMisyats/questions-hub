@@ -109,10 +109,25 @@ public record SearchResult(
     string PackageTitle,
     string TourNumber,
     string QuestionNumber,
-    string Snippet,      // Highlighted text fragment
-    double Rank          // Relevance score
+    string Text,
+    string Answer,
+    string? HandoutText,
+    string? AcceptedAnswers,
+    string? RejectedAnswers,
+    string? Comment,
+    string? Source,
+    string TextHighlighted,           // Text with <mark> tags around matched terms
+    string AnswerHighlighted,
+    string? HandoutTextHighlighted,
+    string? AcceptedAnswersHighlighted,
+    string? RejectedAnswersHighlighted,
+    string? CommentHighlighted,
+    string? SourceHighlighted,
+    double Rank                        // Relevance score
 );
 ```
+
+The `*Highlighted` fields contain the same text as the original fields but with `<mark>` tags around matched search terms. Use `HighlightSanitizer.Sanitize()` to safely render these in Blazor.
 
 ## Troubleshooting
 

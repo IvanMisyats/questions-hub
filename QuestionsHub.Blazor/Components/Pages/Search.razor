@@ -1,6 +1,7 @@
 ﻿@page "/search"
 @page "/search/{Query}"
 @using QuestionsHub.Blazor.Infrastructure
+@using static QuestionsHub.Blazor.Infrastructure.HighlightSanitizer
 @inject SearchService SearchService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -81,46 +82,46 @@
                                 {
                                     <div class="handout mb-3">
                                         <strong>Роздатковий матеріал:</strong>
-                                        <div>@result.HandoutText</div>
+                                        <div>@Sanitize(result.HandoutTextHighlighted, result.HandoutText)</div>
                                     </div>
                                 }
 
                                 @* Full question text *@
                                 <div class="question-text mb-3">
-                                    @result.Text
+                                    @Sanitize(result.TextHighlighted, result.Text)
                                 </div>
 
                                 @* Answer section *@
                                 <div class="answer-section">
                                     <div class="answer-field">
-                                        <span class="answer-label">Відповідь:</span> @result.Answer
+                                        <span class="answer-label">Відповідь:</span> @Sanitize(result.AnswerHighlighted, result.Answer)
                                     </div>
 
                                     @if (!string.IsNullOrEmpty(result.AcceptedAnswers))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Залік:</span> @result.AcceptedAnswers
+                                            <span class="answer-label">Залік:</span> @Sanitize(result.AcceptedAnswersHighlighted, result.AcceptedAnswers)
                                         </div>
                                     }
 
                                     @if (!string.IsNullOrEmpty(result.RejectedAnswers))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Незалік:</span> @result.RejectedAnswers
+                                            <span class="answer-label">Незалік:</span> @Sanitize(result.RejectedAnswersHighlighted, result.RejectedAnswers)
                                         </div>
                                     }
 
                                     @if (!string.IsNullOrEmpty(result.Comment))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Коментар:</span> @result.Comment
+                                            <span class="answer-label">Коментар:</span> @Sanitize(result.CommentHighlighted, result.Comment)
                                         </div>
                                     }
 
                                     @if (!string.IsNullOrEmpty(result.Source))
                                     {
                                         <div class="answer-field source-field">
-                                            <span class="answer-label">Джерело:</span> @result.Source
+                                            <span class="answer-label">Джерело:</span> @Sanitize(result.SourceHighlighted, result.Source)
                                         </div>
                                     }
                                 </div>

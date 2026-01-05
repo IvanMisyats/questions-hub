@@ -162,6 +162,31 @@ Single-page editor for complete package management:
 - **Published** - Visible to all users
 - **Archived** - Hidden from main list, accessible via direct link
 
+### 10. Search (Пошук)
+**Route**: `/search` or `/search/{query}`
+
+Full-text search across all published questions with Ukrainian morphology support.
+
+**Features**:
+- **Ukrainian Morphology** - Finds words in different forms (відмінки, роди, числа)
+- **Accent Insensitive** - Searches ignore Ukrainian accents (А́мундсен = Амундсен)
+- **Typo Tolerance** - Finds results even with spelling mistakes (via trigram matching)
+- **Result Highlighting** - Matched words are highlighted with `<mark>` tags in results
+
+**Search Syntax**:
+- `слово1 слово2` - Both words required (AND)
+- `слово1 OR слово2` - Either word (OR)
+- `"точна фраза"` - Exact phrase match
+- `-слово` - Exclude word from results
+
+**Searchable Fields** (in order of priority):
+1. Question Text
+2. Handout Text
+3. Answer
+4. Accepted/Rejected Answers
+5. Comment
+6. Source
+
 ---
 
 ## UI/UX Features
@@ -173,9 +198,6 @@ Single-page editor for complete package management:
 ---
 
 ## Future Features (Planned)
-
-### Search Functionality
-UI placeholder exists, not implemented. Will include full-text search across questions, packages, and authors with filters.
 
 ### Package Reordering
 Not implemented. Drag-and-drop or button-based reordering of tours within packages and questions within tours.
@@ -266,7 +288,7 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | Media upload | ✅ Working |
 | Authors management | ✅ Working |
 | Author profile page | ⏳ Placeholder only |
-| Search | ⏳ UI only, not functional |
+| Search | ✅ Working |
 | Admin user management | ❌ Not implemented |
 | Interactive play mode | ❌ Not implemented |
 | Comments/ratings | ❌ Not implemented |
