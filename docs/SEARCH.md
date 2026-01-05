@@ -129,6 +129,19 @@ public record SearchResult(
 
 The `*Highlighted` fields contain the same text as the original fields but with `<mark>` tags around matched search terms. Use `HighlightSanitizer.Sanitize()` to safely render these in Blazor.
 
+### Highlighting Strategy
+
+The search uses a hybrid approach for highlighting:
+
+1. **Server-side (PostgreSQL ts_headline)**: Highlights words matched by the full-text search using Ukrainian morphology. Handles word forms (відмінки, роди, числа).
+
+2. **Client-side fallback (HighlightSanitizer)**: When ts_headline doesn't produce highlights (e.g., for accented words like "Копенга́гена" when searching "Копенгаген"), the sanitizer applies accent-insensitive regex-based highlighting.
+
+This ensures:
+- Words with accents (stress marks) are properly highlighted
+- Original text is preserved with its accents
+- Both morphological variants and exact matches are highlighted
+
 ## Troubleshooting
 
 ### Search returns no results

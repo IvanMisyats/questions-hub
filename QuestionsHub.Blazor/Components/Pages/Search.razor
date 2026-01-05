@@ -82,46 +82,46 @@
                                 {
                                     <div class="handout mb-3">
                                         <strong>Роздатковий матеріал:</strong>
-                                        <div>@Sanitize(result.HandoutTextHighlighted, result.HandoutText)</div>
+                                        <div>@Sanitize(result.HandoutTextHighlighted, result.HandoutText, _searchedQuery)</div>
                                     </div>
                                 }
 
                                 @* Full question text *@
                                 <div class="question-text mb-3">
-                                    @Sanitize(result.TextHighlighted, result.Text)
+                                    @Sanitize(result.TextHighlighted, result.Text, _searchedQuery)
                                 </div>
 
                                 @* Answer section *@
                                 <div class="answer-section">
                                     <div class="answer-field">
-                                        <span class="answer-label">Відповідь:</span> @Sanitize(result.AnswerHighlighted, result.Answer)
+                                        <span class="answer-label">Відповідь:</span> @Sanitize(result.AnswerHighlighted, result.Answer, _searchedQuery)
                                     </div>
 
                                     @if (!string.IsNullOrEmpty(result.AcceptedAnswers))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Залік:</span> @Sanitize(result.AcceptedAnswersHighlighted, result.AcceptedAnswers)
+                                            <span class="answer-label">Залік:</span> @Sanitize(result.AcceptedAnswersHighlighted, result.AcceptedAnswers, _searchedQuery)
                                         </div>
                                     }
 
                                     @if (!string.IsNullOrEmpty(result.RejectedAnswers))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Незалік:</span> @Sanitize(result.RejectedAnswersHighlighted, result.RejectedAnswers)
+                                            <span class="answer-label">Незалік:</span> @Sanitize(result.RejectedAnswersHighlighted, result.RejectedAnswers, _searchedQuery)
                                         </div>
                                     }
 
                                     @if (!string.IsNullOrEmpty(result.Comment))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Коментар:</span> @Sanitize(result.CommentHighlighted, result.Comment)
+                                            <span class="answer-label">Коментар:</span> @Sanitize(result.CommentHighlighted, result.Comment, _searchedQuery)
                                         </div>
                                     }
 
                                     @if (!string.IsNullOrEmpty(result.Source))
                                     {
                                         <div class="answer-field source-field">
-                                            <span class="answer-label">Джерело:</span> @Sanitize(result.SourceHighlighted, result.Source)
+                                            <span class="answer-label">Джерело:</span> @Sanitize(result.SourceHighlighted, result.Source, _searchedQuery)
                                         </div>
                                     }
                                 </div>
