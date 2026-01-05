@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: January 4, 2026
+**Last Updated**: January 5, 2026
 
 ---
 
@@ -52,7 +52,9 @@
   - Has FirstName (Ім'я) and LastName (Прізвище)
   - Unique constraint on (FirstName, LastName)
   - Can be linked to multiple Questions and Tours
+  - Can be linked to a User account (optional one-to-one relationship)
 - **User (Користувач)** - Application user with profile information
+  - Can be linked to an Author entity (for Editors)
 
 ---
 
@@ -98,7 +100,12 @@ View and edit profile information. City and Team are editable; First name, Last 
 
 #### 4.5 Login Display Component
 
-Shows login/register buttons for anonymous users. For authenticated users, shows user's name with dropdown menu for profile and logout.
+Shows login/register buttons for anonymous users. For authenticated users, shows user's name with dropdown menu containing:
+- **Мій профіль** - User profile page
+- **Мої пакети** - Package management (Editors and Admins only)
+- **Редактори** - Editors list (Editors and Admins only)
+- **Користувачі** - User management (Admins only)
+- **Вийти** - Logout
 
 ### 5. Navigation & Layout
 
@@ -187,6 +194,45 @@ Full-text search across all published questions with Ukrainian morphology suppor
 5. Comment
 6. Source
 
+### 11. Admin User Management
+
+**Authorization**: Admin only (except Editors list which is read-only for Editors)
+
+#### 11.1 Editors List (Редактори)
+**Route**: `/admin/editors`
+
+Displays all users with Editor role.
+
+**Visible to Editors (read-only)**:
+- Name, City, Linked Author
+
+**Visible to Admin**:
+- Name, Email, City, Linked Author
+- "Понизити" button to demote editor
+
+#### 11.2 Users List (Користувачі)
+**Route**: `/admin/users`
+
+**Authorization**: Admin only
+
+Displays all users (except admins) with search functionality.
+
+**Features**:
+- Search by name or email
+- Shows: Name, Email, City, Team, Status/Actions
+- Editors shown with "Редактор" badge
+- Regular users have "Зробити редактором" button
+- When promoting to editor: automatically creates linked Author entity (or links to existing author with same name)
+
+#### 11.3 Editor Profile (Профіль редактора)
+**Route**: `/editor/{id}`
+
+Displays author profile with:
+- Author name
+- Linked user info (name, city visible to all; email visible to admin only)
+- Statistics: number of tours and questions
+- Admin can link/unlink author to user account
+
 ---
 
 ## UI/UX Features
@@ -203,7 +249,7 @@ Full-text search across all published questions with Ukrainian morphology suppor
 Not implemented. Drag-and-drop or button-based reordering of tours within packages and questions within tours.
 
 ### Author/Editor Search
-Partially implemented. Authors are now stored as separate entities with unique profiles. Author names are clickable links to `/editor/{id}` profile page. Profile page shows placeholder "Сторінка в розробці". Future: search for packages by author, author statistics, list of author's works.
+Partially implemented. Authors are now stored as separate entities with unique profiles. Author names are clickable links to `/editor/{id}` profile page. Profile page shows author name, linked user info (city visible to all, email visible to admin only), and statistics (tours and questions count). Admin can link/unlink authors to user accounts. Future: search for packages by author, list of author's works.
 
 ### Interactive Play Mode
 Not implemented. Timer-based question display, one question at a time, score tracking for practice sessions.
@@ -214,11 +260,11 @@ Not implemented. Upload and store tournament results, team scores, rankings.
 ### Comments & Ratings
 Not implemented. User comments on questions, rating system for questions and packages, favorites.
 
-### User Management (Admin)
-Not implemented. Admin panel for user management, role promotion/demotion, account suspension.
-
 ### Email Notifications
 Placeholder implementation. Will include real SMTP, password reset, registration confirmation.
+
+### Package Access Levels
+Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUsersOnly, Public.
 
 ---
 
@@ -227,20 +273,30 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 ```
 /QuestionsHub.Blazor/
 ├── Components/
-│   ├── Account/           # Authentication pages (Login, Register, Profile, etc.)
-│   ├── Layout/            # Layout components (MainLayout, NavMenu)
-│   ├── Pages/             # Main pages (Home, PackageDetail, ManagePackages, EditorProfile, etc.)
+│   ├── Account/           # Authentication pages (Login, Register, Profile, LoginDisplay, etc.)
+│   ├── Layout/            # Layout components (MainLayout, NavMenu, TopSearchBar)
+│   ├── Pages/             # Main pages
+│   │   ├── Admin/         # Admin pages (Editors, Users)
+│   │   ├── Home.razor     # Home page with package list
+│   │   ├── PackageDetail.razor  # Package view page
+│   │   ├── ManagePackages.razor # Package management list
+│   │   ├── ManagePackageDetail.razor # Package editor
+│   │   ├── EditorProfile.razor  # Author/editor profile page
+│   │   └── Search.razor   # Search page
 │   ├── AddAuthorModal.razor # Modal for creating new authors
 │   ├── AuthorSelector.razor # Multi-select autocomplete for authors/editors
 │   ├── QuestionCard.razor # Question display component
 │   └── TourNavigation.razor # Tour sidebar navigation
 ├── Controllers/           # API controllers
 │   ├── AuthController.cs  # Authentication endpoints
-│   ├── PackageManagementController.cs # Package CRUD API
+│   ├── MediaController.cs # Media upload/delete API
 │   └── Dto/               # Data transfer objects
 ├── Data/                  # Database context, seeding, migrations
 ├── Domain/                # Domain models (User, Package, Tour, Question, Author)
-└── Infrastructure/        # Utilities and helpers
+└── Infrastructure/        # Utilities and services
+    ├── AuthorUserLinkingService.cs  # Author-User linking operations
+    ├── MediaService.cs    # Media file handling
+    └── SearchService.cs   # Full-text search
 ```
 
 ---
@@ -287,9 +343,14 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 | Package ownership & status | ✅ Working |
 | Media upload | ✅ Working |
 | Authors management | ✅ Working |
-| Author profile page | ⏳ Placeholder only |
+| Author profile page | ✅ Working |
+| Author-User linking | ✅ Working |
 | Search | ✅ Working |
-| Admin user management | ❌ Not implemented |
+| Admin: view editors list | ✅ Working |
+| Admin: view all users | ✅ Working |
+| Admin: promote user to editor | ✅ Working |
+| Admin: demote editor | ✅ Working |
+| Package access levels | ❌ Not implemented |
 | Interactive play mode | ❌ Not implemented |
 | Comments/ratings | ❌ Not implemented |
 
@@ -299,7 +360,8 @@ Placeholder implementation. Will include real SMTP, password reset, registration
 
 | Date | Version | Changes |
 |------|---------|---------|
-| Jan 2026 | 1.3 | Added Authors as separate entity with many-to-many relationships, AuthorSelector component, EditorProfile page placeholder |
+| Jan 5, 2026 | 1.4 | Admin user management: editors list, users list, promote/demote editors, Author-User linking, enhanced editor profile page |
+| Jan 4, 2026 | 1.3 | Added Authors as separate entity with many-to-many relationships, AuthorSelector component, EditorProfile page placeholder |
 | Jan 2026 | 1.2 | Removed unused Package Management REST API (Blazor uses DbContext directly) |
 | Jan 2026 | 1.1 | Added Preamble to Package and Tour, removed Tour Title, Media upload implemented |
 | Dec 2025 | 1.0 | Initial specification document |

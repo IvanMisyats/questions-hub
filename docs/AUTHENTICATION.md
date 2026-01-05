@@ -4,7 +4,7 @@
 
 QuestionsHub implements role-based authentication and authorization using **ASP.NET Core Identity** with PostgreSQL as the backing store.
 
-**Last Updated**: December 25, 2025
+**Last Updated**: January 5, 2026
 
 ---
 
@@ -29,20 +29,20 @@ QuestionsHub implements role-based authentication and authorization using **ASP.
   - All User permissions
   - Create new question packages
   - Edit own packages
-  - Set package access levels:
-    - Private (nobody)
-    - By link (anyone with link)
-    - Registered users only
-    - Everyone (including anonymous)
+  - View editors list (read-only)
+  - Linked to an Author entity (created automatically on promotion)
+  
+> **Note**: When a user is promoted to Editor, an Author entity is automatically created and linked. If an Author with the same name already exists, it is linked instead. When demoted, the Author entity remains for historical data.
 
 ### 4. Admin
 - **Assigned at**: System initialization via `.env`
 - **Permissions**: 
   - All Editor permissions
-  - Promote users to Editor role
-  - Demote Editors to User role
-  - Manage all users
-  - Access admin panel
+  - Promote users to Editor role (`/admin/users`)
+  - Demote Editors to User role (`/admin/editors`)
+  - View all users with email addresses
+  - Link/unlink Author ↔ User manually (`/editor/{id}`)
+  - Manage all packages regardless of owner
 
 ---
 
@@ -104,6 +104,27 @@ Manual admin approval of registrations is planned but not yet implemented.
 
 ---
 
+## Privacy
+
+### Email Visibility
+User email addresses are protected and only visible to Admins:
+
+| Page | Who can see email |
+|------|-------------------|
+| `/admin/editors` | Admin only |
+| `/admin/users` | Admin only |
+| `/editor/{id}` | Admin only |
+
+### City Visibility
+User city is visible to all authenticated users on:
+- Editors list (`/admin/editors`)
+- Editor profile page (`/editor/{id}`)
+
+### Role Change Notification
+When a user is promoted or demoted, they must **log out and log back in** for the role change to take effect. This is because role claims are cached in the authentication cookie.
+
+---
+
 ## Admin Bootstrapping
 
 ### First Admin User
@@ -142,8 +163,21 @@ Extends `IdentityUser` with custom fields:
 | LastName | string | ✓ | Прізвище |
 | City | string | | Місто (optional) |
 | Team | string | | Команда (optional) |
+| AuthorId | int? | | Linked Author entity (for Editors) |
 | AccessFailedCount | int | ✓ | Failed login attempts |
 | LockoutEnd | DateTimeOffset? | | When lockout expires |
+
+### Author Table
+Stores question/tour authors, can be linked to users:
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| Id | int | ✓ | Primary key |
+| FirstName | string | ✓ | Ім'я |
+| LastName | string | ✓ | Прізвище |
+| UserId | string? | | Linked ApplicationUser (optional) |
+
+**Constraints**: Unique index on (FirstName, LastName)
 
 ### Identity Tables
 Standard ASP.NET Core Identity tables:
@@ -159,51 +193,57 @@ Standard ASP.NET Core Identity tables:
 
 ## Package Access Control
 
-### Access Levels
-Editors can set package visibility when creating/editing packages:
+> **Note**: Package access levels are **not yet implemented**. Currently, packages have three statuses:
+> - **Draft** - Only visible to owner and admins
+> - **Published** - Visible to all users
+> - **Archived** - Hidden from main list, accessible via direct link
+
+### Planned Access Levels (Future)
+Editors will be able to set package visibility when creating/editing packages:
 
 1. **Private (Приватний)**
    - Only the package creator can view
    - Hidden from search and listings
 
-2. **By Link (За посиланням)**
-   - Anyone with the direct URL can access
-   - Not listed publicly
-
+2. **Editors Only (Тільки редактори)**
+   - Only users with Editor role can view
+   
 3. **Registered Users (Зареєстровані користувачі)**
    - Requires login
    - Available to User, Editor, and Admin roles
 
-4. **Everyone (Усі)**
+4. **Everyone/Public (Усі)**
    - Public access
    - Anonymous users can view
 
-### Implementation
-Package access control is enforced at:
-- Page level: `@attribute [Authorize]` or custom policies
-- Component level: `<AuthorizeView>` components
-- Service level: Check user roles and package settings
 
 ---
 
 ## UI Components
 
 ### Login Display
-- Replaces "Слава Україні!" in the header
-- Shows:
-  - **Anonymous**: "Увійти" button
-  - **Authenticated**: User's full name + "Війти" button
+Located in header, shows:
+- **Anonymous**: "Увійти" and "Реєстрація" buttons
+- **Authenticated**: User's full name with dropdown menu:
+  - Мій профіль
+  - Мої пакети (Editor/Admin only)
+  - Редактори (Editor/Admin only)
+  - Користувачі (Admin only)
+  - Вийти
 
-### Pages
+### Account Pages
 - `/Account/Login` - Login page with "Remember Me"
 - `/Account/Register` - Registration form
 - `/Account/Logout` - Logout handler
 - `/Account/ForgotPassword` - Request password reset
 - `/Account/ResetPassword` - Set new password with token
-- `/Account/EditProfile` - Edit user profile
+- `/Account/Profile` - View/edit user profile
 - `/Account/AccessDenied` - Unauthorized access page
-- `/Admin/Users` - User management (Admin only)
-- `/Admin/UserEdit/{id}` - Promote/demote user (Admin only)
+
+### Admin Pages
+- `/admin/editors` - List of all editors (read-only for Editors, manageable for Admin)
+- `/admin/users` - List of all users with promote/demote actions (Admin only)
+- `/editor/{id}` - Author profile page with user linking (Admin can link/unlink)
 
 ---
 
@@ -342,11 +382,17 @@ dotnet ef database update
 ## Future Enhancements
 
 ### Planned
-- Manual admin approval of registrations
-- Multiple admin users
-- Admin can promote users to Admin role
+- Package access levels (Private, EditorsOnly, RegisteredUsersOnly, Public)
 - Real email sending (SMTP configuration)
 - Activity logging (last login, actions)
+- Multiple admin users (Admin can promote others to Admin)
+
+### Implemented (Jan 2026)
+- ✅ Admin can promote users to Editor role
+- ✅ Admin can demote Editors to User role
+- ✅ Author-User linking (automatic on promotion, manual via admin)
+- ✅ Editors list page (visible to Editor and Admin)
+- ✅ Users list page with search (Admin only)
 
 ### Possible
 - Two-factor authentication (2FA)
