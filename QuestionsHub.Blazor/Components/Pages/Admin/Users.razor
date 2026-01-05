@@ -1,0 +1,295 @@
+﻿@page "/admin/users"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Користувачі - QuestionsHub</PageTitle>
+
+<div class="container py-4">
+
+    <h1 class="mb-4">Користувачі</h1>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @(_isSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                @_message
+                <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+            </div>
+        }
+
+        <!-- Search -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" class="form-control" placeholder="Пошук за іменем або email..."
+                           @bind="_searchQuery" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                    <button class="btn btn-outline-secondary" @onclick="SearchUsers">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                    <path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
+                </svg>Всі користувачі (@_users.Count)
+            </div>
+            <div class="card-body p-0">
+                @if (_users.Count == 0)
+                {
+                    <p class="text-muted p-3 mb-0">
+                        @if (string.IsNullOrEmpty(_searchQuery))
+                        {
+                            <text>Користувачів не знайдено.</text>
+                        }
+                        else
+                        {
+                            <text>Користувачів за запитом «@_searchQuery» не знайдено.</text>
+                        }
+                    </p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ім'я</th>
+                                    <th>Email</th>
+                                    <th>Місто</th>
+                                    <th>Команда</th>
+                                    <th style="width: 200px;">Статус / Дії</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var user in _users)
+                                {
+                                    <tr>
+                                        <td>@user.User.FullName</td>
+                                        <td>@user.User.Email</td>
+                                        <td>@(user.User.City ?? "—")</td>
+                                        <td>@(user.User.Team ?? "—")</td>
+                                        <td>
+                                            @if (user.IsEditor)
+                                            {
+                                                <span class="badge bg-primary">Редактор</span>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-success btn-sm"
+                                                        @onclick="() => PromoteToEditor(user.User.Id)"
+                                                        disabled="@_isProcessing">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                                                        <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7m.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0m-2-6a3 3 0 1 1-6 0 3 3 0 0 1 6 0M8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/>
+                                                        <path d="M8.256 14a4.5 4.5 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10q.39 0 .74.025c.226-.341.496-.65.804-.918Q8.844 9.002 8 9c-5 0-6 3-6 4s1 1 1 1z"/>
+                                                    </svg>Зробити редактором
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<UserWithRole> _users = [];
+    private bool _isLoading = true;
+    private bool _isProcessing;
+    private string? _message;
+    private bool _isSuccess;
+    private string _searchQuery = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+        _isLoading = false;
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        // Get Editor role ID
+        var editorRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Editor");
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+
+        // Get all editor user IDs
+        var editorUserIds = new HashSet<string>();
+        if (editorRole != null)
+        {
+            var ids = await context.UserRoles
+                .Where(ur => ur.RoleId == editorRole.Id)
+                .Select(ur => ur.UserId)
+                .ToListAsync();
+            editorUserIds = ids.ToHashSet();
+        }
+
+        // Exclude admins from the list
+        var adminUserIds = new HashSet<string>();
+        if (adminRole != null)
+        {
+            var ids = await context.UserRoles
+                .Where(ur => ur.RoleId == adminRole.Id)
+                .Select(ur => ur.UserId)
+                .ToListAsync();
+            adminUserIds = ids.ToHashSet();
+        }
+
+        var query = context.Users
+            .Where(u => !adminUserIds.Contains(u.Id));
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var searchLower = _searchQuery.ToLower();
+            query = query.Where(u =>
+                (u.FirstName + " " + u.LastName).ToLower().Contains(searchLower) ||
+                (u.Email != null && u.Email.ToLower().Contains(searchLower)));
+        }
+
+        var users = await query
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
+            .Take(50)
+            .ToListAsync();
+
+        _users = users.Select(u => new UserWithRole
+        {
+            User = u,
+            IsEditor = editorUserIds.Contains(u.Id)
+        }).ToList();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchUsers();
+        }
+    }
+
+    private async Task SearchUsers()
+    {
+        _isLoading = true;
+        await LoadUsersAsync();
+        _isLoading = false;
+    }
+
+    private async Task PromoteToEditor(string userId)
+    {
+        _isProcessing = true;
+        _message = null;
+
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                _message = "Користувача не знайдено.";
+                _isSuccess = false;
+                return;
+            }
+
+            // Add to Editor role
+            var result = await UserManager.AddToRoleAsync(user, "Editor");
+            if (!result.Succeeded)
+            {
+                _message = $"Помилка: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+                _isSuccess = false;
+                return;
+            }
+
+            // Create or link Author for this user
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // First check if user already has a linked author
+            var existingAuthorByUserId = await context.Authors
+                .FirstOrDefaultAsync(a => a.UserId == userId);
+
+            if (existingAuthorByUserId == null)
+            {
+                // Check if an author with the same name already exists (not linked to any user)
+                var existingAuthorByName = await context.Authors
+                    .FirstOrDefaultAsync(a => a.FirstName == user.FirstName
+                                           && a.LastName == user.LastName);
+
+                if (existingAuthorByName != null)
+                {
+                    // Link existing author to this user
+                    if (existingAuthorByName.UserId == null)
+                    {
+                        existingAuthorByName.UserId = userId;
+                        await context.SaveChangesAsync();
+                        _message = $"Користувача {user.FullName} зроблено редактором та пов'язано з існуючим автором.";
+                    }
+                    else
+                    {
+                        // Author with same name is already linked to another user
+                        _message = $"Користувача {user.FullName} зроблено редактором. Автор з таким ім'ям вже існує та пов'язаний з іншим користувачем.";
+                    }
+                }
+                else
+                {
+                    // Create new author
+                    var newAuthor = new Author
+                    {
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        UserId = userId
+                    };
+                    context.Authors.Add(newAuthor);
+                    await context.SaveChangesAsync();
+                    _message = $"Користувача {user.FullName} зроблено редактором.";
+                }
+            }
+            else
+            {
+                _message = $"Користувача {user.FullName} зроблено редактором.";
+            }
+
+            _isSuccess = true;
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = $"Помилка: {ex.Message}";
+            _isSuccess = false;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private class UserWithRole
+    {
+        public required ApplicationUser User { get; set; }
+        public bool IsEditor { get; set; }
+    }
+}
+

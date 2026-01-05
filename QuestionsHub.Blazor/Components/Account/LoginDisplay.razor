@@ -12,6 +12,12 @@
                 <AuthorizeView Roles="Editor,Admin" Context="roleContext">
                     <Authorized>
                         <li><a class="dropdown-item" href="/manage/packages">Мої пакети</a></li>
+                        <li><a class="dropdown-item" href="/admin/editors">Редактори</a></li>
+                    </Authorized>
+                </AuthorizeView>
+                <AuthorizeView Roles="Admin" Context="adminContext">
+                    <Authorized>
+                        <li><a class="dropdown-item" href="/admin/users">Користувачі</a></li>
                     </Authorized>
                 </AuthorizeView>
                 <li><hr class="dropdown-divider"></li>

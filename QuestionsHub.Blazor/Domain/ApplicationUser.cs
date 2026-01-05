@@ -33,6 +33,17 @@ public class ApplicationUser : IdentityUser
     public string? Team { get; set; }
 
     /// <summary>
+    /// Optional link to the Author entity.
+    /// When a user is promoted to Editor, an Author is created and linked.
+    /// </summary>
+    public int? AuthorId { get; set; }
+
+    /// <summary>
+    /// Navigation property to the linked Author.
+    /// </summary>
+    public Author? Author { get; set; }
+
+    /// <summary>
     /// Returns the full name of the user.
     /// </summary>
     public string FullName => $"{FirstName} {LastName}";

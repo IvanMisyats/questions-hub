@@ -1,0 +1,196 @@
+﻿@page "/admin/editors"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Editor,Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Редактори - QuestionsHub</PageTitle>
+
+<div class="container py-4">
+    <h1 class="mb-4">Редактори</h1>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert @(_isSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                @_message
+                <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                    <path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
+                </svg>Список редакторів (@_editors.Count)
+            </div>
+            <div class="card-body p-0">
+                @if (_editors.Count == 0)
+                {
+                    <p class="text-muted p-3 mb-0">Редакторів не знайдено.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ім'я</th>
+                                    @if (_isAdmin)
+                                    {
+                                        <th>Email</th>
+                                    }
+                                    <th>Місто</th>
+                                    <th>Пов'язаний автор</th>
+                                    @if (_isAdmin)
+                                    {
+                                        <th style="width: 150px;">Дії</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var editor in _editors)
+                                {
+                                    <tr>
+                                        <td>@editor.FullName</td>
+                                        @if (_isAdmin)
+                                        {
+                                            <td>@editor.Email</td>
+                                        }
+                                        <td>@(editor.City ?? "—")</td>
+                                        <td>
+                                            @if (editor.Author != null)
+                                            {
+                                                <a href="/editor/@editor.Author.Id">@editor.Author.FullName</a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                        @if (_isAdmin)
+                                        {
+                                            <td>
+                                                <button class="btn btn-outline-danger btn-sm"
+                                                        @onclick="() => DemoteEditor(editor.Id)"
+                                                        disabled="@_isProcessing">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                                                        <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M11 12h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1m0-7a3 3 0 1 1-6 0 3 3 0 0 1 6 0M8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/>
+                                                        <path d="M8.256 14a4.5 4.5 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10q.39 0 .74.025c.226-.341.496-.65.804-.918Q8.844 9.002 8 9c-5 0-6 3-6 4s1 1 1 1z"/>
+                                                    </svg>Понизити
+                                                </button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (_isAdmin)
+        {
+            <div class="mt-4">
+                <a href="/admin/users" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                        <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7m.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0m-2-6a3 3 0 1 1-6 0 3 3 0 0 1 6 0M8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/>
+                        <path d="M8.256 14a4.5 4.5 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10q.39 0 .74.025c.226-.341.496-.65.804-.918Q8.844 9.002 8 9c-5 0-6 3-6 4s1 1 1 1z"/>
+                    </svg>Зробити редактором
+                </a>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<ApplicationUser> _editors = [];
+    private bool _isLoading = true;
+    private bool _isAdmin;
+    private bool _isProcessing;
+    private string? _message;
+    private bool _isSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = authState.User.IsInRole("Admin");
+
+        await LoadEditorsAsync();
+        _isLoading = false;
+    }
+
+    private async Task LoadEditorsAsync()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        var editorRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Editor");
+        if (editorRole == null)
+        {
+            _editors = [];
+            return;
+        }
+
+        var editorUserIds = await context.UserRoles
+            .Where(ur => ur.RoleId == editorRole.Id)
+            .Select(ur => ur.UserId)
+            .ToListAsync();
+
+        _editors = await context.Users
+            .Include(u => u.Author)
+            .Where(u => editorUserIds.Contains(u.Id))
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
+            .ToListAsync();
+    }
+
+    private async Task DemoteEditor(string userId)
+    {
+        _isProcessing = true;
+        _message = null;
+
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                _message = "Користувача не знайдено.";
+                _isSuccess = false;
+                return;
+            }
+
+            var result = await UserManager.RemoveFromRoleAsync(user, "Editor");
+            if (result.Succeeded)
+            {
+                _message = $"Користувача {user.FullName} понижено з редактора.";
+                _isSuccess = true;
+                await LoadEditorsAsync();
+            }
+            else
+            {
+                _message = $"Помилка: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+                _isSuccess = false;
+            }
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}
+

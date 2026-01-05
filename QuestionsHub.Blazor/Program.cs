@@ -93,6 +93,7 @@ mediaUploadOptions.UploadsPath = builder.Environment.IsDevelopment()
 builder.Services.AddSingleton(mediaUploadOptions);
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddScoped<SearchService>();
+builder.Services.AddScoped<AuthorUserLinkingService>();
 
 // Configure Data Protection to persist keys across container restarts
 // In production, keys are stored in /app/keys (mounted from VPS)

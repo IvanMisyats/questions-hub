@@ -1,9 +1,10 @@
 ﻿@page "/editor/{Id:int}"
+@rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
-@using QuestionsHub.Blazor.Data
-@using QuestionsHub.Blazor.Domain
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject AuthorUserLinkingService AuthorUserLinkingService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>@(_author?.FullName ?? "Редактор")</PageTitle>
 
@@ -25,10 +26,103 @@
     }
     else
     {
-        <h1>@_author.FullName</h1>
-        <div class="alert alert-info mt-4" role="alert">
-            <i class="bi bi-info-circle me-2"></i>Сторінка в розробці
+        <h1 class="mb-4">@_author.FullName</h1>
+
+        <!-- Linked User Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-person-badge me-2"></i>Пов'язаний користувач
+            </div>
+            <div class="card-body">
+                @if (_linkedUser != null)
+                {
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <strong>@_linkedUser.FullName</strong>
+                            @if (_isAdmin)
+                            {
+                                <br/>
+                                <small class="text-muted">@_linkedUser.Email</small>
+                            }
+                            @if (!string.IsNullOrEmpty(_linkedUser.City))
+                            {
+                                <br/>
+                                <small class="text-muted">@_linkedUser.City</small>
+                            }
+                        </div>
+                        @if (_isAdmin)
+                        {
+                            <button class="btn btn-outline-danger btn-sm" @onclick="UnlinkUser" disabled="@_isProcessing">
+                                <i class="bi bi-link-45deg me-1"></i>Від'єднати
+                            </button>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">Автор не пов'язаний з жодним користувачем.</p>
+                    @if (_isAdmin)
+                    {
+                        <hr/>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-8">
+                                <label class="form-label">Обрати користувача для зв'язування:</label>
+                                <select class="form-select" @bind="_selectedUserId" disabled="@_isProcessing">
+                                    <option value="">-- Оберіть користувача --</option>
+                                    @foreach (var user in _availableUsers)
+                                    {
+                                        <option value="@user.Id">@user.FullName (@user.Email)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary" @onclick="LinkUser"
+                                        disabled="@(string.IsNullOrEmpty(_selectedUserId) || _isProcessing)">
+                                    <i class="bi bi-link me-1"></i>Пов'язати
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+
+                @if (!string.IsNullOrEmpty(_linkMessage))
+                {
+                    <div class="alert @(_linkSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
+                        @_linkMessage
+                    </div>
+                }
+            </div>
         </div>
+
+        <!-- Statistics Section -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-collection me-2"></i>Тури
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">@_toursCount</h3>
+                        <p class="card-text text-muted">турів, де @_author.FirstName є редактором</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-question-circle me-2"></i>Питання
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">@_questionsCount</h3>
+                        <p class="card-text text-muted">питань, де @_author.FirstName є автором</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <a href="/" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Повернутися на головну
+        </a>
     }
 </div>
 
@@ -37,13 +131,93 @@
     public int Id { get; set; }
 
     private Author? _author;
+    private UserForLinking? _linkedUser;
+    private List<UserForLinking> _availableUsers = [];
+    private string? _selectedUserId;
     private bool _isLoading = true;
+    private bool _isAdmin;
+    private bool _isProcessing;
+    private string? _linkMessage;
+    private bool _linkSuccess;
+    private int _toursCount;
+    private int _questionsCount;
 
     protected override async Task OnInitializedAsync()
     {
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-        _author = await context.Authors.FindAsync(Id);
+        // Check if current user is admin
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = authState.User.IsInRole("Admin");
+
+        await LoadAuthorDataAsync();
         _isLoading = false;
+    }
+
+    private async Task LoadAuthorDataAsync()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        _author = await context.Authors
+            .Include(a => a.User)
+            .Include(a => a.Tours)
+            .Include(a => a.Questions)
+            .FirstOrDefaultAsync(a => a.Id == Id);
+
+        if (_author != null)
+        {
+            _toursCount = _author.Tours.Count;
+            _questionsCount = _author.Questions.Count;
+
+            // Load linked user info
+            _linkedUser = await AuthorUserLinkingService.GetLinkedUserAsync(Id);
+
+            // If admin and no linked user, load available users
+            if (_isAdmin && _linkedUser == null)
+            {
+                _availableUsers = await AuthorUserLinkingService.GetAvailableUsersForLinkingAsync();
+            }
+        }
+    }
+
+    private async Task LinkUser()
+    {
+        if (string.IsNullOrEmpty(_selectedUserId))
+            return;
+
+        _isProcessing = true;
+        _linkMessage = null;
+
+        var result = await AuthorUserLinkingService.LinkAuthorToUserAsync(Id, _selectedUserId);
+
+        _linkSuccess = result.Success;
+        _linkMessage = result.Message;
+
+        if (result.Success)
+        {
+            _linkedUser = await AuthorUserLinkingService.GetLinkedUserAsync(Id);
+            _selectedUserId = null;
+            _availableUsers = [];
+        }
+
+        _isProcessing = false;
+    }
+
+    private async Task UnlinkUser()
+    {
+        _isProcessing = true;
+        _linkMessage = null;
+
+        var result = await AuthorUserLinkingService.UnlinkAuthorFromUserAsync(Id);
+
+        _linkSuccess = result.Success;
+        _linkMessage = result.Message;
+
+        if (result.Success)
+        {
+            _linkedUser = null;
+            _availableUsers = await AuthorUserLinkingService.GetAvailableUsersForLinkingAsync();
+        }
+
+        _isProcessing = false;
     }
 }
 

@@ -23,6 +23,12 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(a => a.LastName).IsRequired().HasMaxLength(100);
             entity.HasIndex(a => new { a.FirstName, a.LastName }).IsUnique();
 
+            // One-to-one optional relationship with ApplicationUser
+            entity.HasOne(a => a.User)
+                .WithOne(u => u.Author)
+                .HasForeignKey<Author>(a => a.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasMany(a => a.Questions)
                 .WithMany(q => q.Authors)
                 .UsingEntity("QuestionAuthors");
