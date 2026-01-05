@@ -352,18 +352,21 @@
                                             }
                                         </div>
                                     }
-                                    <div class="input-group">
-                                        <InputFile class="form-control"
-                                                   OnChange="OnHandoutFileSelected"
-                                                   accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav"
-                                                   disabled="@_isUploadingHandout" />
-                                        @if (_isUploadingHandout)
-                                        {
-                                            <span class="input-group-text">
-                                                <span class="spinner-border spinner-border-sm" role="status"></span>
-                                            </span>
-                                        }
-                                    </div>
+                                    else
+                                    {
+                                        <div class="input-group" @key="_handoutInputKey">
+                                            <InputFile class="form-control"
+                                                       OnChange="OnHandoutFileSelected"
+                                                       accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav"
+                                                       disabled="@_isUploadingHandout" />
+                                            @if (_isUploadingHandout)
+                                            {
+                                                <span class="input-group-text">
+                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                </span>
+                                            }
+                                        </div>
+                                    }
                                     @if (!string.IsNullOrEmpty(_handoutUploadError))
                                     {
                                         <div class="text-danger small mt-1">
@@ -451,18 +454,21 @@
                                     }
                                 </div>
                             }
-                            <div class="input-group">
-                                <InputFile class="form-control"
-                                           OnChange="OnCommentFileSelected"
-                                           accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav"
-                                           disabled="@_isUploadingComment" />
-                                @if (_isUploadingComment)
-                                {
-                                    <span class="input-group-text">
-                                        <span class="spinner-border spinner-border-sm" role="status"></span>
-                                    </span>
-                                }
-                            </div>
+                            else
+                            {
+                                <div class="input-group" @key="_commentInputKey">
+                                    <InputFile class="form-control"
+                                               OnChange="OnCommentFileSelected"
+                                               accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav"
+                                               disabled="@_isUploadingComment" />
+                                    @if (_isUploadingComment)
+                                    {
+                                        <span class="input-group-text">
+                                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        </span>
+                                    }
+                                </div>
+                            }
                             @if (!string.IsNullOrEmpty(_commentUploadError))
                             {
                                 <div class="text-danger small mt-1">
@@ -537,6 +543,8 @@
     private string? _handoutUploadError;
     private string? _commentUploadError;
     private const long MaxUploadSize = 100 * 1024 * 1024; // 100 MB max for streaming
+    private Guid _handoutInputKey = Guid.NewGuid();
+    private Guid _commentInputKey = Guid.NewGuid();
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -923,6 +931,7 @@
         _editingQuestion = question;
         _showQuestionEditor = true;
         _questionSaveStatus = null;
+        ResetMediaInputState();
     }
 
     private void CloseQuestionEditor()
@@ -1046,6 +1055,7 @@
         }
 
         _questionSaveStatus = null;
+        ResetMediaInputState();
         StateHasChanged();
     }
 
@@ -1076,6 +1086,7 @@
         }
 
         _questionSaveStatus = null;
+        ResetMediaInputState();
         StateHasChanged();
     }
 
@@ -1129,6 +1140,7 @@
             // Navigate to the new question
             _editingQuestion = question;
             _questionSaveStatus = null;
+            ResetMediaInputState();
             _saveStatus = "Питання додано";
         }
         catch (Exception ex)
@@ -1365,6 +1377,18 @@
         {
             _editingQuestion.CommentAttachmentUrl = url;
         }
+    }
+
+    /// <summary>
+    /// Resets the InputFile components by generating new keys, forcing re-render.
+    /// Also clears any upload errors.
+    /// </summary>
+    private void ResetMediaInputState()
+    {
+        _handoutInputKey = Guid.NewGuid();
+        _commentInputKey = Guid.NewGuid();
+        _handoutUploadError = null;
+        _commentUploadError = null;
     }
 }
 
