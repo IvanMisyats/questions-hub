@@ -80,14 +80,10 @@
                                 <td>@(package.OwnerName ?? "—")</td>
                             }
                             <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <a href="/manage/package/@package.Id" class="btn btn-outline-primary" title="Редагувати">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <button class="btn btn-outline-danger" @onclick="() => ConfirmDelete(package)" title="Видалити">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
+                                <button class="btn btn-danger d-flex align-items-center justify-content-center"
+                                        style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
+                                        @onclick="() => ConfirmDelete(package)"
+                                        title="Видалити">×</button>
                             </td>
                         </tr>
                     }

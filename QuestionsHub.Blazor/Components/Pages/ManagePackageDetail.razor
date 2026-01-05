@@ -175,26 +175,17 @@
                                             <div class="list-group mb-3">
                                                 @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                                                 {
-                                                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                                                        <div class="d-flex align-items-center" style="cursor: pointer;"
+                                                    <div class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+                                                        <span class="badge bg-primary flex-shrink-0">@question.Number</span>
+                                                        <div class="flex-grow-1" style="cursor: pointer;"
                                                              @onclick="() => OpenQuestionEditor(tour, question)">
-                                                            <span class="badge bg-primary me-3">@question.Number</span>
-                                                            <span class="text-truncate" style="max-width: 500px;">
-                                                                @TruncateText(question.Text, 80)
-                                                            </span>
+                                                            @question.Text
                                                         </div>
-                                                        <div class="btn-group btn-group-sm">
-                                                            <button class="btn btn-primary"
-                                                                    @onclick="() => OpenQuestionEditor(tour, question)"
-                                                                    title="Редагувати">
-                                                                <i class="bi bi-pencil"></i>
-                                                            </button>
-                                                            <button class="btn btn-danger"
-                                                                    @onclick="() => ConfirmDeleteQuestion(tour, question)"
-                                                                    title="Видалити">
-                                                                <i class="bi bi-trash"></i>
-                                                            </button>
-                                                        </div>
+                                                        <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
+                                                                style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
+                                                                @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Видалити">×</button>
                                                     </div>
                                                 }
                                             </div>
@@ -1157,11 +1148,6 @@
             _expandedTours.Add(tourId);
     }
 
-    private static string TruncateText(string text, int maxLength)
-    {
-        if (string.IsNullOrEmpty(text)) return "—";
-        return text.Length <= maxLength ? text : text[..maxLength] + "...";
-    }
 
     private static string GetStatusBadgeClass(PackageStatus status) => status switch
     {
