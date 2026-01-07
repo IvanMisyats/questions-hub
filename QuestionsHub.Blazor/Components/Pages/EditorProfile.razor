@@ -99,11 +99,11 @@
             <div class="col-md-6">
                 <div class="card h-100">
                     <div class="card-header">
-                        <i class="bi bi-collection me-2"></i>Тури
+                        <i class="bi bi-box me-2"></i>Пакети
                     </div>
                     <div class="card-body">
-                        <h3 class="card-title">@_toursCount</h3>
-                        <p class="card-text text-muted">турів, де @_author.FirstName є редактором</p>
+                        <h3 class="card-title">@_packagesCount</h3>
+                        <p class="card-text text-muted">пакетів, де @_author.FirstName є редактором</p>
                     </div>
                 </div>
             </div>
@@ -139,7 +139,7 @@
     private bool _isProcessing;
     private string? _linkMessage;
     private bool _linkSuccess;
-    private int _toursCount;
+    private int _packagesCount;
     private int _questionsCount;
 
     protected override async Task OnInitializedAsync()
@@ -159,12 +159,16 @@
         _author = await context.Authors
             .Include(a => a.User)
             .Include(a => a.Tours)
+                .ThenInclude(t => t.Package)
             .Include(a => a.Questions)
             .FirstOrDefaultAsync(a => a.Id == Id);
 
         if (_author != null)
         {
-            _toursCount = _author.Tours.Count;
+            _packagesCount = _author.Tours
+                .Select(t => t.PackageId)
+                .Distinct()
+                .Count();
             _questionsCount = _author.Questions.Count;
 
             // Load linked user info
