@@ -194,6 +194,20 @@ Full-text search across all published questions with Ukrainian morphology suppor
 5. Comment
 6. Source
 
+### 10.1 Authors List (Автори)
+**Route**: `/editors`
+
+**Authorization**: Public (no authentication required)
+
+**Navigation**: Available in left navigation panel (under "Пошук")
+
+Displays all Authors in the system, ranked by number of questions (descending).
+
+**Columns**:
+- Name (clickable link to EditorProfile page `/editor/{id}`)
+- Number of packages (where author is editor of at least one tour)
+- Number of questions (where author is listed as question author)
+
 ### 11. Admin User Management
 
 **Authorization**: Admin only (except Editors list which is read-only for Editors)
@@ -360,6 +374,7 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 7, 2026 | 1.5 | New public Authors page (/editors) showing all authors ranked by question count, accessible from left navigation |
 | Jan 5, 2026 | 1.4 | Admin user management: editors list, users list, promote/demote editors, Author-User linking, enhanced editor profile page |
 | Jan 4, 2026 | 1.3 | Added Authors as separate entity with many-to-many relationships, AuthorSelector component, EditorProfile page placeholder |
 | Jan 2026 | 1.2 | Removed unused Package Management REST API (Blazor uses DbContext directly) |
