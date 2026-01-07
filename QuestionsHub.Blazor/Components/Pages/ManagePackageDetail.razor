@@ -821,12 +821,44 @@
     {
         if (_package == null) return;
 
+        var question = await CreateQuestionAsync(tour);
+        if (question != null)
+        {
+            OpenQuestionEditor(tour, question);
+        }
+        StateHasChanged();
+    }
+
+    private string CalculateNextQuestionNumber(int fallbackOrderIndex)
+    {
+        if (_package == null) return (fallbackOrderIndex + 1).ToString();
+
+        // Find the last question across all tours (by tour order, then question order)
+        var lastQuestion = _package.Tours
+            .OrderBy(t => t.Number)
+            .SelectMany(t => t.Questions.OrderBy(q => q.OrderIndex))
+            .LastOrDefault();
+
+        if (lastQuestion != null && int.TryParse(lastQuestion.Number, out var lastNum))
+        {
+            return (lastNum + 1).ToString();
+        }
+
+        // Fallback to 1-based index within the tour
+        return (fallbackOrderIndex + 1).ToString();
+    }
+
+    private async Task<Question?> CreateQuestionAsync(Tour tour)
+    {
+        if (_package == null) return null;
+
         try
         {
             await using var context = await DbContextFactory.CreateDbContextAsync();
 
-            var newOrderIndex = tour.Questions.Count; // 0-based
-            var newNumber = (newOrderIndex + 1).ToString(); // Display as 1-based
+            var newOrderIndex = tour.Questions.Count;
+            var newNumber = CalculateNextQuestionNumber(newOrderIndex);
+
             var question = new Question
             {
                 TourId = tour.Id,
@@ -844,13 +876,11 @@
 
             context.Questions.Add(question);
 
-            // Attach authors to context
             foreach (var author in question.Authors)
             {
                 context.Authors.Attach(author);
             }
 
-            // Update package total
             var dbPackage = await context.Packages.FindAsync(_package.Id);
             if (dbPackage != null)
             {
@@ -862,16 +892,14 @@
             tour.Questions.Add(question);
             _package.TotalQuestions++;
 
-            // Open the question editor
-            OpenQuestionEditor(tour, question);
-
             _saveStatus = "Питання додано";
+            return question;
         }
         catch (Exception ex)
         {
             _saveStatus = $"Помилка: {ex.Message}";
+            return null;
         }
-        StateHasChanged();
     }
 
     private void ConfirmDeleteQuestion(Tour tour, Question question)
@@ -1097,55 +1125,12 @@
         // Save current question first
         await SaveEditingQuestionAsync();
 
-        try
+        var question = await CreateQuestionAsync(_editingTour);
+        if (question != null)
         {
-            await using var context = await DbContextFactory.CreateDbContextAsync();
-
-            var newOrderIndex = _editingTour.Questions.Count;
-            var newNumber = (newOrderIndex + 1).ToString();
-            var question = new Question
-            {
-                TourId = _editingTour.Id,
-                OrderIndex = newOrderIndex,
-                Number = newNumber,
-                Text = "",
-                Answer = "",
-                Authors = _editingTour.Editors.Select(e => new Author
-                {
-                    Id = e.Id,
-                    FirstName = e.FirstName,
-                    LastName = e.LastName
-                }).ToList()
-            };
-
-            context.Questions.Add(question);
-
-            // Attach authors to context
-            foreach (var author in question.Authors)
-            {
-                context.Authors.Attach(author);
-            }
-
-            var dbPackage = await context.Packages.FindAsync(_package.Id);
-            if (dbPackage != null)
-            {
-                dbPackage.TotalQuestions++;
-            }
-
-            await context.SaveChangesAsync();
-
-            _editingTour.Questions.Add(question);
-            _package.TotalQuestions++;
-
-            // Navigate to the new question
             _editingQuestion = question;
             _questionSaveStatus = null;
             ResetMediaInputState();
-            _saveStatus = "Питання додано";
-        }
-        catch (Exception ex)
-        {
-            _saveStatus = $"Помилка: {ex.Message}";
         }
         StateHasChanged();
     }
