@@ -147,43 +147,71 @@ uploads/
 - **Backup media:** Include media directory in backup strategy
 - **Monitor disk space:** Set up alerts for disk usage
 
-## Nginx Configuration (Optional)
+## Nginx Direct Serving (Production)
 
-If using Nginx as a reverse proxy, you can optimize media serving:
+In production, nginx serves media files directly from the VPS filesystem, bypassing the Docker container and ASP.NET application entirely. This is a significant performance optimization.
+
+### Why This Is Safe
+
+Media files in `/uploads/handouts/` are **immutable**:
+- When a user uploads a new file, the existing file is deleted
+- A new file is created with a cryptographically random name (256-bit entropy)
+- File contents never change - same filename always means same content
+
+This immutability enables aggressive caching and makes direct serving safe because:
+- No authentication is needed (public files with unpredictable URLs)
+- Cache invalidation is automatic (new file = new URL)
+- No stale content concerns
+
+### Configuration
+
+The production nginx configuration is stored in `infra/nginx/questions.com.ua.conf`:
 
 ```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
+# Serve media files directly from VPS (bypasses Docker/ASP.NET for performance)
+# Files are immutable - old files are deleted and new ones get new names
+location ^~ /media/ {
+    alias /home/github-actions/questions-hub/uploads/handouts/;
 
-    # Application
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    # Direct media serving (bypasses ASP.NET Core for better performance)
-    location /media/ {
-        alias /home/github-actions/questions-hub/uploads/handouts/;
-        
+    # Only allow specific media file extensions
+    location ~* \.(jpg|jpeg|png|gif|webp|svg|mp4|webm|ogg|mp3|wav|m4a)$ {
         # Security headers
         add_header X-Content-Type-Options "nosniff" always;
         add_header Content-Disposition "inline" always;
-        
-        # Cache for 1 year
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        
-        # Disable execution
-        location ~* \.(php|sh|exe|bat|cmd|com|pif|src|asp|aspx|jsp)$ {
-            deny all;
-        }
+
+        # Immutable caching - safe because filenames change on update
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+
+        # Disable access log for static files
+        access_log off;
     }
+
+    # Deny all other file types
+    return 404;
 }
 ```
 
-**Note:** If serving directly via Nginx, the application's static file middleware will be bypassed, but security is still maintained at the Nginx level.
+### Pros and Cons
+
+**Pros:**
+- **Performance:** Nginx is highly optimized for serving static files; eliminates Docker/ASP.NET overhead
+- **Reduced load:** Application server handles only dynamic requests
+- **Efficient caching:** `immutable` cache directive enables optimal browser caching
+- **Zero-copy:** `sendfile` + `tcp_nopush` enables kernel-level file serving
+- **Scalability:** Can handle thousands of concurrent media requests without touching the app
+
+**Cons:**
+- **No app-level auth:** Files are publicly accessible (mitigated by unpredictable filenames)
+- **Separate config:** Media security rules duplicated between nginx and ASP.NET
+- **Path sync required:** VPS path must match nginx `alias` directive
+- **No analytics:** Application can't track media access (consider nginx logs if needed)
+
+### Development vs Production
+
+- **Development:** ASP.NET serves files via `UseStaticFiles()` middleware (simpler setup)
+- **Production:** Nginx serves files directly (better performance)
+
+Both use the same security rules (extension whitelist, security headers), ensuring consistent behavior.
 
 ## Troubleshooting
 

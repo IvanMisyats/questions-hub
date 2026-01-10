@@ -275,3 +275,22 @@ docker compose --profile production up -d
 - Media directory has write access for file uploads (ownership must match container user)
 - Keys directory has restrictive permissions (700)
 
+## Nginx Reverse Proxy
+
+Nginx handles HTTPS termination and serves static media files directly for optimal performance.
+
+### Install Configuration
+
+```bash
+# Copy nginx config from repo to server
+sudo cp infra/nginx/questions.com.ua.conf /etc/nginx/conf.d/questions.com.ua.conf
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Media Files
+
+Nginx serves `/media/*` requests directly from the VPS filesystem, bypassing Docker/ASP.NET for better performance. See [MEDIA_SETUP.md](MEDIA_SETUP.md#nginx-direct-serving-production) for detailed documentation.
+
