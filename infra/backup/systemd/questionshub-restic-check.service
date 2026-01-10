@@ -1,0 +1,8 @@
+[Unit]
+Description=Weekly restic repository check (QuestionsHub)
+
+[Service]
+Type=oneshot
+User=github-actions
+Group=github-actions
+ExecStart=/bin/bash -lc 'set -a; source /home/github-actions/.config/questions-hub-backup/backup.env; set +a; restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" check'
