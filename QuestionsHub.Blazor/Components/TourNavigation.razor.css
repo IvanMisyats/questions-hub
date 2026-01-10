@@ -37,8 +37,8 @@
 }
 
 .question-links {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.25rem;
     padding-left: 0.5rem;
     margin-top: 0.25rem;
@@ -53,6 +53,8 @@
     text-decoration: none;
     background: none;
     cursor: pointer;
+    min-width: 2rem;
+    text-align: center;
 }
 
 .question-link:hover {
