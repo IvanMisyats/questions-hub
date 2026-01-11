@@ -12,6 +12,11 @@
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
       - AdminCredentials__Email=${ADMIN_EMAIL}
       - AdminCredentials__Password=${ADMIN_PASSWORD}
+      - Email__ApiKey=${EMAIL_API_KEY}
+      - Email__ApiSecret=${EMAIL_API_SECRET}
+      - Email__SenderEmail=noreply@questions.com.ua
+      - "Email__SenderName=База запитань ЩДК"
+      - Email__SiteUrl=https://questions.com.ua
     volumes:
       - ${UPLOADS_PATH:-./uploads}:/app/uploads
       - ${KEYS_PATH:-./keys}:/app/keys

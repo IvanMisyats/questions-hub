@@ -1,0 +1,124 @@
+@page "/Account/ResendConfirmation"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using QuestionsHub.Blazor.Domain
+@inject UserManager<ApplicationUser> UserManager
+@inject IEmailSender<ApplicationUser> EmailSender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Повторна відправка підтвердження</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">Повторна відправка</h3>
+
+                    @if (_sent)
+                    {
+                        <div class="alert alert-success text-center">
+                            <p>Якщо обліковий запис з цією адресою існує, ми надіслали новий лист для підтвердження.</p>
+                            <p>Перевірте свою пошту.</p>
+                        </div>
+                        <a href="/Account/Login" class="btn btn-primary w-100">Перейти до входу</a>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrEmpty(_errorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert">
+                                @_errorMessage
+                            </div>
+                        }
+
+                        <p class="text-muted mb-4">
+                            Введіть вашу електронну адресу, і ми надішлемо новий лист для підтвердження.
+                        </p>
+
+                        <EditForm Model="@Model" OnValidSubmit="HandleSubmit" FormName="ResendConfirmation">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <InputText id="email" @bind-Value="Model.Email" class="form-control" />
+                                <ValidationMessage For="@(() => Model.Email)" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100" disabled="@_processing">
+                                @if (_processing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                }
+                                Надіслати
+                            </button>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _processing;
+    private bool _sent;
+    private string? _errorMessage;
+
+    [SupplyParameterFromQuery]
+    public string? Email { get; set; }
+
+    [SupplyParameterFromForm]
+    private ResendModel Model { get; set; } = null!;
+
+    protected override void OnInitialized()
+    {
+        Model ??= new();
+
+        if (!string.IsNullOrEmpty(Email))
+        {
+            Model.Email = Email;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _processing = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (string.IsNullOrEmpty(Model.Email))
+            {
+                _errorMessage = "Введіть email.";
+                return;
+            }
+
+            var user = await UserManager.FindByEmailAsync(Model.Email);
+
+            // Always show success to prevent email enumeration
+            if (user != null && !user.EmailConfirmed)
+            {
+                var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+                var callbackUrl = NavigationManager.ToAbsoluteUri(
+                    $"/Account/ConfirmEmail?userId={Uri.EscapeDataString(user.Id)}&code={Uri.EscapeDataString(code)}").ToString();
+
+                await EmailSender.SendConfirmationLinkAsync(user, user.Email!, callbackUrl);
+            }
+
+            _sent = true;
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private class ResendModel
+    {
+        [Required(ErrorMessage = "Email обов'язковий")]
+        [EmailAddress(ErrorMessage = "Невірний формат email")]
+        public string? Email { get; set; }
+    }
+}
+

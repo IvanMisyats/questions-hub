@@ -59,8 +59,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         // User settings
         options.User.RequireUniqueEmail = true;
 
-        // SignIn settings - no email confirmation required
-        options.SignIn.RequireConfirmedEmail = false;
+        // SignIn settings - email confirmation required
+        options.SignIn.RequireConfirmedEmail = true;
         options.SignIn.RequireConfirmedAccount = false;
     })
     .AddEntityFrameworkStores<QuestionsHubDbContext>()
@@ -94,6 +94,10 @@ builder.Services.AddSingleton(mediaUploadOptions);
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddScoped<SearchService>();
 builder.Services.AddScoped<AuthorUserLinkingService>();
+
+// Configure email service (Mailjet)
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.AddTransient<IEmailSender<ApplicationUser>, MailjetEmailSender>();
 
 // Configure Data Protection to persist keys across container restarts
 // In production, keys are stored in /app/keys (mounted from VPS)

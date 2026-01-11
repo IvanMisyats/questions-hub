@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: January 5, 2026
+**Last Updated**: January 10, 2026
 
 ---
 
@@ -79,12 +79,23 @@ Displays question with host instructions (Вказівка ведучому) if 
 #### 4.1 Registration (Реєстрація)
 **Route**: `/Account/Register`
 
-Registration form with first name, last name, city, team, email, and password. New users automatically assigned "User" role. Auto-login after successful registration.
+Registration form with first name, last name, city, team, email, and password. New users automatically assigned "User" role. Email confirmation required before login.
+
+**Email Confirmation Flow**:
+1. User submits registration form
+2. Confirmation email sent via Mailjet
+3. User clicks link in email to confirm
+4. User can now login
+
+**Related Pages**:
+- `/Account/RegisterConfirmation` - Shows "check your email" message
+- `/Account/ConfirmEmail` - Processes confirmation link
+- `/Account/ResendConfirmation` - Resend confirmation email
 
 #### 4.2 Login (Вхід)
 **Route**: `/Account/Login`
 
-Email and password authentication with "Remember Me" option. Account lockout after 5 failed attempts.
+Email and password authentication with "Remember Me" option. Account lockout after 5 failed attempts. "Forgot Password" link for password reset.
 
 #### 4.3 Logout (Вихід)
 **Route**: `/Account/Logout` or `/api/Auth/logout`
@@ -98,7 +109,19 @@ Ends user session and redirects to home page.
 
 View and edit profile information. City and Team are editable; First name, Last name, and Email are read-only.
 
-#### 4.5 Login Display Component
+#### 4.5 Password Reset (Скидання пароля)
+
+**Forgot Password Page**: `/Account/ForgotPassword`
+- User enters email address
+- System sends password reset link via Mailjet
+- Link is valid for 24 hours
+
+**Reset Password Page**: `/Account/ResetPassword`
+- User enters email and new password
+- Password must meet security requirements
+- On success, user can login with new password
+
+#### 4.6 Login Display Component
 
 Shows login/register buttons for anonymous users. For authenticated users, shows user's name with dropdown menu containing:
 - **Мій профіль** - User profile page
@@ -274,8 +297,6 @@ Not implemented. Upload and store tournament results, team scores, rankings.
 ### Comments & Ratings
 Not implemented. User comments on questions, rating system for questions and packages, favorites.
 
-### Email Notifications
-Placeholder implementation. Will include real SMTP, password reset, registration confirmation.
 
 ### Package Access Levels
 Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUsersOnly, Public.
@@ -348,7 +369,9 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 | Tour navigation | ✅ Working |
 | Media display (images/video/audio) | ✅ Working |
 | User registration | ✅ Working |
+| Email confirmation | ✅ Working |
 | User login/logout | ✅ Working |
+| Password reset (via email) | ✅ Working |
 | User profile view/edit | ✅ Working |
 | Role-based authorization | ✅ Working |
 | Create/edit/delete packages | ✅ Working |
@@ -374,6 +397,7 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 10, 2026 | 1.6 | Email integration with Mailjet: email confirmation required for registration, password reset via email |
 | Jan 7, 2026 | 1.5 | New public Authors page (/editors) showing all authors ranked by question count, accessible from left navigation |
 | Jan 5, 2026 | 1.4 | Admin user management: editors list, users list, promote/demote editors, Author-User linking, enhanced editor profile page |
 | Jan 4, 2026 | 1.3 | Added Authors as separate entity with many-to-many relationships, AuthorSelector component, EditorProfile page placeholder |

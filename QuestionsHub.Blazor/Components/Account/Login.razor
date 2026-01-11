@@ -1,4 +1,4 @@
-﻿@page "/Account/Login"
+@page "/Account/Login"
 @inject NavigationManager NavigationManager
 
 <PageTitle>Вхід</PageTitle>
@@ -14,6 +14,12 @@
                     {
                         <div class="alert alert-danger" role="alert">
                             @_errorMessage
+                            @if (_showResendLink)
+                            {
+                                <div class="mt-2">
+                                    <a href="/Account/ResendConfirmation?email=@Uri.EscapeDataString(EmailFromQuery ?? "")">Надіслати лист повторно</a>
+                                </div>
+                            }
                         </div>
                     }
 
@@ -40,6 +46,10 @@
                         <button type="submit" class="btn btn-primary w-100">Увійти</button>
                     </form>
 
+                    <div class="text-center mt-3">
+                        <a href="/Account/ForgotPassword" class="text-decoration-none">Забули пароль?</a>
+                    </div>
+
                     <hr class="my-4" />
 
                     <div class="text-center">
@@ -54,6 +64,7 @@
 
 @code {
     private string? _errorMessage;
+    private bool _showResendLink;
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
@@ -61,15 +72,19 @@
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? EmailFromQuery { get; set; }
+
     protected override void OnInitialized()
     {
         if (!string.IsNullOrEmpty(Error))
         {
-            _errorMessage = Error switch
+            (_errorMessage, _showResendLink) = Error switch
             {
-                "lockedout" => "Ваш обліковий запис заблоковано на 15 хвилин через багато невдалих спроб входу.",
-                "invalid" => "Невірний email або пароль.",
-                _ => "Виникла помилка. Спробуйте ще раз."
+                "lockedout" => ("Ваш обліковий запис заблоковано на 15 хвилин через багато невдалих спроб входу.", false),
+                "invalid" => ("Невірний email або пароль.", false),
+                "emailnotconfirmed" => ("Електронна адреса не підтверджена. Перевірте свою пошту.", true),
+                _ => ("Виникла помилка. Спробуйте ще раз.", false)
             };
         }
     }

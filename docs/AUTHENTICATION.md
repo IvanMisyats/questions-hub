@@ -1,4 +1,4 @@
-﻿# Authentication & Authorization
+﻿﻿# Authentication & Authorization
 
 ## Overview
 
@@ -58,8 +58,9 @@ QuestionsHub implements role-based authentication and authorization using **ASP.
    - **Пароль** (Password) - required, validated
 2. Password is validated against security policy
 3. Account is **auto-approved** (no admin approval needed)
-4. **No email confirmation required**
-5. User can immediately login with "User" role
+4. **Email confirmation required** - User receives confirmation email
+5. User clicks confirmation link to activate account
+6. User can login with "User" role after confirmation
 
 ### Future Enhancement
 Manual admin approval of registrations is planned but not yet implemented.
@@ -74,14 +75,14 @@ Manual admin approval of registrations is planned but not yet implemented.
 - **Password Security**: Salted and hashed using PBKDF2 (Identity default)
 - **Session Timeout**: Configurable cookie expiration
 - **CSRF/XSRF Protection**: Automatic via Blazor Server
-- **Password Reset**: 24-hour token validity
+- **Password Reset**: 24-hour token validity, sent via email
 - **Edit Profile**: Users can update their information
+- **Email Confirmation**: Required for new registrations
+- **Forgot Password**: Email-based password reset
 
 ### ❌ Excluded (Current Scope)
-- Email confirmation (auto-approved registrations)
 - Two-factor authentication (2FA)
 - Social login (Google, Facebook, etc.)
-- Email sending (placeholder implementation for now)
 
 ---
 
@@ -299,7 +300,7 @@ All authentication UI is in **Ukrainian**:
 - Validation messages
 - Error messages
 - Button text
-- Email templates (when implemented)
+- Email templates
 
 See implementation for complete translation mapping.
 
@@ -307,16 +308,38 @@ See implementation for complete translation mapping.
 
 ## Email Service
 
-### Current Implementation
-`IEmailSender` is implemented as a placeholder that logs to console:
-- Email confirmation (not used, as confirmation is disabled)
-- Password reset emails (logs token to console)
+### Implementation
+Email sending is implemented using **Mailjet** API:
 
-### Future Enhancement
-Implement real SMTP email sending:
-- Configure SendGrid, Mailgun, or custom SMTP
-- Add email templates
-- Send actual emails instead of console logging
+**Provider**: Mailjet (https://www.mailjet.com/)
+**Integration**: `Mailjet.Api` NuGet package
+**Class**: `MailjetEmailSender` implementing `IEmailSender<ApplicationUser>`
+
+### Email Types
+1. **Email Confirmation** - Sent after registration to verify email address
+2. **Password Reset** - Sent when user requests password reset
+
+### Configuration
+Email settings are configured in `appsettings.json` and overridden via environment variables:
+
+```json
+{
+  "Email": {
+    "ApiKey": "",
+    "ApiSecret": "",
+    "SenderEmail": "noreply@questions.com.ua",
+    "SenderName": "База запитань ЩДК",
+    "SiteUrl": "https://questions.com.ua"
+  }
+}
+```
+
+**Environment Variables** (for production deployment):
+- `EMAIL_API_KEY` - Mailjet API Key
+- `EMAIL_API_SECRET` - Mailjet API Secret
+
+### Sender Domain
+The sender domain `questions.com.ua` must be verified in Mailjet for SPF/DKIM authentication.
 
 ---
 
@@ -328,6 +351,7 @@ Implement real SMTP email sending:
 - ✅ CSRF/XSRF tokens automatic in Blazor
 - ✅ Account lockout prevents brute force
 - ✅ Password reset tokens expire after 24 hours
+- ✅ Email confirmation required for new accounts
 - ✅ Secure cookie settings (HttpOnly, Secure in production)
 
 ### Recommendations for Production

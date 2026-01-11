@@ -14,18 +14,29 @@ public class AuthController : ControllerBase
 {
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IEmailSender<ApplicationUser> _emailSender;
 
     public AuthController(
         SignInManager<ApplicationUser> signInManager,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IEmailSender<ApplicationUser> emailSender)
     {
         _signInManager = signInManager;
         _userManager = userManager;
+        _emailSender = emailSender;
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromForm] string email, [FromForm] string password, [FromForm] bool rememberMe, [FromForm] string? returnUrl)
     {
+        var user = await _userManager.FindByEmailAsync(email);
+
+        // Check if email is confirmed before attempting sign in
+        if (user != null && !await _userManager.IsEmailConfirmedAsync(user))
+        {
+            return Redirect($"/Account/Login?error=emailnotconfirmed&email={Uri.EscapeDataString(email)}&returnUrl={Uri.EscapeDataString(returnUrl ?? "/")}");
+        }
+
         var result = await _signInManager.PasswordSignInAsync(email, password, rememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded)
@@ -86,7 +97,7 @@ public class AuthController : ControllerBase
             LastName = lastName,
             City = city,
             Team = team,
-            EmailConfirmed = true
+            EmailConfirmed = false // Email needs to be confirmed
         };
 
         var result = await _userManager.CreateAsync(user, password);
@@ -94,8 +105,16 @@ public class AuthController : ControllerBase
         if (result.Succeeded)
         {
             await _userManager.AddToRoleAsync(user, "User");
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            return LocalRedirect("/");
+
+            // Generate email confirmation token and send email
+            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var request = HttpContext.Request;
+            var callbackUrl = $"{request.Scheme}://{request.Host}/Account/ConfirmEmail?userId={Uri.EscapeDataString(user.Id)}&code={Uri.EscapeDataString(code)}";
+
+            await _emailSender.SendConfirmationLinkAsync(user, email, callbackUrl);
+
+            // Redirect to confirmation page instead of auto-login
+            return Redirect($"/Account/RegisterConfirmation?email={Uri.EscapeDataString(email)}");
         }
 
         var errors = string.Join(",", result.Errors.Select(e => e.Code));
