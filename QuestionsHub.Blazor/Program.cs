@@ -8,6 +8,7 @@ using QuestionsHub.Blazor.Components;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
+using QuestionsHub.Blazor.Infrastructure.Import;
 
 // Set Ukrainian culture as default for the entire application
 var ukrainianCulture = new CultureInfo("uk-UA");
@@ -16,226 +17,252 @@ CultureInfo.DefaultThreadCurrentUICulture = ukrainianCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-// Add services to the container.
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-
-// Add controllers for authentication API endpoints
-builder.Services.AddControllers();
-
-// Add HttpContextAccessor for accessing HTTP context in Blazor components
-builder.Services.AddHttpContextAccessor();
-
-// Add HttpClient factory for Blazor components to call API
-builder.Services.AddHttpClient();
-
-// Add localization services
-builder.Services.AddLocalization();
-
-// Configure Entity Framework with PostgresSQL
-builder.Services.AddDbContext<QuestionsHubDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// Add DbContextFactory for Blazor Server components (avoids DbContext concurrency issues)
-builder.Services.AddDbContextFactory<QuestionsHubDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")), ServiceLifetime.Scoped);
-
-// Configure ASP.NET Core Identity
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-    {
-        // Password settings
-        options.Password.RequireDigit = true;
-        options.Password.RequireLowercase = true;
-        options.Password.RequireUppercase = true;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequiredLength = 8;
-        options.Password.RequiredUniqueChars = 1;
-
-        // Lockout settings
-        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        options.Lockout.MaxFailedAccessAttempts = 5;
-        options.Lockout.AllowedForNewUsers = true;
-
-        // User settings
-        options.User.RequireUniqueEmail = true;
-
-        // SignIn settings - email confirmation required
-        options.SignIn.RequireConfirmedEmail = true;
-        options.SignIn.RequireConfirmedAccount = false;
-    })
-    .AddEntityFrameworkStores<QuestionsHubDbContext>()
-    .AddDefaultTokenProviders()
-    .AddClaimsPrincipalFactory<CustomUserClaimsPrincipalFactory>();
-
-// Configure authentication cookie
-builder.Services.ConfigureApplicationCookie(options =>
-{
-    options.Cookie.HttpOnly = true;
-    options.ExpireTimeSpan = TimeSpan.FromDays(30); // Session timeout: 30 days
-    options.SlidingExpiration = true; // Extend cookie on activity
-    options.LoginPath = "/Account/Login";
-    options.AccessDeniedPath = "/Account/AccessDenied";
-    options.LogoutPath = "/Account/Logout";
-});
-
-// Add cascading authentication state for Blazor components
-builder.Services.AddCascadingAuthenticationState();
-
-// Configure media upload options
-var mediaUploadOptions = new MediaUploadOptions();
-builder.Configuration.GetSection(MediaUploadOptions.SectionName).Bind(mediaUploadOptions);
-
-// Set uploads path based on environment
-mediaUploadOptions.UploadsPath = builder.Environment.IsDevelopment()
-    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads")
-    : "/app/uploads";
-
-builder.Services.AddSingleton(mediaUploadOptions);
-builder.Services.AddScoped<MediaService>();
-builder.Services.AddScoped<SearchService>();
-builder.Services.AddScoped<AuthorUserLinkingService>();
-
-// Configure email service (Mailjet)
-builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
-builder.Services.AddTransient<IEmailSender<ApplicationUser>, MailjetEmailSender>();
-
-// Configure Data Protection to persist keys across container restarts
-// In production, keys are stored in /app/keys (mounted from VPS)
-// In development, keys are stored locally in ../keys
-var keysPath = builder.Environment.IsDevelopment()
-    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "keys")
-    : "/app/keys";
-
-// Ensure the keys directory exists
-Directory.CreateDirectory(keysPath);
-
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
-    .SetApplicationName("QuestionsHub");
+// Configure services
+builder.Services
+    .AddCoreServices()
+    .AddDatabase(builder.Configuration)
+    .AddIdentityServices()
+    .AddMediaServices(builder.Configuration, builder.Environment)
+    .AddPackageImport(builder.Configuration)
+    .AddEmailServices(builder.Configuration)
+    .AddDataProtectionServices(builder.Environment);
 
 var app = builder.Build();
 
-// Handle database reset in development mode (via --reset-db argument)
-#pragma warning disable CA1848 // Use LoggerMessage delegates - startup logging runs once, performance is not critical
-if (app.Environment.IsDevelopment() && args.Contains("--reset-db"))
-{
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+// Initialize database
+await app.InitializeDatabase(args);
 
-    app.Logger.LogWarning("Resetting database (Development mode with --reset-db flag)...");
-
-    try
-    {
-        // Try to delete the entire database (requires superuser privileges)
-        await context.Database.EnsureDeletedAsync();
-        app.Logger.LogInformation("Database deleted successfully.");
-    }
-    catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501") // Permission denied
-    {
-        app.Logger.LogWarning("Cannot delete database (insufficient privileges). Dropping all tables instead...");
-
-        // Alternative: Drop all tables (doesn't require database ownership)
-        await context.Database.ExecuteSqlRawAsync("""
-                                                              DO $$
-                                                              DECLARE
-                                                                  r RECORD;
-                                                              BEGIN
-                                                                  -- Drop all tables
-                                                                  FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                                                                      EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
-                                                                  END LOOP;
-
-                                                                  -- Drop all sequences
-                                                                  FOR r IN (SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public') LOOP
-                                                                      EXECUTE 'DROP SEQUENCE IF EXISTS ' || quote_ident(r.sequence_name) || ' CASCADE';
-                                                                  END LOOP;
-                                                              END $$;
-                                                  """);
-
-        app.Logger.LogInformation("All tables and sequences dropped successfully.");
-    }
-}
-#pragma warning restore CA1848
-
-// Apply migrations and seed the database
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-
-    await context.Database.MigrateAsync();
-    await DbSeeder.SeedAsync(userManager, roleManager, configuration);
-}
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-}
-
-// Configure Ukrainian culture for localization
-var supportedCultures = new[] { new CultureInfo("uk-UA") };
-app.UseRequestLocalization(new RequestLocalizationOptions
-{
-    DefaultRequestCulture = new RequestCulture("uk-UA"),
-    SupportedCultures = supportedCultures,
-    SupportedUICultures = supportedCultures
-});
-
-// Static files must be configured before routing
-app.UseStaticFiles();
-
-// Configure secure media file serving
-// Serve handout files from /media URL path
-var handoutsPath = app.Environment.IsDevelopment()
-    ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads", "handouts")
-    : "/app/uploads/handouts";
-
-if (!Directory.Exists(handoutsPath))
-{
-    throw new InvalidOperationException(
-        $"Handouts folder not found at '{handoutsPath}'. " +
-        "This is a configuration error. Please ensure the uploads folder is properly mounted.");
-}
-
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(handoutsPath),
-    RequestPath = "/media",
-    OnPrepareResponse = ctx =>
-    {
-        // Only serve allowed media file types
-        if (!MediaSecurityOptions.IsAllowedMediaFile(ctx.File.Name))
-        {
-            ctx.Context.Response.StatusCode = 404;
-            ctx.Context.Response.ContentLength = 0;
-            ctx.Context.Response.Body = Stream.Null;
-            return;
-        }
-
-        // Security headers
-        ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-
-        // Allow inline display for whitelisted media types
-        ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
-
-        // Cache for 1 year (media files should be immutable or versioned)
-        ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000");
-    }
-});
-
-app.UseRouting();
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.UseAntiforgery();
-
-app.MapControllers();
-
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+// Configure HTTP pipeline
+app.ConfigureHttpPipeline();
 
 app.Run();
+
+// ============================================================================
+// Service Registration Extensions
+// ============================================================================
+
+internal static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddCoreServices(this IServiceCollection services)
+    {
+        services.AddRazorComponents().AddInteractiveServerComponents();
+        services.AddControllers();
+        services.AddHttpContextAccessor();
+        services.AddHttpClient();
+        services.AddLocalization();
+        services.AddCascadingAuthenticationState();
+
+        return services;
+    }
+
+    public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        services.AddDbContext<QuestionsHubDbContext>(options =>
+            options.UseNpgsql(connectionString));
+
+        services.AddDbContextFactory<QuestionsHubDbContext>(options =>
+            options.UseNpgsql(connectionString), ServiceLifetime.Scoped);
+
+        services.AddScoped<SearchService>();
+        services.AddScoped<AuthorUserLinkingService>();
+        services.AddScoped<PackageService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddIdentityServices(this IServiceCollection services)
+    {
+        services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+            {
+                // Password settings
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Password.RequiredLength = 8;
+                options.Password.RequiredUniqueChars = 1;
+
+                // Lockout settings
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.AllowedForNewUsers = true;
+
+                // User settings
+                options.User.RequireUniqueEmail = true;
+
+                // SignIn settings
+                options.SignIn.RequireConfirmedEmail = false;
+                options.SignIn.RequireConfirmedAccount = false;
+            })
+            .AddEntityFrameworkStores<QuestionsHubDbContext>()
+            .AddDefaultTokenProviders()
+            .AddClaimsPrincipalFactory<CustomUserClaimsPrincipalFactory>();
+
+        services.ConfigureApplicationCookie(options =>
+        {
+            options.Cookie.HttpOnly = true;
+            options.ExpireTimeSpan = TimeSpan.FromDays(30);
+            options.SlidingExpiration = true;
+            options.LoginPath = "/Account/Login";
+            options.AccessDeniedPath = "/Account/AccessDenied";
+            options.LogoutPath = "/Account/Logout";
+        });
+
+        return services;
+    }
+
+    public static IServiceCollection AddDataProtectionServices(
+        this IServiceCollection services,
+        IWebHostEnvironment environment)
+    {
+        var keysPath = environment.IsDevelopment()
+            ? Path.Combine(Directory.GetCurrentDirectory(), "..", "keys")
+            : "/app/keys";
+
+        Directory.CreateDirectory(keysPath);
+
+        services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+            .SetApplicationName("QuestionsHub");
+
+        return services;
+    }
+
+    public static IServiceCollection AddEmailServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+        services.AddTransient<IEmailSender<ApplicationUser>, MailjetEmailSender>();
+
+        return services;
+    }
+}
+
+// ============================================================================
+// Application Initialization Extensions
+// ============================================================================
+
+internal static class ApplicationExtensions
+{
+    public static async Task InitializeDatabase(this WebApplication app, string[] args)
+    {
+#pragma warning disable CA1848 // Startup logging runs once
+        // Handle database reset in development mode
+        if (app.Environment.IsDevelopment() && args.Contains("--reset-db"))
+        {
+            await ResetDatabase(app);
+        }
+
+        // Apply migrations and seed
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+        await context.Database.MigrateAsync();
+        await DbSeeder.SeedAsync(userManager, roleManager, configuration);
+#pragma warning restore CA1848
+    }
+
+    private static async Task ResetDatabase(WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+
+        app.Logger.LogWarning("Resetting database (Development mode with --reset-db flag)...");
+
+        try
+        {
+            await context.Database.EnsureDeletedAsync();
+            app.Logger.LogInformation("Database deleted successfully.");
+        }
+        catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501")
+        {
+            app.Logger.LogWarning("Cannot delete database (insufficient privileges). Dropping all tables instead...");
+
+            await context.Database.ExecuteSqlRawAsync("""
+                DO $$
+                DECLARE
+                    r RECORD;
+                BEGIN
+                    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                        EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                    END LOOP;
+                    FOR r IN (SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public') LOOP
+                        EXECUTE 'DROP SEQUENCE IF EXISTS ' || quote_ident(r.sequence_name) || ' CASCADE';
+                    END LOOP;
+                END $$;
+                """);
+
+            app.Logger.LogInformation("All tables and sequences dropped successfully.");
+        }
+    }
+
+    public static void ConfigureHttpPipeline(this WebApplication app)
+    {
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseExceptionHandler("/Error", createScopeForErrors: true);
+        }
+
+        // Ukrainian culture
+        var supportedCultures = new[] { new CultureInfo("uk-UA") };
+        app.UseRequestLocalization(new RequestLocalizationOptions
+        {
+            DefaultRequestCulture = new RequestCulture("uk-UA"),
+            SupportedCultures = supportedCultures,
+            SupportedUICultures = supportedCultures
+        });
+
+        app.UseStaticFiles();
+        app.ConfigureMediaFileServing();
+
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseAntiforgery();
+
+        app.MapControllers();
+        app.MapRazorComponents<App>()
+            .AddInteractiveServerRenderMode();
+    }
+
+    private static void ConfigureMediaFileServing(this WebApplication app)
+    {
+        var handoutsPath = app.Environment.IsDevelopment()
+            ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads", "handouts")
+            : "/app/uploads/handouts";
+
+        if (!Directory.Exists(handoutsPath))
+        {
+            throw new InvalidOperationException(
+                $"Handouts folder not found at '{handoutsPath}'. " +
+                "Please ensure the uploads folder is properly mounted.");
+        }
+
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(handoutsPath),
+            RequestPath = "/media",
+            OnPrepareResponse = ctx =>
+            {
+                if (!MediaSecurityOptions.IsAllowedMediaFile(ctx.File.Name))
+                {
+                    ctx.Context.Response.StatusCode = 404;
+                    ctx.Context.Response.ContentLength = 0;
+                    ctx.Context.Response.Body = Stream.Null;
+                    return;
+                }
+
+                ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+                ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
+                ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000");
+            }
+        });
+    }
+}
+

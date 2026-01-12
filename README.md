@@ -78,7 +78,9 @@ docker compose --profile full up -d --build
 
 | Script | Description |
 |--------|-------------|
-| `.\start-dev-db.ps1` | Start PostgreSQL for development |
+| `.\start-dev.ps1` | Start dev services (DB) |
+| `.\stop-dev.ps1` | Stop dev services |
+| `.\start-dev-db.ps1` | Start PostgreSQL only |
 | `.\stop-dev-db.ps1` | Stop PostgreSQL (preserves data) |
 | `.\dev-db-logs.ps1` | View PostgreSQL logs |
 | `.\cleanup-db.ps1` | Delete database and start fresh |

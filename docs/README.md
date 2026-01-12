@@ -52,6 +52,13 @@ Media handling documentation:
 - Upload and storage
 - Media serving configuration
 
+### [PACKAGE_IMPORT.md](PACKAGE_IMPORT.md)
+Automatic package import from DOC/DOCX files:
+- Import process and pipeline
+- Job statuses and error handling
+- Document structure recognition
+- Architecture and configuration
+
 ## Quick Start
 
 ### For Developers

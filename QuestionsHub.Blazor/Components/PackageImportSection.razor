@@ -1,0 +1,244 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
+@using QuestionsHub.Blazor.Infrastructure.Import
+
+@inject PackageImportService ImportService
+@inject PackageImportOptions ImportOptions
+@inject PackageService PackageService
+
+@implements IDisposable
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Імпортувати пакет (експериментальна функція)</h5>
+    </div>
+    <div class="card-body">
+        <InputFile OnChange="OnFileSelected" accept=".doc,.docx" class="form-control" disabled="@_isUploading" />
+        <small class="text-muted">
+            Підтримувані формати: .doc, .docx (до @PackageImportOptions.FormatFileSize(ImportOptions.MaxFileSizeBytes))
+        </small>
+
+        @if (_uploadError != null)
+        {
+            <div class="alert alert-danger mt-2 mb-0">@_uploadError</div>
+        }
+
+        @if (_isUploading)
+        {
+            <div class="mt-2">
+                <div class="spinner-border spinner-border-sm me-2"></div>
+                Завантаження...
+            </div>
+        }
+    </div>
+</div>
+
+@if (_importJobs.Count > 0)
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Імпорти</h5>
+        </div>
+        <ul class="list-group list-group-flush">
+            @foreach (var job in _importJobs)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>@job.InputFileName</strong>
+                        <br />
+                        <small class="text-muted">@job.CreatedAt.ToLocalTime().ToString("g")</small>
+                    </div>
+                    <div>
+                        @switch (job.Status)
+                        {
+                            case ImportJobStatus.Queued:
+                                <span class="badge bg-secondary">В черзі</span>
+                                break;
+                            case ImportJobStatus.Running:
+                                <span class="badge bg-primary">
+                                    @job.CurrentStep (@job.Progress%)
+                                </span>
+                                break;
+                            case ImportJobStatus.Succeeded:
+                                <a href="/manage/package/@job.PackageId" class="btn btn-sm btn-success">
+                                    Відкрити пакет
+                                </a>
+                                break;
+                            case ImportJobStatus.Failed:
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-danger" title="@job.ErrorMessage">
+                                        Помилка
+                                    </span>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => DeleteJob(job.Id)"
+                                            title="Видалити">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(job.ErrorMessage))
+                                {
+                                    <small class="text-danger d-block">@job.ErrorMessage</small>
+                                }
+                                break;
+                            case ImportJobStatus.Cancelled:
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-warning text-dark">Скасовано</span>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => DeleteJob(job.Id)"
+                                            title="Видалити">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                break;
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required string UserId { get; set; }
+
+    [Parameter]
+    public bool IsAdmin { get; set; }
+
+    [Parameter]
+    public EventCallback OnImportCompleted { get; set; }
+
+    private List<PackageImportJob> _importJobs = [];
+    private bool _isUploading;
+    private string? _uploadError;
+    private Timer? _pollTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadImportJobs();
+        StartPollingIfNeeded();
+    }
+
+    /// <summary>
+    /// Refreshes the import jobs list. Called by parent component after package deletion.
+    /// </summary>
+    public async Task Refresh()
+    {
+        await LoadImportJobs();
+        StateHasChanged();
+    }
+
+    private async Task LoadImportJobs()
+    {
+        try
+        {
+            _importJobs = IsAdmin
+                ? await ImportService.GetAllJobs(20)
+                : await ImportService.GetJobsForUser(UserId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading import jobs: {ex.Message}");
+        }
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _uploadError = null;
+        _isUploading = true;
+
+        try
+        {
+            var file = e.File;
+
+            if (!ImportOptions.IsExtensionAllowed(file.Name))
+            {
+                _uploadError = $"Непідтримуваний формат файлу. Дозволені: {string.Join(", ", ImportOptions.AllowedExtensions)}";
+                return;
+            }
+
+            if (file.Size > ImportOptions.MaxFileSizeBytes)
+            {
+                _uploadError = $"Файл занадто великий. Максимальний розмір: {PackageImportOptions.FormatFileSize(ImportOptions.MaxFileSizeBytes)}";
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(ImportOptions.MaxFileSizeBytes);
+            var job = await ImportService.Enqueue(UserId, file.Name, stream, file.Size);
+
+            _importJobs.Insert(0, job);
+            StartPollingIfNeeded();
+        }
+        catch (Infrastructure.Import.ValidationException ex)
+        {
+            _uploadError = ex.UserMessage;
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Помилка завантаження: {ex.Message}";
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        var hasActiveJobs = _importJobs.Any(j =>
+            j.Status is ImportJobStatus.Queued or ImportJobStatus.Running);
+
+        if (hasActiveJobs && _pollTimer == null)
+        {
+            _pollTimer = new Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadImportJobs();
+                    StateHasChanged();
+
+                    if (!_importJobs.Any(j =>
+                        j.Status is ImportJobStatus.Queued or ImportJobStatus.Running))
+                    {
+                        StopPolling();
+                        await OnImportCompleted.InvokeAsync();
+                    }
+                });
+            }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        }
+    }
+
+    private void StopPolling()
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = null;
+    }
+
+    private async Task DeleteJob(Guid jobId)
+    {
+        try
+        {
+            var result = await PackageService.DeleteImportJob(jobId, UserId, IsAdmin);
+            if (result.Success)
+            {
+                _importJobs.RemoveAll(j => j.Id == jobId);
+                StateHasChanged();
+            }
+            else
+            {
+                _uploadError = result.ErrorMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Помилка видалення: {ex.Message}";
+        }
+    }
+
+    public void Dispose()
+    {
+        StopPolling();
+    }
+}
+

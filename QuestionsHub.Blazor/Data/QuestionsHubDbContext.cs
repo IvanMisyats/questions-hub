@@ -11,6 +11,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<Tour> Tours => Set<Tour>();
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<Author> Authors => Set<Author>();
+    public DbSet<PackageImportJob> PackageImportJobs => Set<PackageImportJob>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -87,6 +88,32 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(q => q.SearchVector)
                 .HasColumnType("tsvector")
                 .ValueGeneratedOnAddOrUpdate();
+        });
+
+        builder.Entity<PackageImportJob>(entity =>
+        {
+            entity.HasKey(j => j.Id);
+
+            entity.Property(j => j.OwnerId).IsRequired();
+            entity.Property(j => j.InputFileName).IsRequired().HasMaxLength(500);
+            entity.Property(j => j.InputFilePath).IsRequired().HasMaxLength(1000);
+            entity.Property(j => j.ConvertedFilePath).HasMaxLength(1000);
+            entity.Property(j => j.CurrentStep).HasMaxLength(100);
+            entity.Property(j => j.ErrorMessage).HasMaxLength(1000);
+
+            entity.HasOne(j => j.Owner)
+                .WithMany()
+                .HasForeignKey(j => j.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(j => j.Package)
+                .WithMany()
+                .HasForeignKey(j => j.PackageId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Index for efficient job queue polling
+            entity.HasIndex(j => new { j.Status, j.CreatedAt })
+                .HasDatabaseName("IX_PackageImportJobs_Status_CreatedAt");
         });
     }
 }

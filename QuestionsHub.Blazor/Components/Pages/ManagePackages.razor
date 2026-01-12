@@ -5,9 +5,11 @@
 @using System.Security.Claims
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 @attribute [Authorize(Roles = "Editor,Admin")]
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject PackageService PackageService
 @inject NavigationManager Navigation
 
 <PageTitle>Мої пакети - QuestionsHub</PageTitle>
@@ -19,6 +21,11 @@
             <i class="bi bi-plus-lg me-2"></i>Створити пакет
         </button>
     </div>
+
+    @if (_userId != null)
+    {
+        <PackageImportSection @ref="_importSection" UserId="@_userId" IsAdmin="@_isAdmin" OnImportCompleted="LoadPackages" />
+    }
 
     @if (_isLoading)
     {
@@ -146,16 +153,19 @@
     private PackageListItem? _packageToDelete;
     private bool _isDeleting;
 
+    // Component reference
+    private PackageImportSection? _importSection;
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        await CheckUserAsync();
-        await LoadPackagesAsync();
+        await CheckUser();
+        await LoadPackages();
     }
 
-    private async Task CheckUserAsync()
+    private async Task CheckUser()
     {
         if (AuthenticationState != null)
         {
@@ -165,7 +175,7 @@
         }
     }
 
-    private async Task LoadPackagesAsync()
+    private async Task LoadPackages()
     {
         _isLoading = true;
         _errorMessage = null;
@@ -249,38 +259,32 @@
 
     private async Task DeletePackage()
     {
-        if (_packageToDelete == null) return;
+        if (_packageToDelete == null || _userId == null) return;
 
         _isDeleting = true;
 
         try
         {
-            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var result = await PackageService.DeletePackage(
+                _packageToDelete.Id,
+                _userId,
+                _isAdmin);
 
-            var package = await context.Packages
-                .Include(p => p.Tours)
-                    .ThenInclude(t => t.Questions)
-                .FirstOrDefaultAsync(p => p.Id == _packageToDelete.Id);
-
-            if (package != null)
+            if (result.Success)
             {
-                // Check access
-                if (!_isAdmin && package.OwnerId != _userId)
-                {
-                    _errorMessage = "Ви не маєте прав на видалення цього пакету.";
-                    return;
-                }
-
-                context.Packages.Remove(package);
-                await context.SaveChangesAsync();
-
                 _packages?.Remove(_packageToDelete);
                 _showDeleteModal = false;
                 _packageToDelete = null;
+
+                // Refresh import jobs list
+                if (_importSection != null)
+                {
+                    await _importSection.Refresh();
+                }
             }
             else
             {
-                _errorMessage = "Пакет не знайдено.";
+                _errorMessage = result.ErrorMessage;
             }
         }
         catch (Exception ex)
