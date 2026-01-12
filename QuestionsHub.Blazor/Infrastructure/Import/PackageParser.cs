@@ -548,16 +548,25 @@ public class PackageParser
     {
         if (question == null) return;
 
-        switch (section)
+        // Images that appear AFTER answer-related sections are comment attachments
+        // (illustrations for the answer, usually shown after revealing the answer)
+        // Images that appear BEFORE answer-related sections are handouts
+        // (materials shown to players as part of the question)
+        var isAnswerRelatedSection = section is
+            ParserSection.Answer or
+            ParserSection.AcceptedAnswers or
+            ParserSection.RejectedAnswers or
+            ParserSection.Comment or
+            ParserSection.Source or
+            ParserSection.Authors;
+
+        if (isAnswerRelatedSection)
         {
-            case ParserSection.Comment:
-                question.CommentAssetFileName ??= asset.FileName;
-                break;
-            case ParserSection.Handout:
-            case ParserSection.QuestionText:
-            default:
-                question.HandoutAssetFileName ??= asset.FileName;
-                break;
+            question.CommentAssetFileName ??= asset.FileName;
+        }
+        else
+        {
+            question.HandoutAssetFileName ??= asset.FileName;
         }
     }
 
