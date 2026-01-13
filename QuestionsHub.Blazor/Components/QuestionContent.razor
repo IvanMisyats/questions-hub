@@ -1,0 +1,106 @@
+﻿@if (ShowHostInstructions && !string.IsNullOrEmpty(Question.HostInstructions))
+{
+    <div class="host-instructions">
+        <strong>Вказівка ведучому:</strong>
+        <div>@Question.HostInstructions</div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Question.HandoutText))
+{
+    <div class="handout">
+        <strong>Роздатковий матеріал:</strong>
+        <div>@Question.HandoutText</div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Question.HandoutUrl))
+{
+    <div class="handout">
+        <strong>Роздатковий матеріал:</strong>
+        <MediaDisplay Url="@Question.HandoutUrl" Alt="Handout" />
+    </div>
+}
+
+<div class="question-text">
+    @Question.Text
+</div>
+
+@ChildContent
+
+@if (ShowAnswer)
+{
+    <div class="answer-section">
+    <div class="answer-field">
+        <span class="answer-label">Відповідь:</span> @Question.Answer
+    </div>
+
+    @if (!string.IsNullOrEmpty(Question.AcceptedAnswers))
+    {
+        <div class="answer-field">
+            <span class="answer-label">Залік:</span> @Question.AcceptedAnswers
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Question.RejectedAnswers))
+    {
+        <div class="answer-field">
+            <span class="answer-label">Незалік:</span> @Question.RejectedAnswers
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Question.Comment))
+    {
+        <div class="answer-field">
+            <span class="answer-label">Коментар:</span> @Question.Comment
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Question.CommentAttachmentUrl))
+    {
+        <div class="answer-field">
+            <span class="answer-label">Матеріал до коментаря:</span>
+            <MediaDisplay Url="@Question.CommentAttachmentUrl" Alt="Comment attachment" />
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Question.Source))
+    {
+        <div class="answer-field source-field">
+            <span class="answer-label">Джерело:</span> @Question.Source
+        </div>
+    }
+
+    @if (ShowAuthors && Question.Authors.Any())
+    {
+        <div class="answer-field">
+            <span class="answer-label">Автор(и):</span>
+            @foreach (var (author, index) in Question.Authors.Select((a, i) => (a, i)))
+            {
+                <text> </text><a href="/editor/@author.Id">@author.FullName</a>@(index < Question.Authors.Count - 1 ? "," : "")
+            }
+        </div>
+    }
+</div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required Question Question { get; set; }
+
+    [Parameter]
+    public bool ShowHostInstructions { get; set; } = true;
+
+    [Parameter]
+    public bool ShowAuthors { get; set; } = true;
+
+    [Parameter]
+    public bool ShowAnswer { get; set; } = true;
+
+    /// <summary>
+    /// Optional content to render between question text and answer section (e.g., answer toggle button).
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}
+

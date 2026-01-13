@@ -1,0 +1,15 @@
+﻿.media-container {
+    margin-top: 0.5rem;
+}
+
+.media-container video,
+.media-container audio {
+    max-width: 100%;
+    margin-top: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.media-container img {
+    border-radius: 0.25rem;
+}
+

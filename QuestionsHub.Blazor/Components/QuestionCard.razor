@@ -1,6 +1,4 @@
-﻿@using QuestionsHub.Blazor.Domain
-@using QuestionsHub.Blazor.Infrastructure
-@inject IJSRuntime JS
+﻿@inject IJSRuntime JS
 @inject NavigationManager Navigation
 
 <div class="question-card">
@@ -23,147 +21,20 @@
         </button>
     </div>
 
-    @if (!string.IsNullOrEmpty(Question.HostInstructions))
-    {
-        <div class="host-instructions">
-            <strong>Вказівка ведучому:</strong>
-            <div>@Question.HostInstructions</div>
-        </div>
-    }
-
-    @if (!string.IsNullOrEmpty(Question.HandoutText))
-    {
-        <div class="handout">
-            <strong>Роздатковий матеріал:</strong>
-            <div>@Question.HandoutText</div>
-        </div>
-    }
-
-    @if (!string.IsNullOrEmpty(Question.HandoutUrl))
-    {
-        <div class="handout">
-            <strong>Роздатковий матеріал:</strong>
-            <div class="media-container">
-                @{
-                    var handoutMediaType = MediaSecurityOptions.GetMediaType(Question.HandoutUrl);
-                }
-                @switch (handoutMediaType)
+    <QuestionContent Question="Question" ShowAnswer="_showAnswer">
+        <div class="answer-toggle-section mt-3">
+            <button class="btn btn-link answer-toggle p-0" @onclick="ToggleAnswer">
+                @if (_showAnswer)
                 {
-                    case MediaType.Image:
-                        <img src="@Question.HandoutUrl" alt="Handout" class="img-fluid mt-2" style="max-height: 300px;" />
-                        break;
-                    case MediaType.Video:
-                        <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
-                            <source src="@Question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.HandoutUrl)" />
-                            Ваш браузер не підтримує відтворення відео.
-                        </video>
-                        break;
-                    case MediaType.Audio:
-                        <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
-                            <source src="@Question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.HandoutUrl)" />
-                            Ваш браузер не підтримує відтворення аудіо.
-                        </audio>
-                        break;
+                    <text>Сховати відповідь</text>
                 }
-            </div>
+                else
+                {
+                    <text>Показати відповідь</text>
+                }
+            </button>
         </div>
-    }
-
-    <div class="question-text">
-        @Question.Text
-    </div>
-
-    <div class="answer-toggle-section mt-3">
-        <button class="btn btn-link answer-toggle p-0" @onclick="ToggleAnswer">
-            @if (_showAnswer)
-            {
-                <text>Сховати відповідь</text>
-            }
-            else
-            {
-                <text>Показати відповідь</text>
-            }
-        </button>
-    </div>
-
-    @if (_showAnswer)
-    {
-        <div class="answer-section">
-            <div class="answer-field">
-                <span class="answer-label">Відповідь:</span> @Question.Answer
-            </div>
-
-            @if (!string.IsNullOrEmpty(Question.AcceptedAnswers))
-            {
-                <div class="answer-field">
-                    <span class="answer-label">Залік:</span> @Question.AcceptedAnswers
-                </div>
-            }
-
-            @if (!string.IsNullOrEmpty(Question.RejectedAnswers))
-            {
-                <div class="answer-field">
-                    <span class="answer-label">Незалік:</span> @Question.RejectedAnswers
-                </div>
-            }
-
-            @if (!string.IsNullOrEmpty(Question.Comment))
-            {
-                <div class="answer-field">
-                    <span class="answer-label">Коментар:</span> @Question.Comment
-                </div>
-            }
-
-            @if (!string.IsNullOrEmpty(Question.CommentAttachmentUrl))
-            {
-                <div class="answer-field">
-                    <span class="answer-label">Матеріал до коментаря:</span>
-                    <div class="media-container">
-                        @{
-                            var commentMediaType = MediaSecurityOptions.GetMediaType(Question.CommentAttachmentUrl);
-                        }
-                        @switch (commentMediaType)
-                        {
-                            case MediaType.Image:
-                                <img src="@Question.CommentAttachmentUrl" alt="Comment attachment" class="img-fluid mt-2" style="max-height: 300px;" />
-                                break;
-                            case MediaType.Video:
-                                <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
-                                    <source src="@Question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.CommentAttachmentUrl)" />
-                                    Ваш браузер не підтримує відтворення відео.
-                                </video>
-                                break;
-                            case MediaType.Audio:
-                                <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
-                                    <source src="@Question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(Question.CommentAttachmentUrl)" />
-                                    Ваш браузер не підтримує відтворення аудіо.
-                                </audio>
-                                break;
-                        }
-                    </div>
-                </div>
-            }
-
-            @if (!string.IsNullOrEmpty(Question.Source))
-            {
-                <div class="answer-field">
-                    <span class="answer-label">Джерело:</span> @Question.Source
-                </div>
-            }
-
-            @if (Question.Authors.Any())
-            {
-                <div class="answer-field">
-                    <span class="answer-label">Автор(и):</span>
-                    @for (var i = 0; i < Question.Authors.Count; i++)
-                    {
-                        var author = Question.Authors[i];
-                        @(" ")<a href="/editor/@author.Id">@author.FullName</a>@(i < Question.Authors.Count - 1 ? "," : "")
-                    }
-                </div>
-            }
-        </div>
-    }
+    </QuestionContent>
 </div>
 
 @code {
@@ -190,13 +61,13 @@
         _copyInProgress = true;
         var baseUri = Navigation.BaseUri.TrimEnd('/');
         var questionUrl = $"{baseUri}/question/{Question.Id}";
-        
+
         var success = await JS.InvokeAsync<bool>("copyToClipboard", questionUrl);
         if (success)
         {
             _copied = true;
             StateHasChanged();
-            
+
             await Task.Delay(CopyFeedbackDelayMs);
             _copied = false;
             StateHasChanged();

@@ -1,0 +1,38 @@
+﻿@if (!string.IsNullOrEmpty(Url))
+{
+    <div class="media-container">
+        @{
+            var mediaType = MediaSecurityOptions.GetMediaType(Url);
+        }
+        @switch (mediaType)
+        {
+            case MediaType.Image:
+                <img src="@Url" alt="@Alt" class="img-fluid mt-2" style="max-height: @(MaxHeight)px;" />
+                break;
+            case MediaType.Video:
+                <video controls class="mt-2" style="max-width: 100%; max-height: @(MaxHeight + 100)px;">
+                    <source src="@Url" type="@MediaSecurityOptions.GetContentTypeFromPath(Url)" />
+                    Ваш браузер не підтримує відтворення відео.
+                </video>
+                break;
+            case MediaType.Audio:
+                <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
+                    <source src="@Url" type="@MediaSecurityOptions.GetContentTypeFromPath(Url)" />
+                    Ваш браузер не підтримує відтворення аудіо.
+                </audio>
+                break;
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Url { get; set; }
+
+    [Parameter]
+    public string Alt { get; set; } = "Media";
+
+    [Parameter]
+    public int MaxHeight { get; set; } = 300;
+}
+

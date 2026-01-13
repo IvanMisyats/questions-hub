@@ -4,7 +4,6 @@
 @using System.Security.Claims
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
-@using QuestionsHub.Blazor.Infrastructure
 @inject QuestionsHubDbContext DbContext
 
 <PageTitle>Питання @(_question?.Number ?? "") - База українських запитань</PageTitle>
@@ -47,130 +46,7 @@ else
                         </a>
                     </div>
                     <div class="card-body">
-                        @if (!string.IsNullOrEmpty(_question.HostInstructions))
-                        {
-                            <div class="host-instructions mb-3">
-                                <strong>Вказівка ведучому:</strong>
-                                <div>@_question.HostInstructions</div>
-                            </div>
-                        }
-
-                        @if (!string.IsNullOrEmpty(_question.HandoutText))
-                        {
-                            <div class="handout mb-3">
-                                <strong>Роздатковий матеріал:</strong>
-                                <div>@_question.HandoutText</div>
-                            </div>
-                        }
-
-                        @if (!string.IsNullOrEmpty(_question.HandoutUrl))
-                        {
-                            <div class="handout mb-3">
-                                <strong>Роздатковий матеріал:</strong>
-                                <div class="media-container">
-                                    @{
-                                        var handoutMediaType = MediaSecurityOptions.GetMediaType(_question.HandoutUrl);
-                                    }
-                                    @switch (handoutMediaType)
-                                    {
-                                        case MediaType.Image:
-                                            <img src="@_question.HandoutUrl" alt="Handout" class="img-fluid mt-2" style="max-height: 300px;" />
-                                            break;
-                                        case MediaType.Video:
-                                            <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
-                                                <source src="@_question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.HandoutUrl)" />
-                                                Ваш браузер не підтримує відтворення відео.
-                                            </video>
-                                            break;
-                                        case MediaType.Audio:
-                                            <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
-                                                <source src="@_question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.HandoutUrl)" />
-                                                Ваш браузер не підтримує відтворення аудіо.
-                                            </audio>
-                                            break;
-                                    }
-                                </div>
-                            </div>
-                        }
-
-                        <div class="question-text mb-3">
-                            @_question.Text
-                        </div>
-
-                        <div class="answer-section">
-                            <div class="answer-field">
-                                <span class="answer-label">Відповідь:</span> @_question.Answer
-                            </div>
-
-                            @if (!string.IsNullOrEmpty(_question.AcceptedAnswers))
-                            {
-                                <div class="answer-field">
-                                    <span class="answer-label">Залік:</span> @_question.AcceptedAnswers
-                                </div>
-                            }
-
-                            @if (!string.IsNullOrEmpty(_question.RejectedAnswers))
-                            {
-                                <div class="answer-field">
-                                    <span class="answer-label">Незалік:</span> @_question.RejectedAnswers
-                                </div>
-                            }
-
-                            @if (!string.IsNullOrEmpty(_question.Comment))
-                            {
-                                <div class="answer-field">
-                                    <span class="answer-label">Коментар:</span> @_question.Comment
-                                </div>
-                            }
-
-                            @if (!string.IsNullOrEmpty(_question.CommentAttachmentUrl))
-                            {
-                                <div class="answer-field">
-                                    <span class="answer-label">Матеріал до коментаря:</span>
-                                    <div class="media-container">
-                                        @{
-                                            var commentMediaType = MediaSecurityOptions.GetMediaType(_question.CommentAttachmentUrl);
-                                        }
-                                        @switch (commentMediaType)
-                                        {
-                                            case MediaType.Image:
-                                                <img src="@_question.CommentAttachmentUrl" alt="Comment attachment" class="img-fluid mt-2" style="max-height: 300px;" />
-                                                break;
-                                            case MediaType.Video:
-                                                <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
-                                                    <source src="@_question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.CommentAttachmentUrl)" />
-                                                    Ваш браузер не підтримує відтворення відео.
-                                                </video>
-                                                break;
-                                            case MediaType.Audio:
-                                                <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
-                                                    <source src="@_question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.CommentAttachmentUrl)" />
-                                                    Ваш браузер не підтримує відтворення аудіо.
-                                                </audio>
-                                                break;
-                                        }
-                                    </div>
-                                </div>
-                            }
-
-                            @if (!string.IsNullOrEmpty(_question.Source))
-                            {
-                                <div class="answer-field source-field">
-                                    <span class="answer-label">Джерело:</span> @_question.Source
-                                </div>
-                            }
-
-                            @if (_question.Authors.Any())
-                            {
-                                <div class="answer-field">
-                                    <span class="answer-label">Автор(и):</span>
-                                    @foreach (var (author, index) in _question.Authors.Select((a, i) => (a, i)))
-                                    {
-                                        <text> </text><a href="/editor/@author.Id">@author.FullName</a>@(index < _question.Authors.Count - 1 ? "," : "")
-                                    }
-                                </div>
-                            }
-                        </div>
+                        <QuestionContent Question="_question" />
                     </div>
                 </div>
             </div>
