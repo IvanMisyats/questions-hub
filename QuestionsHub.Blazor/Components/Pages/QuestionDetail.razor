@@ -1,0 +1,243 @@
+@page "/question/{Id:int}"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
+@inject QuestionsHubDbContext DbContext
+
+<PageTitle>Питання @(_question?.Number ?? "") - База українських запитань</PageTitle>
+
+@if (_notFound)
+{
+    <div class="container mt-4">
+        <div class="alert alert-warning">
+            <h4>Питання не знайдено</h4>
+            <p>Питання з ідентифікатором @Id не існує або недоступне.</p>
+            <a href="/" class="btn btn-primary">Повернутися на головну</a>
+        </div>
+    </div>
+}
+else if (_question == null)
+{
+    <div class="container mt-4">
+        <p><em>Завантаження...</em></p>
+    </div>
+}
+else
+{
+    <div class="container-fluid">
+        <h4 class="mb-4">Питання</h4>
+
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div class="card question-detail-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <a href="/package/@_question.Tour.PackageId" class="text-decoration-none fw-bold">@_question.Tour.Package.Title</a>
+                            <span class="text-muted mx-2">·</span>
+                            <span class="text-muted">Тур @_question.Tour.Number</span>
+                            <span class="text-muted mx-2">·</span>
+                            <span class="text-muted">Питання @_question.Number</span>
+                        </div>
+                        <a href="/package/@_question.Tour.PackageId#question-@_question.Id"
+                           class="btn btn-sm btn-outline-primary">
+                            Перейти на пакет
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(_question.HostInstructions))
+                        {
+                            <div class="host-instructions mb-3">
+                                <strong>Вказівка ведучому:</strong>
+                                <div>@_question.HostInstructions</div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(_question.HandoutText))
+                        {
+                            <div class="handout mb-3">
+                                <strong>Роздатковий матеріал:</strong>
+                                <div>@_question.HandoutText</div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(_question.HandoutUrl))
+                        {
+                            <div class="handout mb-3">
+                                <strong>Роздатковий матеріал:</strong>
+                                <div class="media-container">
+                                    @{
+                                        var handoutMediaType = MediaSecurityOptions.GetMediaType(_question.HandoutUrl);
+                                    }
+                                    @switch (handoutMediaType)
+                                    {
+                                        case MediaType.Image:
+                                            <img src="@_question.HandoutUrl" alt="Handout" class="img-fluid mt-2" style="max-height: 300px;" />
+                                            break;
+                                        case MediaType.Video:
+                                            <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
+                                                <source src="@_question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.HandoutUrl)" />
+                                                Ваш браузер не підтримує відтворення відео.
+                                            </video>
+                                            break;
+                                        case MediaType.Audio:
+                                            <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
+                                                <source src="@_question.HandoutUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.HandoutUrl)" />
+                                                Ваш браузер не підтримує відтворення аудіо.
+                                            </audio>
+                                            break;
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="question-text mb-3">
+                            @_question.Text
+                        </div>
+
+                        <div class="answer-section">
+                            <div class="answer-field">
+                                <span class="answer-label">Відповідь:</span> @_question.Answer
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(_question.AcceptedAnswers))
+                            {
+                                <div class="answer-field">
+                                    <span class="answer-label">Залік:</span> @_question.AcceptedAnswers
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_question.RejectedAnswers))
+                            {
+                                <div class="answer-field">
+                                    <span class="answer-label">Незалік:</span> @_question.RejectedAnswers
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_question.Comment))
+                            {
+                                <div class="answer-field">
+                                    <span class="answer-label">Коментар:</span> @_question.Comment
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_question.CommentAttachmentUrl))
+                            {
+                                <div class="answer-field">
+                                    <span class="answer-label">Матеріал до коментаря:</span>
+                                    <div class="media-container">
+                                        @{
+                                            var commentMediaType = MediaSecurityOptions.GetMediaType(_question.CommentAttachmentUrl);
+                                        }
+                                        @switch (commentMediaType)
+                                        {
+                                            case MediaType.Image:
+                                                <img src="@_question.CommentAttachmentUrl" alt="Comment attachment" class="img-fluid mt-2" style="max-height: 300px;" />
+                                                break;
+                                            case MediaType.Video:
+                                                <video controls class="mt-2" style="max-width: 100%; max-height: 400px;">
+                                                    <source src="@_question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.CommentAttachmentUrl)" />
+                                                    Ваш браузер не підтримує відтворення відео.
+                                                </video>
+                                                break;
+                                            case MediaType.Audio:
+                                                <audio controls class="mt-2" style="width: 100%; max-width: 500px;">
+                                                    <source src="@_question.CommentAttachmentUrl" type="@MediaSecurityOptions.GetContentTypeFromPath(_question.CommentAttachmentUrl)" />
+                                                    Ваш браузер не підтримує відтворення аудіо.
+                                                </audio>
+                                                break;
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_question.Source))
+                            {
+                                <div class="answer-field source-field">
+                                    <span class="answer-label">Джерело:</span> @_question.Source
+                                </div>
+                            }
+
+                            @if (_question.Authors.Any())
+                            {
+                                <div class="answer-field">
+                                    <span class="answer-label">Автор(и):</span>
+                                    @foreach (var (author, index) in _question.Authors.Select((a, i) => (a, i)))
+                                    {
+                                        <text> </text><a href="/editor/@author.Id">@author.FullName</a>@(index < _question.Authors.Count - 1 ? "," : "")
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Question? _question;
+    private bool _notFound;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _question = await DbContext.Questions
+            .AsNoTracking()
+            .Include(q => q.Authors)
+            .Include(q => q.Tour)
+                .ThenInclude(t => t.Package)
+            .FirstOrDefaultAsync(q => q.Id == Id);
+
+        if (_question == null)
+        {
+            _notFound = true;
+            return;
+        }
+
+        // Check visibility based on package status
+        var canView = await CanViewPackageAsync(_question.Tour.Package);
+        if (!canView)
+        {
+            _question = null;
+            _notFound = true;
+        }
+    }
+
+    private async Task<bool> CanViewPackageAsync(Package package)
+    {
+        // Published packages are visible to everyone
+        if (package.Status == PackageStatus.Published)
+            return true;
+
+        // Archived packages are accessible via direct link
+        if (package.Status == PackageStatus.Archived)
+            return true;
+
+        // Draft packages require authentication
+        if (AuthenticationState == null)
+            return false;
+
+        var authState = await AuthenticationState;
+        var user = authState.User;
+
+        if (!user.Identity?.IsAuthenticated ?? true)
+            return false;
+
+        // Admins can see all packages
+        if (user.IsInRole("Admin"))
+            return true;
+
+        // Owners can see their own draft packages
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return package.OwnerId == userId;
+    }
+}

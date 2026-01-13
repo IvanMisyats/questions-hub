@@ -1,0 +1,70 @@
+/* Question detail card styling - similar to search results */
+.question-detail-card {
+    border-left: 4px solid #1b6ec2;
+}
+
+.question-detail-card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Match QuestionCard and Search styling */
+.question-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.host-instructions {
+    padding: 0.5rem 0.75rem;
+    background: #e0e0e0;
+    border-radius: 0.25rem;
+    border-left: 4px solid #6c757d;
+    color: #495057;
+    white-space: pre-line;
+}
+
+.handout {
+    padding: 0.75rem;
+    background: #fff3cd;
+    border-radius: 0.25rem;
+    border-left: 4px solid #ffc107;
+    white-space: pre-line;
+}
+
+.media-container {
+    margin-top: 0.5rem;
+}
+
+.media-container video,
+.media-container audio {
+    max-width: 100%;
+    margin-top: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.media-container img {
+    border-radius: 0.25rem;
+}
+
+.answer-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed #ccc;
+}
+
+.answer-field {
+    margin-bottom: 0.5rem;
+    white-space: pre-line;
+}
+
+.answer-label {
+    font-weight: 600;
+    color: #555;
+}
+
+.source-field {
+    border-top: 1px solid #eee;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+}
