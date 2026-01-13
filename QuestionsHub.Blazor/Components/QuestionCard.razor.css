@@ -8,6 +8,9 @@
 
 .question-header {
     margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .question-number {
@@ -87,5 +90,25 @@
 .answer-label {
     font-weight: 600;
     color: #555;
+}
+
+.copy-link-btn {
+    padding: 0.15rem 0.35rem;
+    color: #6c757d;
+    background: transparent;
+    border: none;
+    line-height: 1;
+}
+
+.copy-link-btn:hover {
+    color: #1b6ec2;
+}
+
+.copy-icon {
+    vertical-align: middle;
+}
+
+.copy-icon.copied {
+    color: #28a745;
 }
 
