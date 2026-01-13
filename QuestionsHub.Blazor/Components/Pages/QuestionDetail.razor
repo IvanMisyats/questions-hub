@@ -164,10 +164,9 @@ else
                             {
                                 <div class="answer-field">
                                     <span class="answer-label">Автор(и):</span>
-                                    @for (var i = 0; i < _question.Authors.Count; i++)
+                                    @foreach (var (author, index) in _question.Authors.Select((a, i) => (a, i)))
                                     {
-                                        var author = _question.Authors[i];
-                                        @(" ")<a href="/editor/@author.Id">@author.FullName</a>@(i < _question.Authors.Count - 1 ? "," : "")
+                                        <text> </text><a href="/editor/@author.Id">@author.FullName</a>@(index < _question.Authors.Count - 1 ? "," : "")
                                     }
                                 </div>
                             }

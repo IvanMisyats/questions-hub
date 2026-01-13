@@ -170,8 +170,10 @@
     [Parameter]
     public required Question Question { get; set; }
 
+    private const int CopyFeedbackDelayMs = 2000;
     private bool _showAnswer;
     private bool _copied;
+    private bool _copyInProgress;
 
     private void ToggleAnswer()
     {
@@ -180,6 +182,12 @@
 
     private async Task CopyQuestionLink()
     {
+        if (_copyInProgress)
+        {
+            return;
+        }
+
+        _copyInProgress = true;
         var baseUri = Navigation.BaseUri.TrimEnd('/');
         var questionUrl = $"{baseUri}/question/{Question.Id}";
         
@@ -189,10 +197,11 @@
             _copied = true;
             StateHasChanged();
             
-            await Task.Delay(2000);
+            await Task.Delay(CopyFeedbackDelayMs);
             _copied = false;
             StateHasChanged();
         }
+        _copyInProgress = false;
     }
 }
 

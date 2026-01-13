@@ -22,11 +22,33 @@ window.scrollToElement = function(elementId) {
 
 // Copy text to clipboard
 window.copyToClipboard = async function(text) {
+    // Modern clipboard API (requires HTTPS in production)
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (err) {
+            console.error('Clipboard API failed:', err);
+        }
+    }
+    
+    // Fallback for older browsers or non-HTTPS contexts
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
     try {
-        await navigator.clipboard.writeText(text);
+        document.execCommand('copy');
+        textArea.remove();
         return true;
     } catch (err) {
-        console.error('Failed to copy to clipboard:', err);
+        console.error('Fallback copy failed:', err);
+        textArea.remove();
         return false;
     }
 };
