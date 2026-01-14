@@ -135,14 +135,14 @@
                                 <a href="/package/@packageItem.PackageId">@packageItem.PackageTitle</a>
                                 @if (packageItem.Tours.Any())
                                 {
-                                    @(" ° ")
+                                    @TourSeparator
                                     @for (var i = 0; i < packageItem.Tours.Count; i++)
                                     {
                                         var tour = packageItem.Tours[i];
                                         <a href="/package/@packageItem.PackageId#tour-@tour.TourId">Тур @tour.TourNumber</a>
                                         @if (i < packageItem.Tours.Count - 1)
                                         {
-                                            @(" ° ")
+                                            @TourSeparator
                                         }
                                     }
                                 }
@@ -181,7 +181,9 @@
     private int _packagesCount;
     private int _questionsCount;
     private List<PackageListItem> _packagesList = [];
-    private int _displayedPackagesCount = 20;
+    private const int PackagesPerPage = 20;
+    private int _displayedPackagesCount = PackagesPerPage;
+    private const string TourSeparator = " ° ";
 
     private class PackageListItem
     {
@@ -237,8 +239,8 @@
                         TourId = t.Id,
                         TourNumber = t.Number
                     })
-                    .OrderBy(t => int.TryParse(t.TourNumber, out var num) ? num : int.MaxValue)
-                    .ThenBy(t => t.TourNumber)
+                    .OrderBy(t => int.TryParse(t.TourNumber, out var num) ? num : int.MaxValue) // Numeric tours first
+                    .ThenBy(t => t.TourNumber) // Then non-numeric tours alphabetically
                     .ToList()
                 })
                 .OrderByDescending(p => p.PackageId) // Show newest packages first
@@ -257,7 +259,7 @@
 
     private void ShowMorePackages()
     {
-        _displayedPackagesCount += 20;
+        _displayedPackagesCount += PackagesPerPage;
     }
 
     private async Task LinkUser()
