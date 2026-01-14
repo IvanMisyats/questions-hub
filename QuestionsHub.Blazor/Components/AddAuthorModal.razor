@@ -1,8 +1,9 @@
 ﻿@using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 
-@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject AuthorService AuthorService
 
 @if (IsVisible)
 {
@@ -103,28 +104,7 @@
             var firstName = _firstName.Trim();
             var lastName = _lastName.Trim();
 
-            await using var context = await DbContextFactory.CreateDbContextAsync();
-
-            // Check for existing author with same name
-            var existing = await context.Authors
-                .FirstOrDefaultAsync(a => a.FirstName == firstName && a.LastName == lastName);
-
-            Author author;
-            if (existing != null)
-            {
-                author = existing;
-            }
-            else
-            {
-                author = new Author
-                {
-                    FirstName = firstName,
-                    LastName = lastName
-                };
-
-                context.Authors.Add(author);
-                await context.SaveChangesAsync();
-            }
+            var author = await AuthorService.GetOrCreateAuthorAsync(firstName, lastName);
 
             await OnAuthorCreated.InvokeAsync(author);
             Reset();

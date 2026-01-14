@@ -1,8 +1,9 @@
 ﻿@using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 
-@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject AuthorService AuthorService
 
 <div class="author-selector @(_isReadOnly ? "readonly" : "")">
     @if (_isReadOnly)
@@ -117,6 +118,13 @@
     [Parameter]
     public EventCallback OnSelectionChanged { get; set; }
 
+    /// <summary>
+    /// Called when an author is removed from the selection.
+    /// Can be used to clean up orphaned authors.
+    /// </summary>
+    [Parameter]
+    public EventCallback<Author> OnAuthorRemoved { get; set; }
+
     [Parameter]
     public bool IsReadOnly { get => _isReadOnly; set => _isReadOnly = value; }
 
@@ -185,16 +193,7 @@
             // Debounce
             await Task.Delay(200, _searchCts.Token);
 
-            await using var context = await DbContextFactory.CreateDbContextAsync(_searchCts.Token);
-            var query = _searchQuery.Trim();
-
-            _searchResults = await context.Authors
-                .Where(a => EF.Functions.ILike(a.LastName, query + "%")
-                         || EF.Functions.ILike(a.FirstName, query + "%"))
-                .OrderBy(a => a.LastName)
-                .ThenBy(a => a.FirstName)
-                .Take(10)
-                .ToListAsync(_searchCts.Token);
+            _searchResults = await AuthorService.SearchAuthorsAsync(_searchQuery, 10, _searchCts.Token);
         }
         catch (TaskCanceledException)
         {
@@ -230,6 +229,7 @@
         SelectedAuthors.Remove(author);
         await SelectedAuthorsChanged.InvokeAsync(SelectedAuthors);
         await OnSelectionChanged.InvokeAsync();
+        await OnAuthorRemoved.InvokeAsync(author);
     }
 
     private void OpenAddAuthorModal()

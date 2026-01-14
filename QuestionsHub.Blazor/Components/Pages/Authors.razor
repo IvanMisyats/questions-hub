@@ -1,8 +1,9 @@
 ﻿@page "/editors"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Infrastructure
 
-@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject AuthorService AuthorService
 
 <PageTitle>Автори - QuestionsHub</PageTitle>
 
@@ -86,13 +87,13 @@
 </div>
 
 @code {
-    private List<AuthorViewModel> _authors = [];
-    private List<AuthorViewModel> _filteredAuthors = [];
+    private List<AuthorListItem> _authors = [];
+    private List<AuthorListItem> _filteredAuthors = [];
     private bool _isLoading = true;
     private string _searchQuery = string.Empty;
     private CancellationTokenSource? _searchCts;
 
-    private List<AuthorViewModel> FilteredAuthors =>
+    private List<AuthorListItem> FilteredAuthors =>
         string.IsNullOrWhiteSpace(_searchQuery) ? _authors : _filteredAuthors;
 
     protected override async Task OnInitializedAsync()
@@ -138,31 +139,7 @@
 
     private async Task LoadAuthorsAsync()
     {
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-
-        _authors = await context.Authors
-            .Select(a => new AuthorViewModel
-            {
-                Id = a.Id,
-                FirstName = a.FirstName,
-                LastName = a.LastName,
-                QuestionCount = a.Questions.Count,
-                PackageCount = a.Tours.Select(t => t.PackageId).Distinct().Count()
-            })
-            .OrderByDescending(a => a.QuestionCount)
-            .ThenBy(a => a.LastName)
-            .ThenBy(a => a.FirstName)
-            .ToListAsync();
-    }
-
-    private class AuthorViewModel
-    {
-        public int Id { get; set; }
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string FullName => $"{FirstName} {LastName}";
-        public int QuestionCount { get; set; }
-        public int PackageCount { get; set; }
+        _authors = await AuthorService.GetAllAuthorsWithCountsAsync();
     }
 }
 

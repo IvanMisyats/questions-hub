@@ -12,15 +12,18 @@ public partial class PackageDbImporter
 {
     private readonly QuestionsHubDbContext _db;
     private readonly MediaUploadOptions _mediaOptions;
+    private readonly AuthorService _authorService;
     private readonly ILogger<PackageDbImporter> _logger;
 
     public PackageDbImporter(
         QuestionsHubDbContext db,
         MediaUploadOptions mediaOptions,
+        AuthorService authorService,
         ILogger<PackageDbImporter> logger)
     {
         _db = db;
         _mediaOptions = mediaOptions;
+        _authorService = authorService;
         _logger = logger;
     }
 
@@ -133,27 +136,9 @@ public partial class PackageDbImporter
                 continue;
             }
 
-            var existing = await _db.Authors
-                .FirstOrDefaultAsync(a =>
-                    a.FirstName == firstName &&
-                    a.LastName == lastName, ct);
-
-            if (existing != null)
-            {
-                authors.Add(existing);
-            }
-            else
-            {
-                var newAuthor = new Author
-                {
-                    FirstName = firstName,
-                    LastName = lastName
-                };
-                _db.Authors.Add(newAuthor);
-                await _db.SaveChangesAsync(ct);
-                authors.Add(newAuthor);
-                _logger.LogDebug("Created new author: {FirstName} {LastName}", firstName, lastName);
-            }
+            var author = await _authorService.GetOrCreateAuthorAsync(_db, firstName, lastName);
+            authors.Add(author);
+            _logger.LogDebug("Resolved author: {FirstName} {LastName}", firstName, lastName);
         }
 
         return authors;

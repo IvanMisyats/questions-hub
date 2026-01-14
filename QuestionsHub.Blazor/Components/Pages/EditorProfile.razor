@@ -1,9 +1,10 @@
 ﻿@page "/editor/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Infrastructure
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
-@inject AuthorUserLinkingService AuthorUserLinkingService
+@inject AuthorService AuthorService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>@(_author?.FullName ?? "Редактор")</PageTitle>
@@ -247,12 +248,12 @@
                 .ToList();
 
             // Load linked user info
-            _linkedUser = await AuthorUserLinkingService.GetLinkedUserAsync(Id);
+            _linkedUser = await AuthorService.GetLinkedUserAsync(Id);
 
             // If admin and no linked user, load available users
             if (_isAdmin && _linkedUser == null)
             {
-                _availableUsers = await AuthorUserLinkingService.GetAvailableUsersForLinkingAsync();
+                _availableUsers = await AuthorService.GetAvailableUsersForLinkingAsync();
             }
         }
     }
@@ -270,14 +271,14 @@
         _isProcessing = true;
         _linkMessage = null;
 
-        var result = await AuthorUserLinkingService.LinkAuthorToUserAsync(Id, _selectedUserId);
+        var result = await AuthorService.LinkAuthorToUserAsync(Id, _selectedUserId);
 
         _linkSuccess = result.Success;
         _linkMessage = result.Message;
 
         if (result.Success)
         {
-            _linkedUser = await AuthorUserLinkingService.GetLinkedUserAsync(Id);
+            _linkedUser = await AuthorService.GetLinkedUserAsync(Id);
             _selectedUserId = null;
             _availableUsers = [];
         }
@@ -290,7 +291,7 @@
         _isProcessing = true;
         _linkMessage = null;
 
-        var result = await AuthorUserLinkingService.UnlinkAuthorFromUserAsync(Id);
+        var result = await AuthorService.UnlinkAuthorFromUserAsync(Id);
 
         _linkSuccess = result.Success;
         _linkMessage = result.Message;
@@ -298,7 +299,7 @@
         if (result.Success)
         {
             _linkedUser = null;
-            _availableUsers = await AuthorUserLinkingService.GetAvailableUsersForLinkingAsync();
+            _availableUsers = await AuthorService.GetAvailableUsersForLinkingAsync();
         }
 
         _isProcessing = false;
