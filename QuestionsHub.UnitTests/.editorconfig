@@ -1,0 +1,20 @@
+﻿# EditorConfig for QuestionsHub.UnitTests
+root = false
+
+[*.cs]
+# Disable CA1707: Identifiers should not contain underscores
+# Test methods commonly use underscore naming: Method_Scenario_Expected
+dotnet_diagnostic.CA1707.severity = none
+
+# Disable CA1816: Dispose methods should call SuppressFinalize
+# Test fixture disposal doesn't need this
+dotnet_diagnostic.CA1816.severity = none
+
+# Disable xUnit1004: Test methods should not be skipped
+# We intentionally skip tests that generate expected files
+dotnet_diagnostic.xUnit1004.severity = none
+
+# Disable xUnit1042: The member referenced by MemberData returns untyped data rows
+# Using object[] is acceptable for test data
+dotnet_diagnostic.xUnit1042.severity = suggestion
+

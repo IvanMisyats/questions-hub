@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="QuestionsHub.Blazor/QuestionsHub.Blazor.csproj" />
+  <Project Path="QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj" />
 </Solution>

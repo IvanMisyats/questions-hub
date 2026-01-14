@@ -35,8 +35,8 @@ jobs:
         run: dotnet build --no-restore
 
       # 5. Run tests
-      # - name: Run tests
-      #   run: dotnet test --no-build --verbosity normal
+      - name: Run tests
+        run: dotnet test --no-build --verbosity normal
 
       # 6. Log in to GitHub Container Registry (GHCR)
       - name: Login to GitHub Container Registry
