@@ -120,6 +120,45 @@
             </div>
         </div>
 
+        <!-- Packages List Section -->
+        @if (_packagesList.Any())
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-list-ul me-2"></i>Пакети
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        @foreach (var packageItem in _packagesList.Take(_displayedPackagesCount))
+                        {
+                            <li class="mb-2">
+                                <a href="/package/@packageItem.PackageId">@packageItem.PackageTitle</a>
+                                @if (packageItem.Tours.Any())
+                                {
+                                    @(" ° ")
+                                    @for (var i = 0; i < packageItem.Tours.Count; i++)
+                                    {
+                                        var tour = packageItem.Tours[i];
+                                        <a href="/package/@packageItem.PackageId#tour-@tour.TourId">Тур @tour.TourNumber</a>
+                                        @if (i < packageItem.Tours.Count - 1)
+                                        {
+                                            @(" ° ")
+                                        }
+                                    }
+                                }
+                            </li>
+                        }
+                    </ul>
+                    @if (_packagesList.Count > _displayedPackagesCount)
+                    {
+                        <button class="btn btn-link" @onclick="ShowMorePackages">
+                            показати більше
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
         <a href="/" class="btn btn-secondary">
             <i class="bi bi-arrow-left me-1"></i>Повернутися на головну
         </a>
@@ -141,6 +180,21 @@
     private bool _linkSuccess;
     private int _packagesCount;
     private int _questionsCount;
+    private List<PackageListItem> _packagesList = [];
+    private int _displayedPackagesCount = 20;
+
+    private class PackageListItem
+    {
+        public int PackageId { get; set; }
+        public required string PackageTitle { get; set; }
+        public List<TourListItem> Tours { get; set; } = [];
+    }
+
+    private class TourListItem
+    {
+        public int TourId { get; set; }
+        public required string TourNumber { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,6 +225,25 @@
                 .Count();
             _questionsCount = _author.Questions.Count;
 
+            // Build packages list grouped by package
+            _packagesList = _author.Tours
+                .GroupBy(t => new { t.PackageId, t.Package.Title })
+                .Select(g => new PackageListItem
+                {
+                    PackageId = g.Key.PackageId,
+                    PackageTitle = g.Key.Title,
+                    Tours = g.Select(t => new TourListItem
+                    {
+                        TourId = t.Id,
+                        TourNumber = t.Number
+                    })
+                    .OrderBy(t => int.TryParse(t.TourNumber, out var num) ? num : int.MaxValue)
+                    .ThenBy(t => t.TourNumber)
+                    .ToList()
+                })
+                .OrderByDescending(p => p.PackageId) // Show newest packages first
+                .ToList();
+
             // Load linked user info
             _linkedUser = await AuthorUserLinkingService.GetLinkedUserAsync(Id);
 
@@ -180,6 +253,11 @@
                 _availableUsers = await AuthorUserLinkingService.GetAvailableUsersForLinkingAsync();
             }
         }
+    }
+
+    private void ShowMorePackages()
+    {
+        _displayedPackagesCount += 20;
     }
 
     private async Task LinkUser()
