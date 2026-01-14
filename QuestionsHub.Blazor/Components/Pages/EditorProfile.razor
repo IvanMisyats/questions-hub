@@ -248,12 +248,12 @@
                 .ToList();
 
             // Load linked user info
-            _linkedUser = await AuthorService.GetLinkedUserAsync(Id);
+            _linkedUser = await AuthorService.GetLinkedUser(Id);
 
             // If admin and no linked user, load available users
             if (_isAdmin && _linkedUser == null)
             {
-                _availableUsers = await AuthorService.GetAvailableUsersForLinkingAsync();
+                _availableUsers = await AuthorService.GetAvailableUsersForLinking();
             }
         }
     }
@@ -271,14 +271,14 @@
         _isProcessing = true;
         _linkMessage = null;
 
-        var result = await AuthorService.LinkAuthorToUserAsync(Id, _selectedUserId);
+        var result = await AuthorService.LinkAuthorToUser(Id, _selectedUserId);
 
         _linkSuccess = result.Success;
         _linkMessage = result.Message;
 
         if (result.Success)
         {
-            _linkedUser = await AuthorService.GetLinkedUserAsync(Id);
+            _linkedUser = await AuthorService.GetLinkedUser(Id);
             _selectedUserId = null;
             _availableUsers = [];
         }
@@ -291,7 +291,7 @@
         _isProcessing = true;
         _linkMessage = null;
 
-        var result = await AuthorService.UnlinkAuthorFromUserAsync(Id);
+        var result = await AuthorService.UnlinkAuthorFromUser(Id);
 
         _linkSuccess = result.Success;
         _linkMessage = result.Message;
@@ -299,7 +299,7 @@
         if (result.Success)
         {
             _linkedUser = null;
-            _availableUsers = await AuthorService.GetAvailableUsersForLinkingAsync();
+            _availableUsers = await AuthorService.GetAvailableUsersForLinking();
         }
 
         _isProcessing = false;

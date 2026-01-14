@@ -104,7 +104,7 @@
             var firstName = _firstName.Trim();
             var lastName = _lastName.Trim();
 
-            var author = await AuthorService.GetOrCreateAuthorAsync(firstName, lastName);
+            var author = await AuthorService.GetOrCreateAuthor(firstName, lastName);
 
             await OnAuthorCreated.InvokeAsync(author);
             Reset();

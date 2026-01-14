@@ -1390,7 +1390,7 @@
     /// </summary>
     private async Task TryDeleteOrphanedAuthorAsync(Author author)
     {
-        await AuthorService.TryDeleteAuthorIfOrphanedAsync(author.Id);
+        await AuthorService.TryDeleteAuthorIfOrphaned(author.Id);
     }
 }
 

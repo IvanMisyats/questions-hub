@@ -136,7 +136,7 @@ public partial class PackageDbImporter
                 continue;
             }
 
-            var author = await _authorService.GetOrCreateAuthorAsync(_db, firstName, lastName);
+            var author = await _authorService.GetOrCreateAuthor(_db, firstName, lastName);
             authors.Add(author);
             _logger.LogDebug("Resolved author: {FirstName} {LastName}", firstName, lastName);
         }

@@ -193,7 +193,7 @@
             // Debounce
             await Task.Delay(200, _searchCts.Token);
 
-            _searchResults = await AuthorService.SearchAuthorsAsync(_searchQuery, 10, _searchCts.Token);
+            _searchResults = await AuthorService.SearchAuthors(_searchQuery, 10, _searchCts.Token);
         }
         catch (TaskCanceledException)
         {

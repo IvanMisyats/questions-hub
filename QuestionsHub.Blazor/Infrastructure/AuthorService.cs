@@ -24,11 +24,11 @@ public class AuthorService
     /// <param name="lastName">Author's last name.</param>
     /// <returns>The existing or newly created author.</returns>
     /// <exception cref="ArgumentException">Thrown when firstName or lastName is null, empty, or whitespace.</exception>
-    public async Task<Author> GetOrCreateAuthorAsync(string firstName, string lastName)
+    public async Task<Author> GetOrCreateAuthor(string firstName, string lastName)
     {
         ValidateAuthorName(firstName, lastName);
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        return await GetOrCreateAuthorInternalAsync(context, firstName.Trim(), lastName.Trim());
+        return await GetOrCreateAuthorInternal(context, firstName.Trim(), lastName.Trim());
     }
 
     /// <summary>
@@ -40,13 +40,13 @@ public class AuthorService
     /// <param name="lastName">Author's last name.</param>
     /// <returns>The existing or newly created author.</returns>
     /// <exception cref="ArgumentException">Thrown when firstName or lastName is null, empty, or whitespace.</exception>
-    public async Task<Author> GetOrCreateAuthorAsync(
+    public async Task<Author> GetOrCreateAuthor(
         QuestionsHubDbContext context,
         string firstName,
         string lastName)
     {
         ValidateAuthorName(firstName, lastName);
-        return await GetOrCreateAuthorInternalAsync(context, firstName.Trim(), lastName.Trim());
+        return await GetOrCreateAuthorInternal(context, firstName.Trim(), lastName.Trim());
     }
 
     private static void ValidateAuthorName(string firstName, string lastName)
@@ -62,7 +62,7 @@ public class AuthorService
         }
     }
 
-    private static async Task<Author> GetOrCreateAuthorInternalAsync(
+    private static async Task<Author> GetOrCreateAuthorInternal(
         QuestionsHubDbContext context,
         string firstName,
         string lastName)
@@ -92,7 +92,7 @@ public class AuthorService
     /// </summary>
     /// <param name="authorId">The author ID.</param>
     /// <returns>The author if found, null otherwise.</returns>
-    public async Task<Author?> GetAuthorByIdAsync(int authorId)
+    public async Task<Author?> GetAuthorById(int authorId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -111,7 +111,7 @@ public class AuthorService
     /// <param name="limit">Maximum number of results to return.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of matching authors.</returns>
-    public async Task<List<Author>> SearchAuthorsAsync(string query, int limit = 10, CancellationToken ct = default)
+    public async Task<List<Author>> SearchAuthors(string query, int limit = 10, CancellationToken ct = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(ct);
 
@@ -134,7 +134,7 @@ public class AuthorService
     /// Gets all authors with their question and package counts.
     /// </summary>
     /// <returns>List of author view models with counts.</returns>
-    public async Task<List<AuthorListItem>> GetAllAuthorsWithCountsAsync()
+    public async Task<List<AuthorListItem>> GetAllAuthorsWithCounts()
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -158,10 +158,10 @@ public class AuthorService
     /// </summary>
     /// <param name="authorId">The author ID to check and potentially delete.</param>
     /// <returns>True if the author was deleted, false if they still have relationships.</returns>
-    public async Task<bool> TryDeleteAuthorIfOrphanedAsync(int authorId)
+    public async Task<bool> TryDeleteAuthorIfOrphaned(int authorId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        return await TryDeleteAuthorIfOrphanedAsync(context, authorId);
+        return await TryDeleteAuthorIfOrphaned(context, authorId);
     }
 
     /// <summary>
@@ -171,7 +171,7 @@ public class AuthorService
     /// <param name="context">Database context to use.</param>
     /// <param name="authorId">The author ID to check and potentially delete.</param>
     /// <returns>True if the author was deleted, false if they still have relationships.</returns>
-    public async Task<bool> TryDeleteAuthorIfOrphanedAsync(QuestionsHubDbContext context, int authorId)
+    public async Task<bool> TryDeleteAuthorIfOrphaned(QuestionsHubDbContext context, int authorId)
     {
         var author = await context.Authors
             .Include(a => a.Questions)
@@ -203,7 +203,7 @@ public class AuthorService
     /// <param name="authorId">The ID of the author to link.</param>
     /// <param name="userId">The ID of the user to link.</param>
     /// <returns>Result indicating success or failure with a message.</returns>
-    public async Task<AuthorOperationResult> LinkAuthorToUserAsync(int authorId, string userId)
+    public async Task<AuthorOperationResult> LinkAuthorToUser(int authorId, string userId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -249,7 +249,7 @@ public class AuthorService
     /// </summary>
     /// <param name="authorId">The ID of the author to unlink.</param>
     /// <returns>Result indicating success or failure with a message.</returns>
-    public async Task<AuthorOperationResult> UnlinkAuthorFromUserAsync(int authorId)
+    public async Task<AuthorOperationResult> UnlinkAuthorFromUser(int authorId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -276,7 +276,7 @@ public class AuthorService
     /// Gets all users available for linking (not yet linked to any author).
     /// </summary>
     /// <returns>List of users that can be linked to an author.</returns>
-    public async Task<List<UserForLinking>> GetAvailableUsersForLinkingAsync()
+    public async Task<List<UserForLinking>> GetAvailableUsersForLinking()
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -307,7 +307,7 @@ public class AuthorService
     /// </summary>
     /// <param name="authorId">The author ID.</param>
     /// <returns>The linked user info, or null if not linked.</returns>
-    public async Task<UserForLinking?> GetLinkedUserAsync(int authorId)
+    public async Task<UserForLinking?> GetLinkedUser(int authorId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
