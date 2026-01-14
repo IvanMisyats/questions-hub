@@ -66,7 +66,7 @@ internal static class ServiceCollectionExtensions
             options.UseNpgsql(connectionString), ServiceLifetime.Scoped);
 
         services.AddScoped<SearchService>();
-        services.AddScoped<AuthorUserLinkingService>();
+        services.AddScoped<AuthorService>();
         services.AddScoped<PackageService>();
 
         return services;

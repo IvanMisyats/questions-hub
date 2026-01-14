@@ -10,6 +10,7 @@
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject NavigationManager Navigation
 @inject MediaService MediaService
+@inject AuthorService AuthorService
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - QuestionsHub</PageTitle>
 
@@ -147,6 +148,7 @@
                                                 <label class="form-label small">Редактори туру</label>
                                                 <AuthorSelector SelectedAuthors="tour.Editors"
                                                                 OnSelectionChanged="() => SaveTourAsync(tour)"
+                                                                OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
                                                                 Placeholder="Введіть прізвище редактора..." />
                                             </div>
                                             <div class="col-md-2 d-flex align-items-end">
@@ -495,6 +497,7 @@
                         <div class="col-md-10">
                             <AuthorSelector SelectedAuthors="_editingQuestion.Authors"
                                             OnSelectionChanged="SaveEditingQuestionAsync"
+                                            OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
                                             Placeholder="Введіть прізвище автора..." />
                         </div>
                     </div>
@@ -1380,6 +1383,14 @@
         _commentInputKey = Guid.NewGuid();
         _handoutUploadError = null;
         _commentUploadError = null;
+    }
+
+    /// <summary>
+    /// Attempts to delete an author if they are orphaned (no questions, no tours, and not linked to a user).
+    /// </summary>
+    private async Task TryDeleteOrphanedAuthorAsync(Author author)
+    {
+        await AuthorService.TryDeleteAuthorIfOrphaned(author.Id);
     }
 }
 
