@@ -23,10 +23,12 @@ public class AuthorService
     /// <param name="firstName">Author's first name.</param>
     /// <param name="lastName">Author's last name.</param>
     /// <returns>The existing or newly created author.</returns>
+    /// <exception cref="ArgumentException">Thrown when firstName or lastName is null, empty, or whitespace.</exception>
     public async Task<Author> GetOrCreateAuthorAsync(string firstName, string lastName)
     {
+        ValidateAuthorName(firstName, lastName);
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        return await GetOrCreateAuthorAsync(context, firstName, lastName);
+        return await GetOrCreateAuthorInternalAsync(context, firstName.Trim(), lastName.Trim());
     }
 
     /// <summary>
@@ -37,14 +39,34 @@ public class AuthorService
     /// <param name="firstName">Author's first name.</param>
     /// <param name="lastName">Author's last name.</param>
     /// <returns>The existing or newly created author.</returns>
+    /// <exception cref="ArgumentException">Thrown when firstName or lastName is null, empty, or whitespace.</exception>
     public async Task<Author> GetOrCreateAuthorAsync(
         QuestionsHubDbContext context,
         string firstName,
         string lastName)
     {
-        firstName = firstName.Trim();
-        lastName = lastName.Trim();
+        ValidateAuthorName(firstName, lastName);
+        return await GetOrCreateAuthorInternalAsync(context, firstName.Trim(), lastName.Trim());
+    }
 
+    private static void ValidateAuthorName(string firstName, string lastName)
+    {
+        if (string.IsNullOrWhiteSpace(firstName))
+        {
+            throw new ArgumentException("Ім'я автора не може бути порожнім.", nameof(firstName));
+        }
+
+        if (string.IsNullOrWhiteSpace(lastName))
+        {
+            throw new ArgumentException("Прізвище автора не може бути порожнім.", nameof(lastName));
+        }
+    }
+
+    private static async Task<Author> GetOrCreateAuthorInternalAsync(
+        QuestionsHubDbContext context,
+        string firstName,
+        string lastName)
+    {
         var existing = await context.Authors
             .FirstOrDefaultAsync(a => a.FirstName == firstName && a.LastName == lastName);
 
