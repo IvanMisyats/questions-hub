@@ -1,56 +1,42 @@
-name: CI/CD Pipeline
+﻿name: CD
 
 env:
   PROJECT_NAME: ivanmisyats/questions-hub
 
 on:
-  push:
+  # Trigger after CI workflow completes successfully on main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+  # Allow manual deployment
   workflow_dispatch:
 
 jobs:
-  build-test-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    # Only run if CI succeeded (for workflow_run trigger) or manual trigger
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       # 1. Check out the code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Set up .NET SDK
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '10.0.x'
-
-      # 3. Restore dependencies
-      - name: Restore dependencies
-        run: dotnet restore
-
-      # 4. Build the project
-      - name: Build
-        run: dotnet build --no-restore
-
-      # 5. Run tests
-      - name: Run tests
-        run: dotnet test --no-build --verbosity normal
-
-      # 6. Log in to GitHub Container Registry (GHCR)
+      # 2. Log in to GitHub Container Registry (GHCR)
       - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner || env.GITHUB_ACTOR }}" --password-stdin
+        run: echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
 
-      # 7. Build Docker image
+      # 3. Build Docker image
       - name: Build Docker image
         run: docker buildx build --load -f QuestionsHub.Blazor/Dockerfile -t ghcr.io/${{ env.PROJECT_NAME }}:latest .
 
-      # 8. Push Docker image to GHCR
+      # 4. Push Docker image to GHCR
       - name: Push Docker image
         run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-      # 9. Copy deployment files to VPS
+      # 5. Copy deployment files to VPS
       - name: Copy deployment files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -61,7 +47,7 @@ jobs:
           source: "docker-compose.yml,db/"
           target: "~/questions-hub/"
 
-      # 10. Deploy to VPS via SSH
+      # 6. Deploy to VPS via SSH
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v0.1.7
         with:
