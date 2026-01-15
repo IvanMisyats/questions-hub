@@ -182,7 +182,7 @@
                                         </a>
                                     </div>
                                     <div class="text-muted small mt-1">
-                                        @(question.QuestionText.Length > 150 ? question.QuestionText[..150] + "..." : question.QuestionText)
+                                        @(question.QuestionText.Length > QuestionPreviewLength ? question.QuestionText[..QuestionPreviewLength] + "..." : question.QuestionText)
                                     </div>
                                 </li>
                             }
@@ -231,6 +231,7 @@
     private bool _showQuestionsList = false;
     private List<QuestionListItem> _questionsList = [];
     private const int QuestionsPerPage = 20;
+    private const int QuestionPreviewLength = 150;
     private int _displayedQuestionsCount = 0;
     private bool _isLoadingQuestions = false;
     private bool _hasMoreQuestions = false;
@@ -353,16 +354,17 @@
             var skip = _displayedQuestionsCount;
             var take = QuestionsPerPage;
 
+            // Base query for author's questions
+            var baseQuery = context.Questions
+                .Where(q => q.Authors.Any(a => a.Id == _author.Id));
+
             // Only get total count on first load
             if (_displayedQuestionsCount == 0)
             {
-                _questionsCount = await context.Questions
-                    .Where(q => q.Authors.Any(a => a.Id == _author.Id))
-                    .CountAsync();
+                _questionsCount = await baseQuery.CountAsync();
             }
 
-            var questions = await context.Questions
-                .Where(q => q.Authors.Any(a => a.Id == _author.Id))
+            var questions = await baseQuery
                 .Include(q => q.Tour)
                     .ThenInclude(t => t.Package)
                 .OrderByDescending(q => q.Tour.PackageId)
