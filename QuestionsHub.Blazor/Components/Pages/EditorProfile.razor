@@ -2,6 +2,8 @@
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Infrastructure
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject AuthorService AuthorService
@@ -29,41 +31,35 @@
     {
         <h1 class="mb-4">@_author.FullName</h1>
 
-        <!-- Linked User Section -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <i class="bi bi-person-badge me-2"></i>Пов'язаний користувач
-            </div>
-            <div class="card-body">
-                @if (_linkedUser != null)
-                {
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <strong>@_linkedUser.FullName</strong>
-                            @if (_isAdmin)
-                            {
+        <!-- Linked User Section (Admin Only) -->
+        @if (_isAdmin)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-person-badge me-2"></i>Пов'язаний користувач
+                </div>
+                <div class="card-body">
+                    @if (_linkedUser != null)
+                    {
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong>@_linkedUser.FullName</strong>
                                 <br/>
                                 <small class="text-muted">@_linkedUser.Email</small>
-                            }
-                            @if (!string.IsNullOrEmpty(_linkedUser.City))
-                            {
-                                <br/>
-                                <small class="text-muted">@_linkedUser.City</small>
-                            }
-                        </div>
-                        @if (_isAdmin)
-                        {
+                                @if (!string.IsNullOrEmpty(_linkedUser.City))
+                                {
+                                    <br/>
+                                    <small class="text-muted">@_linkedUser.City</small>
+                                }
+                            </div>
                             <button class="btn btn-outline-danger btn-sm" @onclick="UnlinkUser" disabled="@_isProcessing">
                                 <i class="bi bi-link-45deg me-1"></i>Від'єднати
                             </button>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted mb-0">Автор не пов'язаний з жодним користувачем.</p>
-                    @if (_isAdmin)
+                        </div>
+                    }
+                    else
                     {
+                        <p class="text-muted mb-0">Автор не пов'язаний з жодним користувачем.</p>
                         <hr/>
                         <div class="row g-3 align-items-end">
                             <div class="col-md-8">
@@ -84,21 +80,21 @@
                             </div>
                         </div>
                     }
-                }
 
-                @if (!string.IsNullOrEmpty(_linkMessage))
-                {
-                    <div class="alert @(_linkSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
-                        @_linkMessage
-                    </div>
-                }
+                    @if (!string.IsNullOrEmpty(_linkMessage))
+                    {
+                        <div class="alert @(_linkSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
+                            @_linkMessage
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
+        }
 
         <!-- Statistics Section -->
         <div class="row mb-4">
             <div class="col-md-6">
-                <div class="card h-100">
+                <div class="card h-100" @onclick="ShowPackagesList" style="cursor: pointer;">
                     <div class="card-header">
                         <i class="bi bi-box me-2"></i>Пакети
                     </div>
@@ -109,7 +105,7 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100">
+                <div class="card h-100" @onclick="ShowQuestionsList" style="cursor: pointer;">
                     <div class="card-header">
                         <i class="bi bi-question-circle me-2"></i>Питання
                     </div>
@@ -122,11 +118,11 @@
         </div>
 
         <!-- Packages List Section -->
-        @if (_packagesList.Any())
+        @if (_packagesList.Any() && _showPackagesList)
         {
-            <div class="card mb-4">
+            <div class="card mb-4" id="packages-list">
                 <div class="card-header">
-                    <i class="bi bi-list-ul me-2"></i>Пакети
+                    <i class="bi bi-list-ul me-2"></i>Список пакетів
                 </div>
                 <div class="card-body">
                     <ul class="list-unstyled">
@@ -160,6 +156,84 @@
             </div>
         }
 
+        <!-- Questions List Section -->
+        @if (_showQuestionsList)
+        {
+            <div class="mb-4" id="questions-list">
+                <h4 class="mb-3">Список питань</h4>
+                @if (_isLoadingQuestions)
+                {
+                    <div class="d-flex justify-content-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Завантаження...</span>
+                        </div>
+                    </div>
+                }
+                else if (_questionsList.Any())
+                {
+                    @foreach (var question in _questionsList)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <a href="/package/@question.Tour.PackageId" class="text-decoration-none fw-bold">@question.Tour.Package.Title</a>
+                                    <span class="text-muted mx-2">→</span>
+                                    <span class="text-muted">Тур @question.Tour.Number</span>
+                                    <span class="text-muted mx-2">→</span>
+                                    <span class="text-muted">Питання @question.Number</span>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="@(() => CopyQuestionLink(question.Id))" title="Скопіювати посилання на питання">
+                                    @if (_copiedQuestionId == question.Id)
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/>
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1 1 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4 4 0 0 1-.128-1.287z"/>
+                                            <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243z"/>
+                                        </svg>
+                                    }
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <QuestionContent Question="@question" ShowAnswer="@GetQuestionAnswerState(question.Id)">
+                                    <div class="answer-toggle-section mt-3">
+                                        <button class="btn btn-link answer-toggle p-0" @onclick="@(() => ToggleQuestionAnswer(question.Id))">
+                                            @if (GetQuestionAnswerState(question.Id))
+                                            {
+                                                <text>Сховати відповідь</text>
+                                            }
+                                            else
+                                            {
+                                                <text>Показати відповідь</text>
+                                            }
+                                        </button>
+                                    </div>
+                                </QuestionContent>
+                            </div>
+                        </div>
+                    }
+                    @if (_hasMoreQuestions)
+                    {
+                        <div class="text-center mt-3">
+                            <button class="btn btn-primary" @onclick="LoadMoreQuestions" disabled="@_isLoadingQuestions">
+                                Показати більше
+                            </button>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <p class="mb-0">Питання не знайдено.</p>
+                    </div>
+                }
+            </div>
+        }
+
         <a href="/" class="btn btn-secondary">
             <i class="bi bi-arrow-left me-1"></i>Повернутися на головну
         </a>
@@ -184,7 +258,18 @@
     private List<PackageListItem> _packagesList = [];
     private const int PackagesPerPage = 20;
     private int _displayedPackagesCount = PackagesPerPage;
-    private const string TourSeparator = " ° ";
+    private const string TourSeparator = " → ";
+    private bool _showPackagesList = true;
+    private bool _showQuestionsList = false;
+    private List<Question> _questionsList = [];
+    private const int QuestionsPerPage = 20;
+    private int _displayedQuestionsCount = 0;
+    private bool _isLoadingQuestions = false;
+    private bool _hasMoreQuestions = false;
+    private Dictionary<int, bool> _questionAnswerStates = new();
+    private int? _copiedQuestionId;
+    private bool _copyInProgress;
+    private const int CopyFeedbackDelayMs = 2000;
 
     private class PackageListItem
     {
@@ -261,6 +346,116 @@
     private void ShowMorePackages()
     {
         _displayedPackagesCount += PackagesPerPage;
+    }
+
+    private void ShowPackagesList()
+    {
+        _showPackagesList = true;
+        _showQuestionsList = false;
+    }
+
+    private async Task ShowQuestionsList()
+    {
+        _showPackagesList = false;
+        _showQuestionsList = true;
+        
+        if (_questionsList.Count == 0)
+        {
+            await LoadMoreQuestions();
+        }
+    }
+
+    private async Task LoadMoreQuestions()
+    {
+        if (_author == null) return;
+
+        _isLoadingQuestions = true;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var skip = _displayedQuestionsCount;
+            var take = QuestionsPerPage;
+
+            // Base query for author's questions
+            var baseQuery = context.Questions
+                .Where(q => q.Authors.Any(a => a.Id == _author.Id));
+
+            // Only get total count on first load
+            if (_displayedQuestionsCount == 0)
+            {
+                _questionsCount = await baseQuery.CountAsync();
+            }
+
+            var questions = await baseQuery
+                .Include(q => q.Authors)
+                .Include(q => q.Tour)
+                    .ThenInclude(t => t.Package)
+                .OrderByDescending(q => q.Tour.PackageId)
+                .ThenBy(q => q.Tour.Number)
+                .ThenBy(q => q.OrderIndex)
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync();
+
+            _hasMoreQuestions = (skip + questions.Count) < _questionsCount;
+
+            _questionsList.AddRange(questions);
+            _displayedQuestionsCount += questions.Count;
+        }
+        finally
+        {
+            _isLoadingQuestions = false;
+        }
+    }
+
+    private bool GetQuestionAnswerState(int questionId)
+    {
+        return _questionAnswerStates.GetValueOrDefault(questionId, false);
+    }
+
+    private void ToggleQuestionAnswer(int questionId)
+    {
+        if (_questionAnswerStates.ContainsKey(questionId))
+        {
+            _questionAnswerStates[questionId] = !_questionAnswerStates[questionId];
+        }
+        else
+        {
+            _questionAnswerStates[questionId] = true;
+        }
+    }
+
+    private async Task CopyQuestionLink(int questionId)
+    {
+        if (_copyInProgress)
+        {
+            return;
+        }
+
+        _copyInProgress = true;
+        
+        try
+        {
+            var baseUri = Navigation.BaseUri.TrimEnd('/');
+            var questionUrl = $"{baseUri}/question/{questionId}";
+
+            var success = await JS.InvokeAsync<bool>("copyToClipboard", questionUrl);
+            if (success)
+            {
+                _copiedQuestionId = questionId;
+                StateHasChanged();
+
+                await Task.Delay(CopyFeedbackDelayMs);
+                _copiedQuestionId = null;
+                StateHasChanged();
+            }
+        }
+        finally
+        {
+            _copyInProgress = false;
+        }
     }
 
     private async Task LinkUser()
