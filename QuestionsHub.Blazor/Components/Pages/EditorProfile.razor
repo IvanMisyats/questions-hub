@@ -182,7 +182,7 @@
                                         </a>
                                     </div>
                                     <div class="text-muted small mt-1">
-                                        @(question.QuestionText.Length > 150 ? question.QuestionText.Substring(0, 150) + "..." : question.QuestionText)
+                                        @(question.QuestionText.Length > 150 ? question.QuestionText[..150] + "..." : question.QuestionText)
                                     </div>
                                 </li>
                             }
@@ -346,42 +346,51 @@
 
         _isLoadingQuestions = true;
 
-        await using var context = await DbContextFactory.CreateDbContextAsync();
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
 
-        var skip = _displayedQuestionsCount;
-        var take = QuestionsPerPage;
+            var skip = _displayedQuestionsCount;
+            var take = QuestionsPerPage;
 
-        var questions = await context.Questions
-            .Where(q => q.Authors.Any(a => a.Id == _author.Id))
-            .Include(q => q.Tour)
-                .ThenInclude(t => t.Package)
-            .OrderByDescending(q => q.Tour.PackageId)
-            .ThenBy(q => q.Tour.Number)
-            .ThenBy(q => q.OrderIndex)
-            .Skip(skip)
-            .Take(take)
-            .Select(q => new QuestionListItem
+            // Only get total count on first load
+            if (_displayedQuestionsCount == 0)
             {
-                QuestionId = q.Id,
-                QuestionNumber = q.Number,
-                QuestionText = q.Text,
-                PackageId = q.Tour.PackageId,
-                PackageTitle = q.Tour.Package.Title,
-                TourId = q.TourId,
-                TourNumber = q.Tour.Number
-            })
-            .ToListAsync();
+                _questionsCount = await context.Questions
+                    .Where(q => q.Authors.Any(a => a.Id == _author.Id))
+                    .CountAsync();
+            }
 
-        // Check if there are more questions
-        var totalCount = await context.Questions
-            .Where(q => q.Authors.Any(a => a.Id == _author.Id))
-            .CountAsync();
-        
-        _hasMoreQuestions = (skip + questions.Count) < totalCount;
+            var questions = await context.Questions
+                .Where(q => q.Authors.Any(a => a.Id == _author.Id))
+                .Include(q => q.Tour)
+                    .ThenInclude(t => t.Package)
+                .OrderByDescending(q => q.Tour.PackageId)
+                .ThenBy(q => q.Tour.Number)
+                .ThenBy(q => q.OrderIndex)
+                .Skip(skip)
+                .Take(take)
+                .Select(q => new QuestionListItem
+                {
+                    QuestionId = q.Id,
+                    QuestionNumber = q.Number,
+                    QuestionText = q.Text,
+                    PackageId = q.Tour.PackageId,
+                    PackageTitle = q.Tour.Package.Title,
+                    TourId = q.TourId,
+                    TourNumber = q.Tour.Number
+                })
+                .ToListAsync();
 
-        _questionsList.AddRange(questions);
-        _displayedQuestionsCount += questions.Count;
-        _isLoadingQuestions = false;
+            _hasMoreQuestions = (skip + questions.Count) < _questionsCount;
+
+            _questionsList.AddRange(questions);
+            _displayedQuestionsCount += questions.Count;
+        }
+        finally
+        {
+            _isLoadingQuestions = false;
+        }
     }
 
     private async Task LinkUser()
