@@ -406,6 +406,58 @@ public class PackageParserTests
         result.Tours[0].Questions[0].HandoutText.Should().Contain(expected);
     }
 
+    [Fact]
+    public void Parse_BracketedHandoutMarker_ExtractsHandoutTextAndQuestionText()
+    {
+        // Arrange - Bracketed handout with question text after closing bracket
+        // This is the format: 1. [Роздатковий матеріал: handout text] question text
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатковий матеріал: ] Текст питання після роздатки"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().Contain("Текст питання після роздатки");
+        question.Text.Should().NotContain("Роздатковий матеріал");
+        question.Text.Should().NotContain("[");
+        question.Text.Should().NotContain("]");
+    }
+
+    [Theory]
+    [InlineData("[Роздатка: Таблиця] Питання", "Таблиця", "Питання")]
+    [InlineData("[Роздатковий матеріал: Схема] Який результат?", "Схема", "Який результат?")]
+    [InlineData("[Роздатка: ] Питання без тексту роздатки", "", "Питання без тексту роздатки")]
+    public void Parse_BracketedHandoutWithText_SeparatesHandoutAndQuestion(
+        string line, string expectedHandout, string expectedQuestionText)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. " + line),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().Contain(expectedQuestionText);
+        question.Text.Should().NotContain("[Роздат");
+
+        if (!string.IsNullOrEmpty(expectedHandout))
+        {
+            question.HandoutText.Should().Contain(expectedHandout);
+        }
+    }
+
     #endregion
 
     #region Package Header
@@ -619,8 +671,166 @@ public class PackageParserTests
         q.Authors.Should().Contain("Тест Тестович");
     }
 
+
     #endregion
 
+    #region Asset Association
+
+    [Fact]
+    public void Parse_AssetInCommentSection_AssignsToCommentAsset()
+    {
+        // Arrange - Asset is in a block with Comment label
+        var commentAsset = new AssetReference
+        {
+            FileName = "comment_image.png",
+            RelativeUrl = "/media/comment_image.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання тесту"),
+            Block("Відповідь: Тест"),
+            Block("Коментар: Пояснення", [commentAsset])
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.CommentAssetFileName.Should().Be("comment_image.png");
+        question.HandoutAssetFileName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Parse_AssetInHandoutSection_AssignsToHandoutAsset()
+    {
+        // Arrange - Asset is in a block with Handout marker
+        var handoutAsset = new AssetReference
+        {
+            FileName = "handout_image.png",
+            RelativeUrl = "/media/handout_image.png",
+            ContentType = "image/png",
+            SizeBytes = 2048
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Роздатка:", [handoutAsset]),
+            Block("1. Питання тесту"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutAssetFileName.Should().Be("handout_image.png");
+        question.CommentAssetFileName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Parse_AssetInQuestionTextSection_AssignsToHandoutAsset()
+    {
+        // Arrange - Asset is in a block with question text (before answer sections)
+        var imageAsset = new AssetReference
+        {
+            FileName = "question_image.png",
+            RelativeUrl = "/media/question_image.png",
+            ContentType = "image/png",
+            SizeBytes = 512
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання з картинкою", [imageAsset]),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Images in question text are treated as handouts
+        var question = result.Tours[0].Questions[0];
+        question.HandoutAssetFileName.Should().Be("question_image.png");
+        question.CommentAssetFileName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Parse_MultiLineBlockWithCommentAsset_AssignsToCommentAsset()
+    {
+        // Regression test: Asset in a multi-line block should be associated
+        // with the LAST section in the block, not the first
+        var commentAsset = new AssetReference
+        {
+            FileName = "inline_comment.png",
+            RelativeUrl = "/media/inline_comment.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+
+        // Simulate a block with multiple sections (soft line breaks in Word)
+        var multiLineBlock = "1. Питання\nВідповідь: Тест\nКоментар: Пояснення з картинкою";
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block(multiLineBlock, [commentAsset])
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - The asset should be associated with Comment (last section), not QuestionText (first)
+        var question = result.Tours[0].Questions[0];
+        question.CommentAssetFileName.Should().Be("inline_comment.png");
+        question.HandoutAssetFileName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Parse_BothHandoutAndCommentAssets_AssignsSeparately()
+    {
+        // Arrange
+        var handoutAsset = new AssetReference
+        {
+            FileName = "handout.png",
+            RelativeUrl = "/media/handout.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+        var commentAsset = new AssetReference
+        {
+            FileName = "comment.png",
+            RelativeUrl = "/media/comment.png",
+            ContentType = "image/png",
+            SizeBytes = 2048
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Роздатка: Таблиця", [handoutAsset]),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Коментар: Пояснення", [commentAsset])
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutAssetFileName.Should().Be("handout.png");
+        question.CommentAssetFileName.Should().Be("comment.png");
+    }
+
+    #endregion
     #region Helpers
 
     private static DocBlock Block(string text, int index = 0) => new()

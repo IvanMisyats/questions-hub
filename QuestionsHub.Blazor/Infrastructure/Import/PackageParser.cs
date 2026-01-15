@@ -52,6 +52,11 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarker();
 
+    // Matches: [Роздатка: ...], [Роздатковий матеріал: ...]
+    // Captures the handout text inside brackets and any text after the closing bracket
+    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*([^\]]*)\]\s*(.*)$", RegexOptions.IgnoreCase)]
+    public static partial Regex HandoutMarkerBracket();
+
     // Editors in header
     [GeneratedRegex(@"^\s*(?:Редактори?(?:\s*туру)?)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex EditorsLabel();
@@ -96,8 +101,11 @@ public class PackageParser
         var currentSection = ParserSection.PackageHeader;
         TourDto? currentTour = null;
         QuestionDto? currentQuestion = null;
-        var pendingAssets = new Queue<AssetReference>(assets);
         var headerBlocks = new List<string>();
+
+        // Track pending assets that should be associated with the next question
+        // This handles cases where handout/images appear BEFORE the question starts
+        var pendingAssets = new List<(AssetReference Asset, ParserSection Section)>();
 
         // Track expected question numbers for sequential validation
         // Questions can be numbered either per-tour (1, 2, 3... then 1, 2, 3 in next tour)
@@ -112,6 +120,10 @@ public class PackageParser
             var text = NormalizeText(block.Text);
             if (string.IsNullOrWhiteSpace(text) && block.Assets.Count == 0)
                 continue;
+
+            // Track if this block created a new question
+            // This helps distinguish standalone handout blocks from multi-line blocks with question+handout
+            var questionCreatedInThisBlock = false;
 
             // Split block by newlines to handle multi-line paragraphs with soft line breaks
             var lines = text.Split('\n');
@@ -144,7 +156,6 @@ public class PackageParser
                     currentSection = ParserSection.TourHeader;
 
                     // Reset per-tour numbering expectation for the new tour
-                    // Global numbering expectation continues from previous tour
                     expectedNextQuestionInTour = null;
 
                     _logger.LogDebug("Found tour: {TourNumber}", tourNumber);
@@ -156,7 +167,7 @@ public class PackageParser
                 {
                     // Validate that question number is sequential
                     if (!IsValidNextQuestionNumber(questionNumber,
-                        ref expectedNextQuestionInTour, ref expectedNextQuestionGlobal))
+                            ref expectedNextQuestionInTour, ref expectedNextQuestionGlobal))
                     {
                         // Not a valid sequential question number, treat as regular text
                         // This handles cases like "2." in source references
@@ -196,6 +207,7 @@ public class PackageParser
                         {
                             ParsePackageHeader(headerBlocks, result);
                         }
+
                         currentTour = new TourDto { Number = "1" };
                         result.Tours.Add(currentTour);
                         result.Warnings.Add("Тур не знайдено, створено тур за замовчуванням");
@@ -203,39 +215,45 @@ public class PackageParser
 
                     currentQuestion = new QuestionDto { Number = questionNumber };
                     currentSection = ParserSection.QuestionText;
+                    questionCreatedInThisBlock = true;
 
-                    // Collect remaining text from this line and subsequent lines in the block
-                    var questionTextParts = new List<string>();
+                    // Apply any pending assets from blocks that appeared before this question
+                    foreach (var (asset, section) in pendingAssets)
+                    {
+                        AssociateAsset(asset, section, currentQuestion);
+                    }
+                    pendingAssets.Clear();
+
+                    // Do NOT swallow the rest of the lines in the paragraph, because they can contain
+                    // labels like "Відповідь:" / "Коментар:" etc.
                     if (!string.IsNullOrWhiteSpace(remainingText))
                     {
-                        questionTextParts.Add(remainingText);
-                    }
-
-                    // Add remaining lines from the same block as question text
-                    for (var remainingIdx = lineIndex + 1; remainingIdx < lines.Length; remainingIdx++)
-                    {
-                        var remainingLine = lines[remainingIdx].Trim();
-                        if (!string.IsNullOrWhiteSpace(remainingLine))
+                        // Check if remaining text starts with bracketed handout
+                        if (TryExtractBracketedHandout(remainingText, out var handoutInRemaining, out var textAfterHandout))
                         {
-                            questionTextParts.Add(remainingLine);
+                            if (!string.IsNullOrWhiteSpace(handoutInRemaining))
+                            {
+                                currentQuestion.HandoutText = AppendText(currentQuestion.HandoutText, handoutInRemaining);
+                            }
+                            if (!string.IsNullOrWhiteSpace(textAfterHandout))
+                            {
+                                currentQuestion.Text = AppendText(currentQuestion.Text, textAfterHandout);
+                            }
                         }
-                    }
-
-                    if (questionTextParts.Count > 0)
-                    {
-                        currentQuestion.Text = string.Join("\n", questionTextParts);
+                        else
+                        {
+                            currentQuestion.Text = AppendText(currentQuestion.Text, remainingText);
+                        }
                     }
 
                     _logger.LogDebug("Found question: {QuestionNumber}", questionNumber);
 
-                    // Process assets from this block with the question
-                    foreach (var asset in block.Assets)
-                    {
-                        AssociateAsset(asset, currentSection, currentQuestion);
-                    }
+                    // NOTE: Don't associate assets here! The block may contain multiple sections
+                    // (e.g., "20. Text\nВідповідь: ...\nКоментар: ... [IMAGE]")
+                    // Assets will be associated after label detection for proper section assignment.
 
-                    // Skip remaining lines since we've consumed them
-                    break;
+                    // Continue parsing remaining lines (lineIndex+1, ...) normally
+                    continue;
                 }
 
                 // If we're still in package header, collect blocks
@@ -259,6 +277,30 @@ public class PackageParser
                     continue;
                 }
 
+                // Check for bracketed handout [Роздатка: ...] or [Роздатковий матеріал: ...]
+                // The text inside brackets is handout, text after is question text
+                if (TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
+                {
+                    currentSection = ParserSection.Handout;
+
+                    if (currentQuestion != null && !string.IsNullOrWhiteSpace(handoutText))
+                    {
+                        currentQuestion.HandoutText = AppendText(currentQuestion.HandoutText, handoutText);
+                    }
+
+                    // The text after ] is question text, not handout
+                    if (!string.IsNullOrWhiteSpace(afterHandout))
+                    {
+                        // This text belongs to question text section
+                        if (currentQuestion != null)
+                        {
+                            currentQuestion.Text = AppendText(currentQuestion.Text, afterHandout);
+                        }
+                        currentSection = ParserSection.QuestionText;
+                    }
+                    continue;
+                }
+
                 // Detect label transitions
                 var (newSection, labelRemainder) = DetectLabel(line);
                 if (newSection != null)
@@ -267,19 +309,30 @@ public class PackageParser
                     line = labelRemainder;
                 }
 
-                // Handle assets (only for first line to avoid duplicates)
-                if (lineIndex == 0)
-                {
-                    foreach (var asset in block.Assets)
-                    {
-                        AssociateAsset(asset, currentSection, currentQuestion);
-                    }
-                }
-
                 // Append to current section
                 if (!string.IsNullOrWhiteSpace(line))
                 {
                     AppendToSection(currentSection, line, currentQuestion, currentTour, result);
+                }
+            }
+
+            // Associate block assets with the FINAL section detected in this block
+            // This ensures images in comment sections are correctly classified
+            foreach (var asset in block.Assets)
+            {
+                // Handout sections that appear in standalone blocks (without question start)
+                // belong to the NEXT question. Handouts in the same block as a question
+                // belong to that question.
+                var isStandaloneHandoutBlock = currentSection == ParserSection.Handout && !questionCreatedInThisBlock;
+
+                if (isStandaloneHandoutBlock || currentQuestion == null)
+                {
+                    // Queue the asset to be associated with the next question
+                    pendingAssets.Add((asset, currentSection));
+                }
+                else
+                {
+                    AssociateAsset(asset, currentSection, currentQuestion);
                 }
             }
         }
@@ -456,7 +509,6 @@ public class PackageParser
             return (ParserSection.Authors, match.Groups[1].Value.Trim());
 
         // Note: HostInstructions are handled separately via TryExtractHostInstructions
-        // because they need special handling (extracting content and remaining text)
 
         match = ParserPatterns.HandoutMarker().Match(text);
         if (match.Success)
@@ -478,6 +530,26 @@ public class PackageParser
         if (match.Success)
         {
             instructions = match.Groups[1].Value.Trim();
+            remainingText = match.Groups[2].Value.Trim();
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tries to extract handout from a line that starts with [Роздатка: ...] or [Роздатковий матеріал: ...].
+    /// Returns the handout text inside brackets and any text after the closing bracket.
+    /// </summary>
+    private static bool TryExtractBracketedHandout(string text, out string handoutText, out string remainingText)
+    {
+        handoutText = "";
+        remainingText = "";
+
+        var match = ParserPatterns.HandoutMarkerBracket().Match(text);
+        if (match.Success)
+        {
+            handoutText = match.Groups[1].Value.Trim();
             remainingText = match.Groups[2].Value.Trim();
             return true;
         }
@@ -549,9 +621,7 @@ public class PackageParser
         if (question == null) return;
 
         // Images that appear AFTER answer-related sections are comment attachments
-        // (illustrations for the answer, usually shown after revealing the answer)
         // Images that appear BEFORE answer-related sections are handouts
-        // (materials shown to players as part of the question)
         var isAnswerRelatedSection = section is
             ParserSection.Answer or
             ParserSection.AcceptedAnswers or
@@ -601,7 +671,6 @@ public class PackageParser
 
     private static void FinalizeQuestion(QuestionDto question, ParseResult result)
     {
-        // Validate required fields
         if (!question.HasText)
         {
             result.Warnings.Add($"Питання {question.Number}: текст питання не знайдено");
@@ -639,21 +708,17 @@ public class PackageParser
         var answerRatio = (double)questionsWithAnswer / totalQuestions;
         var textRatio = (double)questionsWithText / totalQuestions;
 
-        // Confidence is based on having both text and answers
         result.Confidence = (answerRatio * 0.6) + (textRatio * 0.4);
     }
 
     private static List<string> ParseAuthorList(string text)
     {
-        // Split by common delimiters
-        var authors = text
+        return text
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)
             .SelectMany(s => s.Split([" та ", " і ", " and "], StringSplitOptions.RemoveEmptyEntries))
             .Select(s => s.Trim().TrimEnd('.', ',', ';'))
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .ToList();
-
-        return authors;
     }
 
     private static string AppendText(string? existing, string newText)
@@ -663,4 +728,3 @@ public class PackageParser
         return existing + "\n" + newText;
     }
 }
-
