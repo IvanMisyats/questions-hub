@@ -388,15 +388,15 @@
                             <label class="col-form-label">Текст питання <span class="text-danger">*</span></label>
                         </div>
                         <div class="col-md-10">
-                            <textarea class="form-control auto-expand"
-                                      @bind="_editingQuestion.Text" @onblur="SaveEditingQuestionAsync"></textarea>
+                            <textarea class="form-control auto-expand @(_isTextEmpty ? "field-required-empty" : "")"
+                                      @bind="_editingQuestion.Text" @onblur="OnTextBlurAsync"></textarea>
                         </div>
                         <div class="col-md-2">
                             <label class="col-form-label">Відповідь <span class="text-danger">*</span></label>
                         </div>
                         <div class="col-md-10">
-                            <input type="text" class="form-control"
-                                   @bind="_editingQuestion.Answer" @onblur="SaveEditingQuestionAsync" />
+                            <input type="text" class="form-control @(_isAnswerEmpty ? "field-required-empty" : "")"
+                                   @bind="_editingQuestion.Answer" @onblur="OnAnswerBlurAsync" />
                         </div>
                         <div class="col-md-2">
                             <label class="col-form-label">Залік</label>
@@ -492,13 +492,15 @@
                                       @bind="_editingQuestion.Source" @onblur="SaveEditingQuestionAsync"></textarea>
                         </div>
                         <div class="col-md-2">
-                            <label class="col-form-label">Автори</label>
+                            <label class="col-form-label @(_areAuthorsEmpty ? "text-danger" : "")">Автори <span class="text-danger">*</span></label>
                         </div>
                         <div class="col-md-10">
-                            <AuthorSelector SelectedAuthors="_editingQuestion.Authors"
-                                            OnSelectionChanged="SaveEditingQuestionAsync"
-                                            OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
-                                            Placeholder="Введіть прізвище автора..." />
+                            <div class="@(_areAuthorsEmpty ? "author-selector-required-empty" : "")">
+                                <AuthorSelector SelectedAuthors="_editingQuestion.Authors"
+                                                OnSelectionChanged="OnAuthorsChangedAsync"
+                                                OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
+                                                Placeholder="Введіть прізвище автора..." />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -554,6 +556,11 @@
     private const long MaxUploadSize = 100 * 1024 * 1024; // 100 MB max for streaming
     private Guid _handoutInputKey = Guid.NewGuid();
     private Guid _commentInputKey = Guid.NewGuid();
+
+    // Validation state for mandatory fields
+    private bool _isTextEmpty;
+    private bool _isAnswerEmpty;
+    private bool _areAuthorsEmpty;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -969,6 +976,7 @@
         _showQuestionEditor = true;
         _questionSaveStatus = null;
         ResetMediaInputState();
+        ValidateMandatoryFields();
     }
 
     private void CloseQuestionEditor()
@@ -1034,6 +1042,33 @@
         StateHasChanged();
     }
 
+    private void ValidateMandatoryFields()
+    {
+        if (_editingQuestion == null) return;
+
+        _isTextEmpty = string.IsNullOrWhiteSpace(_editingQuestion.Text);
+        _isAnswerEmpty = string.IsNullOrWhiteSpace(_editingQuestion.Answer);
+        _areAuthorsEmpty = _editingQuestion.Authors == null || _editingQuestion.Authors.Count == 0;
+    }
+
+    private async Task OnTextBlurAsync()
+    {
+        ValidateMandatoryFields();
+        await SaveEditingQuestionAsync();
+    }
+
+    private async Task OnAnswerBlurAsync()
+    {
+        ValidateMandatoryFields();
+        await SaveEditingQuestionAsync();
+    }
+
+    private async Task OnAuthorsChangedAsync()
+    {
+        ValidateMandatoryFields();
+        await SaveEditingQuestionAsync();
+    }
+
 
     private bool CanNavigatePrev()
     {
@@ -1093,6 +1128,7 @@
 
         _questionSaveStatus = null;
         ResetMediaInputState();
+        ValidateMandatoryFields();
         StateHasChanged();
     }
 
@@ -1124,6 +1160,7 @@
 
         _questionSaveStatus = null;
         ResetMediaInputState();
+        ValidateMandatoryFields();
         StateHasChanged();
     }
 
@@ -1140,6 +1177,7 @@
             _editingQuestion = question;
             _questionSaveStatus = null;
             ResetMediaInputState();
+            ValidateMandatoryFields();
         }
         StateHasChanged();
     }
