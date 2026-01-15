@@ -269,6 +269,7 @@
     private Dictionary<int, bool> _questionAnswerStates = new();
     private int? _copiedQuestionId;
     private bool _copyInProgress;
+    private const int CopyFeedbackDelayMs = 2000;
 
     private class PackageListItem
     {
@@ -434,20 +435,27 @@
         }
 
         _copyInProgress = true;
-        var baseUri = Navigation.BaseUri.TrimEnd('/');
-        var questionUrl = $"{baseUri}/question/{questionId}";
-
-        var success = await JS.InvokeAsync<bool>("copyToClipboard", questionUrl);
-        if (success)
+        
+        try
         {
-            _copiedQuestionId = questionId;
-            StateHasChanged();
+            var baseUri = Navigation.BaseUri.TrimEnd('/');
+            var questionUrl = $"{baseUri}/question/{questionId}";
 
-            await Task.Delay(2000);
-            _copiedQuestionId = null;
-            StateHasChanged();
+            var success = await JS.InvokeAsync<bool>("copyToClipboard", questionUrl);
+            if (success)
+            {
+                _copiedQuestionId = questionId;
+                StateHasChanged();
+
+                await Task.Delay(CopyFeedbackDelayMs);
+                _copiedQuestionId = null;
+                StateHasChanged();
+            }
         }
-        _copyInProgress = false;
+        finally
+        {
+            _copyInProgress = false;
+        }
     }
 
     private async Task LinkUser()
