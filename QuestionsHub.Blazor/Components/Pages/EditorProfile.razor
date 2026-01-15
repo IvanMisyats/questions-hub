@@ -29,41 +29,35 @@
     {
         <h1 class="mb-4">@_author.FullName</h1>
 
-        <!-- Linked User Section -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <i class="bi bi-person-badge me-2"></i>Пов'язаний користувач
-            </div>
-            <div class="card-body">
-                @if (_linkedUser != null)
-                {
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <strong>@_linkedUser.FullName</strong>
-                            @if (_isAdmin)
-                            {
+        <!-- Linked User Section (Admin Only) -->
+        @if (_isAdmin)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-person-badge me-2"></i>Пов'язаний користувач
+                </div>
+                <div class="card-body">
+                    @if (_linkedUser != null)
+                    {
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong>@_linkedUser.FullName</strong>
                                 <br/>
                                 <small class="text-muted">@_linkedUser.Email</small>
-                            }
-                            @if (!string.IsNullOrEmpty(_linkedUser.City))
-                            {
-                                <br/>
-                                <small class="text-muted">@_linkedUser.City</small>
-                            }
-                        </div>
-                        @if (_isAdmin)
-                        {
+                                @if (!string.IsNullOrEmpty(_linkedUser.City))
+                                {
+                                    <br/>
+                                    <small class="text-muted">@_linkedUser.City</small>
+                                }
+                            </div>
                             <button class="btn btn-outline-danger btn-sm" @onclick="UnlinkUser" disabled="@_isProcessing">
                                 <i class="bi bi-link-45deg me-1"></i>Від'єднати
                             </button>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted mb-0">Автор не пов'язаний з жодним користувачем.</p>
-                    @if (_isAdmin)
+                        </div>
+                    }
+                    else
                     {
+                        <p class="text-muted mb-0">Автор не пов'язаний з жодним користувачем.</p>
                         <hr/>
                         <div class="row g-3 align-items-end">
                             <div class="col-md-8">
@@ -84,21 +78,21 @@
                             </div>
                         </div>
                     }
-                }
 
-                @if (!string.IsNullOrEmpty(_linkMessage))
-                {
-                    <div class="alert @(_linkSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
-                        @_linkMessage
-                    </div>
-                }
+                    @if (!string.IsNullOrEmpty(_linkMessage))
+                    {
+                        <div class="alert @(_linkSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
+                            @_linkMessage
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
+        }
 
         <!-- Statistics Section -->
         <div class="row mb-4">
             <div class="col-md-6">
-                <div class="card h-100">
+                <div class="card h-100 cursor-pointer" @onclick="ShowPackagesList" style="cursor: pointer;">
                     <div class="card-header">
                         <i class="bi bi-box me-2"></i>Пакети
                     </div>
@@ -109,7 +103,7 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100">
+                <div class="card h-100 cursor-pointer" @onclick="ShowQuestionsList" style="cursor: pointer;">
                     <div class="card-header">
                         <i class="bi bi-question-circle me-2"></i>Питання
                     </div>
@@ -122,11 +116,11 @@
         </div>
 
         <!-- Packages List Section -->
-        @if (_packagesList.Any())
+        @if (_packagesList.Any() && _showPackagesList)
         {
-            <div class="card mb-4">
+            <div class="card mb-4" id="packages-list">
                 <div class="card-header">
-                    <i class="bi bi-list-ul me-2"></i>Пакети
+                    <i class="bi bi-list-ul me-2"></i>Список пакетів
                 </div>
                 <div class="card-body">
                     <ul class="list-unstyled">
@@ -160,6 +154,54 @@
             </div>
         }
 
+        <!-- Questions List Section -->
+        @if (_showQuestionsList)
+        {
+            <div class="card mb-4" id="questions-list">
+                <div class="card-header">
+                    <i class="bi bi-list-ul me-2"></i>Список питань
+                </div>
+                <div class="card-body">
+                    @if (_isLoadingQuestions)
+                    {
+                        <div class="d-flex justify-content-center py-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Завантаження...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (_questionsList.Any())
+                    {
+                        <ul class="list-unstyled">
+                            @foreach (var question in _questionsList)
+                            {
+                                <li class="mb-3">
+                                    <div>
+                                        <a href="/package/@question.PackageId#question-@question.QuestionId" class="fw-bold">
+                                            @question.PackageTitle → Тур @question.TourNumber → Питання @question.QuestionNumber
+                                        </a>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        @(question.QuestionText.Length > 150 ? question.QuestionText.Substring(0, 150) + "..." : question.QuestionText)
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                        @if (_hasMoreQuestions)
+                        {
+                            <button class="btn btn-primary" @onclick="LoadMoreQuestions" disabled="@_isLoadingQuestions">
+                                Показати більше
+                            </button>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">Питання не знайдено.</p>
+                    }
+                </div>
+            </div>
+        }
+
         <a href="/" class="btn btn-secondary">
             <i class="bi bi-arrow-left me-1"></i>Повернутися на головну
         </a>
@@ -184,7 +226,14 @@
     private List<PackageListItem> _packagesList = [];
     private const int PackagesPerPage = 20;
     private int _displayedPackagesCount = PackagesPerPage;
-    private const string TourSeparator = " ° ";
+    private const string TourSeparator = " → ";
+    private bool _showPackagesList = true;
+    private bool _showQuestionsList = false;
+    private List<QuestionListItem> _questionsList = [];
+    private const int QuestionsPerPage = 20;
+    private int _displayedQuestionsCount = 0;
+    private bool _isLoadingQuestions = false;
+    private bool _hasMoreQuestions = false;
 
     private class PackageListItem
     {
@@ -195,6 +244,17 @@
 
     private class TourListItem
     {
+        public int TourId { get; set; }
+        public required string TourNumber { get; set; }
+    }
+
+    private class QuestionListItem
+    {
+        public int QuestionId { get; set; }
+        public required string QuestionNumber { get; set; }
+        public required string QuestionText { get; set; }
+        public int PackageId { get; set; }
+        public required string PackageTitle { get; set; }
         public int TourId { get; set; }
         public required string TourNumber { get; set; }
     }
@@ -261,6 +321,67 @@
     private void ShowMorePackages()
     {
         _displayedPackagesCount += PackagesPerPage;
+    }
+
+    private void ShowPackagesList()
+    {
+        _showPackagesList = true;
+        _showQuestionsList = false;
+    }
+
+    private async Task ShowQuestionsList()
+    {
+        _showPackagesList = false;
+        _showQuestionsList = true;
+        
+        if (_questionsList.Count == 0)
+        {
+            await LoadMoreQuestions();
+        }
+    }
+
+    private async Task LoadMoreQuestions()
+    {
+        if (_author == null) return;
+
+        _isLoadingQuestions = true;
+
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        var skip = _displayedQuestionsCount;
+        var take = QuestionsPerPage;
+
+        var questions = await context.Questions
+            .Where(q => q.Authors.Any(a => a.Id == _author.Id))
+            .Include(q => q.Tour)
+                .ThenInclude(t => t.Package)
+            .OrderByDescending(q => q.Tour.PackageId)
+            .ThenBy(q => q.Tour.Number)
+            .ThenBy(q => q.OrderIndex)
+            .Skip(skip)
+            .Take(take + 1) // Take one extra to check if there are more
+            .Select(q => new QuestionListItem
+            {
+                QuestionId = q.Id,
+                QuestionNumber = q.Number,
+                QuestionText = q.Text,
+                PackageId = q.Tour.PackageId,
+                PackageTitle = q.Tour.Package.Title,
+                TourId = q.TourId,
+                TourNumber = q.Tour.Number
+            })
+            .ToListAsync();
+
+        _hasMoreQuestions = questions.Count > take;
+        
+        if (_hasMoreQuestions)
+        {
+            questions = questions.Take(take).ToList();
+        }
+
+        _questionsList.AddRange(questions);
+        _displayedQuestionsCount += questions.Count;
+        _isLoadingQuestions = false;
     }
 
     private async Task LinkUser()
