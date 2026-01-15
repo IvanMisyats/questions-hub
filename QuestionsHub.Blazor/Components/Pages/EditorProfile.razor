@@ -157,48 +157,50 @@
         <!-- Questions List Section -->
         @if (_showQuestionsList)
         {
-            <div class="card mb-4" id="questions-list">
-                <div class="card-header">
-                    <i class="bi bi-list-ul me-2"></i>Список питань
-                </div>
-                <div class="card-body">
-                    @if (_isLoadingQuestions)
+            <div class="mb-4" id="questions-list">
+                <h4 class="mb-3">Список питань</h4>
+                @if (_isLoadingQuestions)
+                {
+                    <div class="d-flex justify-content-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Завантаження...</span>
+                        </div>
+                    </div>
+                }
+                else if (_questionsList.Any())
+                {
+                    @foreach (var question in _questionsList)
                     {
-                        <div class="d-flex justify-content-center py-3">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Завантаження...</span>
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <a href="/package/@question.Tour.PackageId" class="text-decoration-none fw-bold">@question.Tour.Package.Title</a>
+                                    <span class="text-muted mx-2">→</span>
+                                    <span class="text-muted">Тур @question.Tour.Number</span>
+                                    <span class="text-muted mx-2">→</span>
+                                    <span class="text-muted">Питання @question.Number</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <QuestionCard Question="question" />
                             </div>
                         </div>
                     }
-                    else if (_questionsList.Any())
+                    @if (_hasMoreQuestions)
                     {
-                        <ul class="list-unstyled">
-                            @foreach (var question in _questionsList)
-                            {
-                                <li class="mb-3">
-                                    <div>
-                                        <a href="/package/@question.PackageId#question-@question.QuestionId" class="fw-bold">
-                                            @question.PackageTitle → Тур @question.TourNumber → Питання @question.QuestionNumber
-                                        </a>
-                                    </div>
-                                    <div class="text-muted small mt-1">
-                                        @(question.QuestionText.Length > QuestionPreviewLength ? question.QuestionText[..QuestionPreviewLength] + "..." : question.QuestionText)
-                                    </div>
-                                </li>
-                            }
-                        </ul>
-                        @if (_hasMoreQuestions)
-                        {
+                        <div class="text-center mt-3">
                             <button class="btn btn-primary" @onclick="LoadMoreQuestions" disabled="@_isLoadingQuestions">
                                 Показати більше
                             </button>
-                        }
+                        </div>
                     }
-                    else
-                    {
-                        <p class="text-muted mb-0">Питання не знайдено.</p>
-                    }
-                </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <p class="mb-0">Питання не знайдено.</p>
+                    </div>
+                }
             </div>
         }
 
@@ -229,9 +231,8 @@
     private const string TourSeparator = " → ";
     private bool _showPackagesList = true;
     private bool _showQuestionsList = false;
-    private List<QuestionListItem> _questionsList = [];
+    private List<Question> _questionsList = [];
     private const int QuestionsPerPage = 20;
-    private const int QuestionPreviewLength = 150;
     private int _displayedQuestionsCount = 0;
     private bool _isLoadingQuestions = false;
     private bool _hasMoreQuestions = false;
@@ -245,17 +246,6 @@
 
     private class TourListItem
     {
-        public int TourId { get; set; }
-        public required string TourNumber { get; set; }
-    }
-
-    private class QuestionListItem
-    {
-        public int QuestionId { get; set; }
-        public required string QuestionNumber { get; set; }
-        public required string QuestionText { get; set; }
-        public int PackageId { get; set; }
-        public required string PackageTitle { get; set; }
         public int TourId { get; set; }
         public required string TourNumber { get; set; }
     }
@@ -365,6 +355,7 @@
             }
 
             var questions = await baseQuery
+                .Include(q => q.Authors)
                 .Include(q => q.Tour)
                     .ThenInclude(t => t.Package)
                 .OrderByDescending(q => q.Tour.PackageId)
@@ -372,16 +363,6 @@
                 .ThenBy(q => q.OrderIndex)
                 .Skip(skip)
                 .Take(take)
-                .Select(q => new QuestionListItem
-                {
-                    QuestionId = q.Id,
-                    QuestionNumber = q.Number,
-                    QuestionText = q.Text,
-                    PackageId = q.Tour.PackageId,
-                    PackageTitle = q.Tour.Package.Title,
-                    TourId = q.TourId,
-                    TourNumber = q.Tour.Number
-                })
                 .ToListAsync();
 
             _hasMoreQuestions = (skip + questions.Count) < _questionsCount;
