@@ -143,6 +143,8 @@ public class PackageParserTests
     [Theory]
     [InlineData("Запитання 1")]
     [InlineData("Питання 1.")]
+    [InlineData("Запитання 1:")]
+    [InlineData("Питання 1:")]
     public void Parse_NamedQuestionStart_DetectsQuestion(string line)
     {
         // Arrange
@@ -159,6 +161,65 @@ public class PackageParserTests
 
         // Assert
         result.Tours[0].Questions.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Parse_QuestionWithColonSeparator_ParsesFullStructure()
+    {
+        // Arrange - format from real packages: "Запитання N:" on separate line
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1:"),
+            Block("У вже згаданій серії «Надприродного» ВІН парадоксально нападає на героя."),
+            Block("Відповідь: Махатма Ґанді"),
+            Block("Залік: за прізвищем"),
+            Block("Коментар: перевертень з епізоду із попереднього запитання перетворився на вегетаріанця."),
+            Block("Джерела: Надприродне сезон 5, серія 5")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[0].Questions[0];
+        question.Number.Should().Be("1");
+        question.Text.Should().Contain("Надприродного");
+        question.Answer.Should().Be("Махатма Ґанді");
+        question.AcceptedAnswers.Should().Be("за прізвищем");
+        question.Comment.Should().Contain("перевертень");
+        question.Source.Should().Contain("Надприродне сезон 5");
+    }
+
+    [Fact]
+    public void Parse_MultipleQuestionsWithColonSeparator_ParsesAll()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1:"),
+            Block("Перше питання тексту"),
+            Block("Відповідь: Перша відповідь"),
+            Block("Запитання 2:"),
+            Block("Друге питання тексту"),
+            Block("Відповідь: Друга відповідь"),
+            Block("Питання 3:"),
+            Block("Третє питання тексту"),
+            Block("Відповідь: Третя відповідь")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(3);
+        result.Tours[0].Questions[0].Number.Should().Be("1");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+        result.Tours[0].Questions[2].Number.Should().Be("3");
     }
 
     #endregion
@@ -256,6 +317,42 @@ public class PackageParserTests
 
         // Assert
         result.Tours[0].Questions[0].RejectedAnswers.Should().Contain(expected);
+    }
+
+    [Theory]
+    [InlineData("Заліки: Симиренки", "Симиренки")]
+    [InlineData("Залік (не оголошувати): за прізвищем", "за прізвищем")]
+    public void Parse_AcceptedLabel_Variants_AreDetected(string line, string expected)
+    {
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        result.Tours[0].Questions[0].AcceptedAnswers.Should().Contain(expected);
+    }
+
+    [Fact]
+    public void Parse_Zaliki_DoesNotPolluteAnswer()
+    {
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Київ"),
+            Block("Заліки: Київ; столиця")
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("Київ");
+        q.AcceptedAnswers.Should().Contain("Київ; столиця");
     }
 
     #endregion
