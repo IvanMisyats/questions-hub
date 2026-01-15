@@ -92,7 +92,7 @@
         <!-- Statistics Section -->
         <div class="row mb-4">
             <div class="col-md-6">
-                <div class="card h-100 cursor-pointer" @onclick="ShowPackagesList" style="cursor: pointer;">
+                <div class="card h-100" @onclick="ShowPackagesList" style="cursor: pointer;">
                     <div class="card-header">
                         <i class="bi bi-box me-2"></i>Пакети
                     </div>
@@ -103,7 +103,7 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100 cursor-pointer" @onclick="ShowQuestionsList" style="cursor: pointer;">
+                <div class="card h-100" @onclick="ShowQuestionsList" style="cursor: pointer;">
                     <div class="card-header">
                         <i class="bi bi-question-circle me-2"></i>Питання
                     </div>
@@ -359,7 +359,7 @@
             .ThenBy(q => q.Tour.Number)
             .ThenBy(q => q.OrderIndex)
             .Skip(skip)
-            .Take(take + 1) // Take one extra to check if there are more
+            .Take(take)
             .Select(q => new QuestionListItem
             {
                 QuestionId = q.Id,
@@ -372,12 +372,12 @@
             })
             .ToListAsync();
 
-        _hasMoreQuestions = questions.Count > take;
+        // Check if there are more questions
+        var totalCount = await context.Questions
+            .Where(q => q.Authors.Any(a => a.Id == _author.Id))
+            .CountAsync();
         
-        if (_hasMoreQuestions)
-        {
-            questions = questions.Take(take).ToList();
-        }
+        _hasMoreQuestions = (skip + questions.Count) < totalCount;
 
         _questionsList.AddRange(questions);
         _displayedQuestionsCount += questions.Count;
