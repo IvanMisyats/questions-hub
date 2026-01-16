@@ -26,6 +26,10 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Запитання|Питання)\s+(\d+)[\.:]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex QuestionStartNamed();
 
+    // Matches: "Запитання 1. text", "Питання 1: text" (named format with text after)
+    [GeneratedRegex(@"^\s*(?:Запитання|Питання)\s+(\d+)[\.:]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex QuestionStartNamedWithText();
+
     // Labels (field markers)
     [GeneratedRegex(@"^\s*Відповідь\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AnswerLabel();
@@ -112,6 +116,13 @@ public class PackageParser
         Global
     }
 
+    private enum QuestionFormat
+    {
+        Unknown,
+        Named,      // "Запитання N" or "Питання N"
+        Numbered    // "N." or "N. text"
+    }
+
     private sealed record AuthorRangeRule(int From, int To, List<string> Authors);
 
     /// <summary>
@@ -127,6 +138,7 @@ public class PackageParser
         public List<(AssetReference Asset, ParserSection Section)> PendingAssets { get; } = [];
         public List<AuthorRangeRule> AuthorRanges { get; } = [];
         public NumberingMode Mode { get; set; } = NumberingMode.Unknown;
+        public QuestionFormat Format { get; set; } = QuestionFormat.Unknown;
         public int? ExpectedNextQuestionInTour { get; set; }
         public int? ExpectedNextQuestionGlobal { get; set; }
         public bool QuestionCreatedInCurrentBlock { get; set; }
@@ -289,14 +301,36 @@ public class PackageParser
     /// </summary>
     private bool TryProcessQuestionStart(string line, ParserContext ctx)
     {
-        if (!TryParseQuestionStart(line, out var questionNumber, out var remainingText))
+        if (!TryParseQuestionStart(line, out var questionNumber, out var remainingText, out var detectedFormat))
             return false;
+
+        // Context-based validation: don't allow "N." pattern in Source section
+        // This prevents numbered list items in sources from being parsed as questions
+        // But allow if it's in Authors section (which typically ends a question)
+        if (detectedFormat == QuestionFormat.Numbered &&
+            ctx.CurrentSection == ParserSection.Source)
+        {
+            ProcessAsRegularContent(line, ctx);
+            return true;
+        }
+
+        // Format consistency validation: if first question used Named format,
+        // require subsequent questions to also use Named format
+        if (ctx.Format == QuestionFormat.Named && detectedFormat == QuestionFormat.Numbered)
+        {
+            ProcessAsRegularContent(line, ctx);
+            return true;
+        }
 
         if (!IsValidNextQuestionNumber(questionNumber, ctx))
         {
             ProcessAsRegularContent(line, ctx);
             return true;
         }
+
+        // Set format on first question
+        if (ctx.Format == QuestionFormat.Unknown)
+            ctx.Format = detectedFormat;
 
         SaveCurrentQuestion(ctx);
         EnsureDefaultTourExists(ctx);
@@ -604,26 +638,51 @@ public class PackageParser
         return true;
     }
 
-    private static bool TryParseQuestionStart(string text, out string questionNumber, out string remainingText)
+    private static bool TryParseQuestionStart(string text, out string questionNumber, out string remainingText, out QuestionFormat format)
     {
         questionNumber = "";
         remainingText = "";
+        format = QuestionFormat.Unknown;
 
-        // Try pattern with text first (captures remaining text in group 2)
-        var match = ParserPatterns.QuestionStartWithText().Match(text);
-        if (match.Success)
+        // Try named format with text first (Запитання N. text / Питання N: text)
+        var namedWithTextMatch = ParserPatterns.QuestionStartNamedWithText().Match(text);
+        if (namedWithTextMatch.Success)
         {
-            questionNumber = match.Groups[1].Value;
-            remainingText = match.Groups[2].Value.Trim();
+            questionNumber = namedWithTextMatch.Groups[1].Value;
+            remainingText = namedWithTextMatch.Groups[2].Value.Trim();
+            format = QuestionFormat.Named;
             return true;
         }
 
-        // Try other patterns (only capture question number)
-        if (!TryMatchFirst(text, out match, ParserPatterns.QuestionStartNumberOnly(), ParserPatterns.QuestionStartNamed()))
-            return false;
+        // Try named format without text (Запитання N / Питання N)
+        var namedMatch = ParserPatterns.QuestionStartNamed().Match(text);
+        if (namedMatch.Success)
+        {
+            questionNumber = namedMatch.Groups[1].Value;
+            format = QuestionFormat.Named;
+            return true;
+        }
 
-        questionNumber = match.Groups[1].Value;
-        return true;
+        // Try numbered format with text (N. text)
+        var withTextMatch = ParserPatterns.QuestionStartWithText().Match(text);
+        if (withTextMatch.Success)
+        {
+            questionNumber = withTextMatch.Groups[1].Value;
+            remainingText = withTextMatch.Groups[2].Value.Trim();
+            format = QuestionFormat.Numbered;
+            return true;
+        }
+
+        // Try numbered format without text (N.)
+        var numberOnlyMatch = ParserPatterns.QuestionStartNumberOnly().Match(text);
+        if (numberOnlyMatch.Success)
+        {
+            questionNumber = numberOnlyMatch.Groups[1].Value;
+            format = QuestionFormat.Numbered;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -222,6 +222,111 @@ public class PackageParserTests
         result.Tours[0].Questions[2].Number.Should().Be("3");
     }
 
+    [Fact]
+    public void Parse_NumberedSourceList_NotParsedAsQuestions()
+    {
+        // Arrange - Numbered source list should not be parsed as questions
+        // Real case: "Джерело:\n1. https://...\n2. https://..."
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("Джерело:"),
+            Block("1.\thttps://paleontologyworld.com/dinosaurs"),
+            Block("2.\thttps://en.wikipedia.org/wiki/The_Last_Flower"),
+            Block("3.\thttps://www.youtube.com/watch?v=X1RrEAroZbw"),
+            Block("Автор: Костянтин Ільїн (Одеса)."),
+            Block("Запитання 2."),
+            Block("Друге питання"),
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+
+        var question1 = result.Tours[0].Questions[0];
+        question1.Number.Should().Be("1");
+        question1.Source.Should().Contain("paleontologyworld.com");
+        question1.Source.Should().Contain("wikipedia.org");
+        question1.Source.Should().Contain("youtube.com");
+        question1.Authors.Should().Contain("Костянтин Ільїн (Одеса)");
+
+        var question2 = result.Tours[0].Questions[1];
+        question2.Number.Should().Be("2");
+        question2.Text.Should().Contain("Друге питання");
+    }
+
+    [Fact]
+    public void Parse_NamedFormatRequiresConsistency_NumberedNotAllowedAfterNamed()
+    {
+        // Arrange - If first question uses "Запитання N" format,
+        // subsequent questions must also use that format
+        // This prevents "2. " in sources from being parsed as questions
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Перше питання"),
+            Block("Коментар: Коментар 1. Частина коментаря 2. Ще частина"),
+            Block("Відповідь: одинадцята."),
+            Block("Залік: 11."),
+            Block("Джерело:"),
+            Block("1. https://first-source.com"),
+            Block("2. https://second-source.com"),
+            Block("Автор: Тестовий автор"),
+            Block("Запитання 2."),
+            Block("Друге питання про щось"),
+            Block("Відповідь: тринога.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+
+        var question1 = result.Tours[0].Questions[0];
+        question1.Number.Should().Be("1");
+        question1.Text.Should().Contain("Перше питання");
+        question1.Comment.Should().Contain("Коментар 1. Частина коментаря 2.");
+        question1.Source.Should().Contain("https://first-source.com");
+        question1.Source.Should().Contain("https://second-source.com");
+
+        var question2 = result.Tours[0].Questions[1];
+        question2.Number.Should().Be("2");
+        question2.Text.Should().Contain("Друге питання");
+    }
+
+    [Fact]
+    public void Parse_NumberedFormatAllowsNumberedQuestions()
+    {
+        // Arrange - If using "N." format from the start, numbered sources
+        // should not be parsed as questions (context-based validation)
+        // The Author line marks the end of a question's metadata
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("Джерело:"),
+            Block("1. https://example.com"),
+            Block("Автор: Тест"),
+            Block("2. Друге питання"),
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Source.Should().Contain("https://example.com");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+    }
+
     #endregion
 
     #region Answer Parsing
