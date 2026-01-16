@@ -739,6 +739,27 @@ public class PackageParserTests
     }
 
     [Fact]
+    public void Parse_TwoHeaderBlocksWithNoFontInfo_TakesFirstAsTitle()
+    {
+        // Arrange - Basic case with no font size info
+        var blocks = new List<DocBlock>
+        {
+            Block("Перший блок"),
+            Block("Другий блок"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Перший блок");
+        result.Preamble.Should().Contain("Другий блок");
+    }
+
+    [Fact]
     public void Parse_PackageWithPreamble_ExtractsPreamble()
     {
         // Arrange
@@ -756,6 +777,138 @@ public class PackageParserTests
 
         // Assert
         result.Preamble.Should().Contain("Опис пакету або вступ");
+    }
+
+    [Fact]
+    public void Parse_MultiLineTitleWithSameFontSize_CombinesTitleBlocks()
+    {
+        // Arrange - Two blocks with same font size (18pt = 36 half-points)
+        // Block 3 has smaller font (14pt = 28 half-points) - should be editor, not title
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Благодійний турнір:", 18),
+            BlockWithFont("«Синхрон синів маминої подруги»", 18),
+            BlockWithFont("Редактори: Антон Куперман (Одеса), Марков Владислав (Львів-Запоріжжя)", 14),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Благодійний турнір: «Синхрон синів маминої подруги»");
+        result.Editors.Should().Contain("Антон Куперман (Одеса)");
+        result.Editors.Should().Contain("Марков Владислав (Львів-Запоріжжя)");
+    }
+
+    [Fact]
+    public void Parse_TitleWithIncreasingThenDecreasingFontSize_IncludesLargerFontBlocks()
+    {
+        // Arrange - pt 15, then pt 18, then pt 15
+        // Title should include first two blocks (up to and including largest font)
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Перша частина заголовка", 15),
+            BlockWithFont("ГОЛОВНА ЧАСТИНА", 18),
+            BlockWithFont("Опис турніру", 15),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Перша частина заголовка ГОЛОВНА ЧАСТИНА");
+        result.Preamble.Should().Contain("Опис турніру");
+    }
+
+    [Fact]
+    public void Parse_TitleWithTitleStyle_UsesStyleBasedDetection()
+    {
+        // Arrange - Blocks with Title style take precedence
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Заголовок з Title стилем", 14, "Title"),
+            BlockWithFont("Підзаголовок", 18), // Larger font but no Title style
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Заголовок з Title стилем");
+    }
+
+    [Fact]
+    public void Parse_TitleWithHeadingStyle_UsesStyleBasedDetection()
+    {
+        // Arrange - Blocks with Heading style
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Заголовок", 16, "Heading1"),
+            BlockWithFont("Підзаголовок", 14, "Heading2"),
+            BlockWithFont("Редактор: Іван", 12),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Заголовок Підзаголовок");
+    }
+
+    [Fact]
+    public void Parse_TitleLimitedToThreeBlocks()
+    {
+        // Arrange - Four blocks with same large font, only first 3 should be in title
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Частина 1", 18),
+            BlockWithFont("Частина 2", 18),
+            BlockWithFont("Частина 3", 18),
+            BlockWithFont("Частина 4", 18), // Should NOT be included
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Частина 1 Частина 2 Частина 3");
+        result.Preamble.Should().Contain("Частина 4");
+    }
+
+    [Fact]
+    public void Parse_SingleBlockTitle_WorksWithFontSize()
+    {
+        // Arrange - Single title block followed by smaller font
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Назва турніру", 18),
+            BlockWithFont("Опис турніру", 12),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Be("Назва турніру");
+        result.Preamble.Should().Contain("Опис турніру");
     }
 
     #endregion
@@ -1099,6 +1252,17 @@ public class PackageParserTests
         Index = 0,
         Text = text,
         Assets = assets
+    };
+
+    /// <summary>
+    /// Creates a DocBlock with font size in points.
+    /// </summary>
+    private static DocBlock BlockWithFont(string text, double fontSizePoints, string? styleId = null) => new()
+    {
+        Index = 0,
+        Text = text,
+        FontSizeHalfPoints = (int)(fontSizePoints * 2),
+        StyleId = styleId
     };
 
     #endregion

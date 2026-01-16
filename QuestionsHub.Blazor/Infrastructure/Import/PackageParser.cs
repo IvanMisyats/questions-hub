@@ -123,13 +123,14 @@ public class PackageParser
         public ParserSection CurrentSection { get; set; } = ParserSection.PackageHeader;
         public TourDto? CurrentTour { get; set; }
         public QuestionDto? CurrentQuestion { get; set; }
-        public List<string> HeaderBlocks { get; } = [];
+        public List<DocBlock> HeaderBlocks { get; } = [];
         public List<(AssetReference Asset, ParserSection Section)> PendingAssets { get; } = [];
         public List<AuthorRangeRule> AuthorRanges { get; } = [];
         public NumberingMode Mode { get; set; } = NumberingMode.Unknown;
         public int? ExpectedNextQuestionInTour { get; set; }
         public int? ExpectedNextQuestionGlobal { get; set; }
         public bool QuestionCreatedInCurrentBlock { get; set; }
+        public DocBlock? CurrentBlock { get; set; }
 
         /// <summary>
         /// Indicates we're inside a multiline bracketed handout [Роздатка: ... ] that spans multiple lines.
@@ -178,6 +179,7 @@ public class PackageParser
             return;
 
         ctx.QuestionCreatedInCurrentBlock = false;
+        ctx.CurrentBlock = block;
 
         foreach (var line in SplitIntoLines(text))
         {
@@ -311,14 +313,17 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Collects lines into header blocks when no tour has been started yet.
+    /// Collects blocks into header blocks when no tour has been started yet.
     /// </summary>
     private static bool TryCollectHeaderLine(string line, ParserContext ctx)
     {
         if (ctx.HasCurrentTour)
             return false;
 
-        ctx.HeaderBlocks.Add(line);
+        // Add the current block to header blocks (only add once per block)
+        if (ctx.CurrentBlock != null && !ctx.HeaderBlocks.Contains(ctx.CurrentBlock))
+            ctx.HeaderBlocks.Add(ctx.CurrentBlock);
+
         return true;
     }
 
@@ -416,7 +421,9 @@ public class PackageParser
         }
         else
         {
-            ctx.HeaderBlocks.Add(line);
+            // Add the current block to header blocks (only add once per block)
+            if (ctx.CurrentBlock != null && !ctx.HeaderBlocks.Contains(ctx.CurrentBlock))
+                ctx.HeaderBlocks.Add(ctx.CurrentBlock);
         }
     }
 
@@ -881,17 +888,24 @@ public class PackageParser
             question.HandoutAssetFileName ??= asset.FileName;
     }
 
-    private static void ParsePackageHeader(List<string> headerBlocks, ParseResult result)
+    private static void ParsePackageHeader(List<DocBlock> headerBlocks, ParseResult result)
     {
         if (headerBlocks.Count == 0) return;
 
-        result.Title = headerBlocks.FirstOrDefault(b => !string.IsNullOrWhiteSpace(b));
+        // Determine title blocks based on font size and style
+        var titleBlocks = DetermineTitleBlocks(headerBlocks);
+        result.Title = string.Join(" ", titleBlocks.Select(b => NormalizeText(b.Text)));
 
         var preambleLines = new List<string>();
 
-        foreach (var block in headerBlocks.Skip(1))
+        // Process remaining blocks after title
+        foreach (var block in headerBlocks.Skip(titleBlocks.Count))
         {
-            var editorsMatch = ParserPatterns.EditorsLabel().Match(block);
+            var text = NormalizeText(block.Text);
+            if (string.IsNullOrWhiteSpace(text))
+                continue;
+
+            var editorsMatch = ParserPatterns.EditorsLabel().Match(text);
             if (editorsMatch.Success)
             {
                 var editors = ParseAuthorList(editorsMatch.Groups[1].Value);
@@ -899,12 +913,67 @@ public class PackageParser
             }
             else
             {
-                preambleLines.Add(block);
+                preambleLines.Add(text);
             }
         }
 
         if (preambleLines.Count > 0)
             result.Preamble = string.Join("\n", preambleLines);
+    }
+
+    /// <summary>
+    /// Determines which header blocks should be included in the title based on:
+    /// 1. Blocks with "Title" or "Heading" style (take consecutive styled blocks)
+    /// 2. Blocks up to and including the block with the largest font size
+    /// Limited to maximum 3 blocks.
+    /// </summary>
+    private static List<DocBlock> DetermineTitleBlocks(List<DocBlock> headerBlocks)
+    {
+        if (headerBlocks.Count == 0)
+            return [];
+
+        // Take at most first 3 blocks for title consideration
+        var candidates = headerBlocks.Take(3).ToList();
+
+        // Strategy 1: Look for consecutive blocks with Title/Heading style
+        var titleStyleBlocks = candidates
+            .TakeWhile(b => b.StyleId?.Contains("Title", StringComparison.OrdinalIgnoreCase) == true
+                         || b.StyleId?.Contains("Heading", StringComparison.OrdinalIgnoreCase) == true)
+            .ToList();
+
+        if (titleStyleBlocks.Count > 0)
+            return titleStyleBlocks;
+
+        // Strategy 2: Use font size to determine title extent
+        // Find the maximum font size among candidates
+        var maxFontSize = candidates
+            .Where(b => b.FontSizeHalfPoints.HasValue)
+            .Select(b => b.FontSizeHalfPoints!.Value)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        if (maxFontSize == 0)
+        {
+            // No font size info - just return the first non-empty block
+            return candidates.Take(1).ToList();
+        }
+
+        // Find the index of the last block with max font size
+        var lastMaxFontIndex = -1;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].FontSizeHalfPoints == maxFontSize)
+                lastMaxFontIndex = i;
+        }
+
+        if (lastMaxFontIndex >= 0)
+        {
+            // Include all blocks up to and including the last max font block
+            return candidates.Take(lastMaxFontIndex + 1).ToList();
+        }
+
+        // Fallback: just return the first block
+        return candidates.Take(1).ToList();
     }
 
     private static void FinalizeQuestion(QuestionDto question, List<AuthorRangeRule> authorRanges, ParseResult result)

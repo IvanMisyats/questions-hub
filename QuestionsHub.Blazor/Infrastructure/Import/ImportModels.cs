@@ -11,6 +11,17 @@ public record DocBlock
     public bool IsBold { get; init; }
     public bool IsItalic { get; init; }
     public bool IsHeading { get; init; }
+
+    /// <summary>
+    /// Font size in half-points (e.g., 24 = 12pt). Null if not explicitly set.
+    /// </summary>
+    public int? FontSizeHalfPoints { get; init; }
+
+    /// <summary>
+    /// Font size in points. Returns null if not explicitly set.
+    /// </summary>
+    public double? FontSizePoints => FontSizeHalfPoints.HasValue ? FontSizeHalfPoints.Value / 2.0 : null;
+
     public List<AssetReference> Assets { get; init; } = [];
 }
 

@@ -134,6 +134,7 @@ public class DocxExtractor
         var styleId = para.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
         var (isBold, isItalic) = GetTextFormatting(para);
         var isHeading = IsHeadingStyle(styleId);
+        var fontSizeHalfPoints = GetFontSizeHalfPoints(para, mainPart);
 
         return new DocBlock
         {
@@ -143,6 +144,7 @@ public class DocxExtractor
             IsBold = isBold,
             IsItalic = isItalic,
             IsHeading = isHeading,
+            FontSizeHalfPoints = fontSizeHalfPoints,
             Assets = []
         };
     }
@@ -352,6 +354,66 @@ public class DocxExtractor
         var italicCount = runs.Count(r => r.RunProperties?.Italic != null);
 
         return (boldCount > runs.Count / 2, italicCount > runs.Count / 2);
+    }
+
+    /// <summary>
+    /// Gets the font size in half-points from the paragraph.
+    /// Checks run properties first, then style definitions.
+    /// </summary>
+    private static int? GetFontSizeHalfPoints(Paragraph para, MainDocumentPart mainPart)
+    {
+        // First, check run properties (most specific)
+        var runs = para.Elements<Run>().ToList();
+        if (runs.Count > 0)
+        {
+            // Get font size from the first run that has it
+            foreach (var run in runs)
+            {
+                var runFontSize = run.RunProperties?.FontSize?.Val?.Value;
+                if (runFontSize != null && int.TryParse(runFontSize, CultureInfo.InvariantCulture, out var size))
+                {
+                    return size;
+                }
+            }
+        }
+
+        // Check style definition
+        var styleId = para.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+        if (!string.IsNullOrEmpty(styleId))
+        {
+            var styleFontSize = GetStyleFontSize(styleId, mainPart);
+            if (styleFontSize.HasValue)
+                return styleFontSize.Value;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the font size from a style definition.
+    /// </summary>
+    private static int? GetStyleFontSize(string styleId, MainDocumentPart mainPart)
+    {
+        var stylesPart = mainPart.StyleDefinitionsPart;
+        if (stylesPart?.Styles == null) return null;
+
+        var style = stylesPart.Styles.Elements<Style>()
+            .FirstOrDefault(s => s.StyleId?.Value == styleId);
+
+        if (style?.StyleRunProperties?.FontSize?.Val?.Value != null)
+        {
+            if (int.TryParse(style.StyleRunProperties.FontSize.Val.Value, CultureInfo.InvariantCulture, out var size))
+                return size;
+        }
+
+        // Check if this style is based on another style
+        var basedOnStyleId = style?.BasedOn?.Val?.Value;
+        if (!string.IsNullOrEmpty(basedOnStyleId))
+        {
+            return GetStyleFontSize(basedOnStyleId, mainPart);
+        }
+
+        return null;
     }
 
     private static bool IsHeadingStyle(string? styleId)
