@@ -28,8 +28,9 @@ Refer to README.md for the complete technology stack. The project uses:
 
 - Always write files as **UTF-8 without BOM** (no `EF BB BF` at the start).
 - Follow C# naming conventions and .NET best practices
-- Use async/await patterns for asynchronous operations
+- Use async/await patterns for asynchronous operations. Do not use `Async` suffix for method names.
 - Maintain consistent code formatting across the project
+- Prefer readable and maintainable code over clever solutions
 
 ### Entity Framework Migrations
 
