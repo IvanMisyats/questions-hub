@@ -1,4 +1,4 @@
-﻿﻿# Authentication & Authorization
+﻿# Authentication & Authorization
 
 ## Overview
 
@@ -194,10 +194,47 @@ Standard ASP.NET Core Identity tables:
 
 ## Package Access Control
 
-> **Note**: Package access levels are **not yet implemented**. Currently, packages have three statuses:
-> - **Draft** - Only visible to owner and admins
-> - **Published** - Visible to all users
-> - **Archived** - Hidden from main list, accessible via direct link
+Packages have three visibility statuses:
+
+| Status | Package Detail Page | Main List/Search | Author Pages | Editor Statistics |
+|--------|--------------------|--------------------|--------------|-------------------|
+| **Draft** | Owner/Admin only | Hidden | Hidden | Not counted |
+| **Published** | Everyone | Visible | Visible | Counted |
+| **Archived** | Direct link only | Hidden | Hidden | Not counted |
+
+### Detailed Rules
+
+#### Draft Packages
+- **Package Detail Page**: Only the package owner and admins can view
+- **Main Package List**: Not displayed
+- **Search Results**: Questions are excluded from search
+- **Author Pages (/editor/{id})**: Questions and packages are not displayed
+- **Editors Page (/editors)**: Questions and packages are not counted in statistics
+- **Author Visibility**: If an author only has content in draft packages, they will not appear on the public authors list
+
+#### Published Packages
+- **Package Detail Page**: Visible to everyone (including anonymous users)
+- **Main Package List**: Displayed
+- **Search Results**: Questions are searchable
+- **Author Pages (/editor/{id})**: Questions and packages are displayed
+- **Editors Page (/editors)**: Questions and packages are counted in statistics
+
+#### Archived Packages
+- **Package Detail Page**: Accessible via direct link only
+- **Main Package List**: Not displayed
+- **Search Results**: Questions are excluded from search
+- **Author Pages (/editor/{id})**: Questions and packages are not displayed
+- **Editors Page (/editors)**: Questions and packages are not counted in statistics
+- **Author Visibility**: If an author only has content in archived packages, they will not appear on the public authors list
+
+### Important Security Note
+
+Content from Draft and Archived packages is **never exposed** on public pages. This includes:
+- The `/editors` page only shows authors with at least one published question or package
+- The `/editor/{id}` page only displays questions and packages from published packages
+- Search only returns results from published packages
+
+This ensures that unpublished content remains private to the package owner and administrators.
 
 ### Planned Access Levels (Future)
 Editors will be able to set package visibility when creating/editing packages:

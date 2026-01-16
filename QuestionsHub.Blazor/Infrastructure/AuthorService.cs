@@ -132,25 +132,36 @@ public class AuthorService
 
     /// <summary>
     /// Gets all authors with their question and package counts.
+    /// Only counts questions and packages from published packages.
+    /// Authors with no published content are excluded from the list.
     /// </summary>
     /// <returns>List of author view models with counts.</returns>
     public async Task<List<AuthorListItem>> GetAllAuthorsWithCounts()
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
+        // Only count questions and packages from published packages
         return await context.Authors
             .Select(a => new AuthorListItem
             {
                 Id = a.Id,
                 FirstName = a.FirstName,
                 LastName = a.LastName,
-                QuestionCount = a.Questions.Count,
+                // Only count questions from published packages
+                QuestionCount = a.Questions.Count(q => q.Tour.Package.Status == PackageStatus.Published),
                 // Count packages from both tours (as tour editor) and blocks (as block editor)
-                PackageCount = a.Tours.Select(t => t.PackageId)
-                    .Union(a.Blocks.Select(b => b.Tour.PackageId))
+                // Only count published packages
+                PackageCount = a.Tours
+                    .Where(t => t.Package.Status == PackageStatus.Published)
+                    .Select(t => t.PackageId)
+                    .Union(a.Blocks
+                        .Where(b => b.Tour.Package.Status == PackageStatus.Published)
+                        .Select(b => b.Tour.PackageId))
                     .Distinct()
                     .Count()
             })
+            // Exclude authors with no published content
+            .Where(a => a.QuestionCount > 0 || a.PackageCount > 0)
             .OrderByDescending(a => a.QuestionCount)
             .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName)

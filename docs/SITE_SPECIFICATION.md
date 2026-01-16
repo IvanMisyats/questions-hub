@@ -240,6 +240,17 @@ Displays all Authors in the system, ranked by number of questions (descending).
 - Number of packages (where author is editor of at least one tour)
 - Number of questions (where author is listed as question author)
 
+**Important**: Only content from **published packages** is counted. Authors with questions/packages only in Draft or Archived packages will not appear on this list. See [AUTHENTICATION.md](AUTHENTICATION.md#package-access-control) for details.
+
+### 10.2 Author Profile (Профіль автора)
+**Route**: `/editor/{id}`
+
+**Authorization**: Public (no authentication required)
+
+Displays detailed information about an author including their packages and questions.
+
+**Content Visibility**: Only packages and questions from **published packages** are displayed. Content from Draft and Archived packages is hidden to protect unpublished work. See [AUTHENTICATION.md](AUTHENTICATION.md#package-access-control) for details.
+
 ### 11. Admin User Management
 
 **Authorization**: Admin only (except Editors list which is read-only for Editors)

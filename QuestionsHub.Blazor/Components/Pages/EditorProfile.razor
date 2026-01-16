@@ -1,6 +1,7 @@
 ﻿@page "/editor/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -312,18 +313,29 @@
                 .ThenInclude(b => b.Tour)
                     .ThenInclude(t => t.Package)
             .Include(a => a.Questions)
+                .ThenInclude(q => q.Tour)
+                    .ThenInclude(t => t.Package)
             .FirstOrDefaultAsync(a => a.Id == Id);
 
         if (_author != null)
         {
-            // Count unique packages from tours and blocks
-            var packageIdsFromTours = _author.Tours.Select(t => t.PackageId);
-            var packageIdsFromBlocks = _author.Blocks.Select(b => b.Tour.PackageId);
+            // Only count/show packages with Published status
+            // (Draft and Archived packages are private to owner/admin)
+            var publishedToursFromTours = _author.Tours
+                .Where(t => t.Package.Status == PackageStatus.Published);
+            var publishedToursFromBlocks = _author.Blocks
+                .Where(b => b.Tour.Package.Status == PackageStatus.Published);
+
+            var packageIdsFromTours = publishedToursFromTours.Select(t => t.PackageId);
+            var packageIdsFromBlocks = publishedToursFromBlocks.Select(b => b.Tour.PackageId);
             _packagesCount = packageIdsFromTours.Union(packageIdsFromBlocks).Distinct().Count();
-            _questionsCount = _author.Questions.Count;
+
+            // Only count questions from published packages
+            _questionsCount = _author.Questions.Count(q => q.Tour.Package.Status == PackageStatus.Published);
 
             // Build packages list grouped by package, including both tours and blocks
-            var tourItems = _author.Tours
+            // Only include published packages
+            var tourItems = publishedToursFromTours
                 .Select(t => new
                 {
                     t.PackageId,
@@ -334,7 +346,7 @@
                     BlockOrderIndex = (int?)null
                 });
 
-            var blockItems = _author.Blocks
+            var blockItems = publishedToursFromBlocks
                 .Select(b => new
                 {
                     b.Tour.PackageId,
@@ -453,9 +465,10 @@
             var skip = _displayedQuestionsCount;
             var take = QuestionsPerPage;
 
-            // Base query for author's questions
+            // Base query for author's questions - only from published packages
             var baseQuery = context.Questions
-                .Where(q => q.Authors.Any(a => a.Id == _author.Id));
+                .Where(q => q.Authors.Any(a => a.Id == _author.Id)
+                         && q.Tour.Package.Status == PackageStatus.Published);
 
             // Only get total count on first load
             if (_displayedQuestionsCount == 0)
