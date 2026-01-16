@@ -1,5 +1,5 @@
-﻿using System.Text.RegularExpressions;
-using Microsoft.Extensions.Logging;
+﻿using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -104,6 +104,27 @@ public class PackageParser
 
     private sealed record AuthorRangeRule(int From, int To, List<string> Authors);
 
+    /// <summary>
+    /// Encapsulates mutable parsing state to reduce parameter passing and improve readability.
+    /// </summary>
+    private sealed class ParserContext
+    {
+        public ParseResult Result { get; } = new();
+        public ParserSection CurrentSection { get; set; } = ParserSection.PackageHeader;
+        public TourDto? CurrentTour { get; set; }
+        public QuestionDto? CurrentQuestion { get; set; }
+        public List<string> HeaderBlocks { get; } = [];
+        public List<(AssetReference Asset, ParserSection Section)> PendingAssets { get; } = [];
+        public List<AuthorRangeRule> AuthorRanges { get; } = [];
+        public NumberingMode Mode { get; set; } = NumberingMode.Unknown;
+        public int? ExpectedNextQuestionInTour { get; set; }
+        public int? ExpectedNextQuestionGlobal { get; set; }
+        public bool QuestionCreatedInCurrentBlock { get; set; }
+
+        public bool HasCurrentQuestion => CurrentQuestion != null;
+        public bool HasCurrentTour => CurrentTour != null;
+    }
+
     public PackageParser(ILogger<PackageParser> logger)
     {
         _logger = logger;
@@ -114,255 +135,356 @@ public class PackageParser
     /// </summary>
     public ParseResult Parse(List<DocBlock> blocks, List<AssetReference> assets)
     {
-        var result = new ParseResult();
-        var currentSection = ParserSection.PackageHeader;
-        TourDto? currentTour = null;
-        QuestionDto? currentQuestion = null;
-        var headerBlocks = new List<string>();
-
-        // Assets that appear BEFORE a question starts (standalone handout blocks, etc.)
-        var pendingAssets = new List<(AssetReference Asset, ParserSection Section)>();
-
-        // Author ranges like "Автор запитань 1-18: ..."
-        var authorRanges = new List<AuthorRangeRule>();
-
-        // Numbering mode heuristic
-        var numberingMode = NumberingMode.Unknown;
-
-        // Sequence validation
-        int? expectedNextQuestionInTour = null;
-        int? expectedNextQuestionGlobal = null;
+        var ctx = new ParserContext();
 
         _logger.LogInformation("Parsing {BlockCount} blocks", blocks.Count);
 
         foreach (var block in blocks)
         {
-            var text = NormalizeText(block.Text);
-            if (string.IsNullOrWhiteSpace(text) && block.Assets.Count == 0)
-                continue;
-
-            var questionCreatedInThisBlock = false;
-
-            // Split block by newlines to handle soft line breaks
-            var lines = text.Split('\n');
-
-            for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
-            {
-                var line = lines[lineIndex].Trim();
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                // Tour start
-                if (TryParseTourStart(line, out var tourNumber))
-                {
-                    if (currentQuestion != null && currentTour != null)
-                    {
-                        FinalizeQuestion(currentQuestion, authorRanges, result);
-                        currentTour.Questions.Add(currentQuestion);
-                    }
-
-                    if (currentTour == null && headerBlocks.Count > 0)
-                    {
-                        ParsePackageHeader(headerBlocks, result);
-                    }
-
-                    currentTour = new TourDto { Number = tourNumber };
-                    result.Tours.Add(currentTour);
-                    currentQuestion = null;
-                    currentSection = ParserSection.TourHeader;
-
-                    // Reset per-tour expected number (global continues)
-                    expectedNextQuestionInTour = null;
-
-                    _logger.LogDebug("Found tour: {TourNumber}", tourNumber);
-                    continue;
-                }
-
-                // Author range lines often appear in header (before first question)
-                if (currentQuestion == null)
-                {
-                    var rangeMatch = ParserPatterns.AuthorRangeLabel().Match(line);
-                    if (rangeMatch.Success)
-                    {
-                        var from = int.Parse(rangeMatch.Groups[1].Value);
-                        var to = int.Parse(rangeMatch.Groups[2].Value);
-                        var authorsText = rangeMatch.Groups[3].Value.Trim();
-                        var authors = ParseAuthorList(authorsText);
-
-                        if (authors.Count > 0)
-                            authorRanges.Add(new AuthorRangeRule(from, to, authors));
-
-                        continue;
-                    }
-                }
-
-                // Question start
-                if (TryParseQuestionStart(line, out var questionNumber, out var remainingText))
-                {
-                    if (!IsValidNextQuestionNumber(
-                            questionNumber,
-                            ref expectedNextQuestionInTour,
-                            ref expectedNextQuestionGlobal,
-                            ref numberingMode))
-                    {
-                        // Not a valid sequential question number -> treat as regular text
-                        if (currentTour != null)
-                        {
-                            var (detectedSection, detectedRemainder) = DetectLabel(line);
-                            if (detectedSection != null)
-                            {
-                                currentSection = detectedSection.Value;
-                                line = detectedRemainder;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(line))
-                                AppendToSection(currentSection, line, currentQuestion, currentTour, result);
-                        }
-                        else
-                        {
-                            headerBlocks.Add(line);
-                        }
-
-                        continue;
-                    }
-
-                    // Save previous question
-                    if (currentQuestion != null && currentTour != null)
-                    {
-                        FinalizeQuestion(currentQuestion, authorRanges, result);
-                        currentTour.Questions.Add(currentQuestion);
-                    }
-
-                    // If no tour, create default
-                    if (currentTour == null)
-                    {
-                        if (headerBlocks.Count > 0)
-                            ParsePackageHeader(headerBlocks, result);
-
-                        currentTour = new TourDto { Number = "1" };
-                        result.Tours.Add(currentTour);
-                        result.Warnings.Add("Тур не знайдено, створено тур за замовчуванням");
-                    }
-
-                    currentQuestion = new QuestionDto { Number = questionNumber };
-                    currentSection = ParserSection.QuestionText;
-                    questionCreatedInThisBlock = true;
-
-                    // Apply pending assets that appeared before the question
-                    foreach (var (asset, section) in pendingAssets)
-                        AssociateAsset(asset, section, currentQuestion);
-                    pendingAssets.Clear();
-
-                    // DO NOT swallow remaining lines in the paragraph (labels may follow)
-                    if (!string.IsNullOrWhiteSpace(remainingText))
-                    {
-                        // Remaining text may start with bracketed handout
-                        if (TryExtractBracketedHandout(remainingText, out var handoutInRemaining, out var textAfterHandout))
-                        {
-                            if (!string.IsNullOrWhiteSpace(handoutInRemaining))
-                                currentQuestion.HandoutText = AppendText(currentQuestion.HandoutText, handoutInRemaining);
-
-                            if (!string.IsNullOrWhiteSpace(textAfterHandout))
-                                currentQuestion.Text = AppendText(currentQuestion.Text, textAfterHandout);
-                        }
-                        else
-                        {
-                            currentQuestion.Text = AppendText(currentQuestion.Text, remainingText);
-                        }
-                    }
-
-                    _logger.LogDebug("Found question: {QuestionNumber}", questionNumber);
-
-                    // Continue parsing next lines of the same block
-                    continue;
-                }
-
-                // Package header collection
-                if (currentTour == null)
-                {
-                    headerBlocks.Add(line);
-                    continue;
-                }
-
-                // Host instructions [Ведучому: ...]
-                if (currentQuestion != null && TryExtractHostInstructions(line, out var hostInstructions, out var afterInstructions))
-                {
-                    currentQuestion.HostInstructions = AppendText(currentQuestion.HostInstructions, hostInstructions);
-
-                    if (!string.IsNullOrWhiteSpace(afterInstructions))
-                        currentQuestion.Text = AppendText(currentQuestion.Text, afterInstructions);
-
-                    continue;
-                }
-
-                // Bracketed handout [Роздатка: ...] Question text...
-                if (TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
-                {
-                    currentSection = ParserSection.Handout;
-
-                    if (currentQuestion != null && !string.IsNullOrWhiteSpace(handoutText))
-                        currentQuestion.HandoutText = AppendText(currentQuestion.HandoutText, handoutText);
-
-                    if (!string.IsNullOrWhiteSpace(afterHandout))
-                    {
-                        if (currentQuestion != null)
-                            currentQuestion.Text = AppendText(currentQuestion.Text, afterHandout);
-
-                        currentSection = ParserSection.QuestionText;
-                    }
-
-                    continue;
-                }
-
-                // Label transitions
-                var (newSection, labelRemainder) = DetectLabel(line);
-                if (newSection != null)
-                {
-                    currentSection = newSection.Value;
-                    line = labelRemainder;
-                }
-
-                // Append line to current section
-                if (!string.IsNullOrWhiteSpace(line))
-                    AppendToSection(currentSection, line, currentQuestion, currentTour, result);
-            }
-
-            // Associate block assets with the FINAL section detected in this block.
-            foreach (var asset in block.Assets)
-            {
-                var isStandaloneHandoutBlock = currentSection == ParserSection.Handout && !questionCreatedInThisBlock;
-
-                if (isStandaloneHandoutBlock || currentQuestion == null)
-                {
-                    pendingAssets.Add((asset, currentSection));
-                }
-                else
-                {
-                    AssociateAsset(asset, currentSection, currentQuestion);
-                }
-            }
+            ProcessBlock(block, ctx);
         }
 
-        // Save final question
-        if (currentQuestion != null && currentTour != null)
-        {
-            FinalizeQuestion(currentQuestion, authorRanges, result);
-            currentTour.Questions.Add(currentQuestion);
-        }
-
-        // Parse header if no tours found
-        if (result.Tours.Count == 0 && headerBlocks.Count > 0)
-        {
-            ParsePackageHeader(headerBlocks, result);
-        }
-
-        CalculateConfidence(result);
+        FinalizeParsingResult(ctx);
 
         _logger.LogInformation(
             "Parsed {TourCount} tours, {QuestionCount} questions, confidence: {Confidence:P0}",
-            result.Tours.Count, result.TotalQuestions, result.Confidence);
+            ctx.Result.Tours.Count, ctx.Result.TotalQuestions, ctx.Result.Confidence);
+
+        return ctx.Result;
+    }
+
+    /// <summary>
+    /// Processes a single document block (paragraph).
+    /// </summary>
+    private void ProcessBlock(DocBlock block, ParserContext ctx)
+    {
+        var text = NormalizeText(block.Text);
+        if (string.IsNullOrWhiteSpace(text) && block.Assets.Count == 0)
+            return;
+
+        ctx.QuestionCreatedInCurrentBlock = false;
+
+        foreach (var line in SplitIntoLines(text))
+        {
+            ProcessLine(line, ctx);
+        }
+
+        AssociateBlockAssets(block.Assets, ctx);
+    }
+
+    /// <summary>
+    /// Processes a single line of text within a block.
+    /// </summary>
+    private void ProcessLine(string line, ParserContext ctx)
+    {
+        if (TryProcessTourStart(line, ctx)) return;
+        if (TryProcessAuthorRange(line, ctx)) return;
+        if (TryProcessQuestionStart(line, ctx)) return;
+        if (TryCollectHeaderLine(line, ctx)) return;
+        if (TryProcessHostInstructions(line, ctx)) return;
+        if (TryProcessBracketedHandout(line, ctx)) return;
+
+        ProcessLabelOrContent(line, ctx);
+    }
+
+    /// <summary>
+    /// Attempts to parse and handle a tour start line.
+    /// </summary>
+    private bool TryProcessTourStart(string line, ParserContext ctx)
+    {
+        if (!TryParseTourStart(line, out var tourNumber))
+            return false;
+
+        SaveCurrentQuestion(ctx);
+        EnsurePackageHeaderParsed(ctx);
+
+        ctx.CurrentTour = new TourDto { Number = tourNumber };
+        ctx.Result.Tours.Add(ctx.CurrentTour);
+        ctx.CurrentQuestion = null;
+        ctx.CurrentSection = ParserSection.TourHeader;
+        ctx.ExpectedNextQuestionInTour = null;
+
+        _logger.LogDebug("Found tour: {TourNumber}", tourNumber);
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to parse author range headers (e.g., "Автор запитань 1-18: ...").
+    /// </summary>
+    private static bool TryProcessAuthorRange(string line, ParserContext ctx)
+    {
+        if (ctx.HasCurrentQuestion)
+            return false;
+
+        var match = ParserPatterns.AuthorRangeLabel().Match(line);
+        if (!match.Success)
+            return false;
+
+        var from = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var to = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+        var authors = ParseAuthorList(match.Groups[3].Value.Trim());
+
+        if (authors.Count > 0)
+            ctx.AuthorRanges.Add(new AuthorRangeRule(from, to, authors));
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to parse and handle a question start line.
+    /// </summary>
+    private bool TryProcessQuestionStart(string line, ParserContext ctx)
+    {
+        if (!TryParseQuestionStart(line, out var questionNumber, out var remainingText))
+            return false;
+
+        if (!IsValidNextQuestionNumber(questionNumber, ctx))
+        {
+            ProcessAsRegularContent(line, ctx);
+            return true;
+        }
+
+        SaveCurrentQuestion(ctx);
+        EnsureDefaultTourExists(ctx);
+
+        ctx.CurrentQuestion = new QuestionDto { Number = questionNumber };
+        ctx.CurrentSection = ParserSection.QuestionText;
+        ctx.QuestionCreatedInCurrentBlock = true;
+
+        ApplyPendingAssets(ctx);
+        ProcessRemainingTextAfterQuestionNumber(remainingText, ctx.CurrentQuestion);
+
+        _logger.LogDebug("Found question: {QuestionNumber}", questionNumber);
+        return true;
+    }
+
+    /// <summary>
+    /// Collects lines into header blocks when no tour has been started yet.
+    /// </summary>
+    private static bool TryCollectHeaderLine(string line, ParserContext ctx)
+    {
+        if (ctx.HasCurrentTour)
+            return false;
+
+        ctx.HeaderBlocks.Add(line);
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to extract and process host instructions [Ведучому: ...].
+    /// </summary>
+    private static bool TryProcessHostInstructions(string line, ParserContext ctx)
+    {
+        if (!ctx.HasCurrentQuestion)
+            return false;
+
+        if (!TryExtractHostInstructions(line, out var instructions, out var afterInstructions))
+            return false;
+
+        ctx.CurrentQuestion!.HostInstructions = AppendText(ctx.CurrentQuestion.HostInstructions, instructions);
+
+        if (!string.IsNullOrWhiteSpace(afterInstructions))
+            ctx.CurrentQuestion.Text = AppendText(ctx.CurrentQuestion.Text, afterInstructions);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to extract and process bracketed handout [Роздатка: ...].
+    /// </summary>
+    private static bool TryProcessBracketedHandout(string line, ParserContext ctx)
+    {
+        if (!TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
+            return false;
+
+        ctx.CurrentSection = ParserSection.Handout;
+
+        if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(handoutText))
+            ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, handoutText);
+
+        if (!string.IsNullOrWhiteSpace(afterHandout))
+        {
+            if (ctx.HasCurrentQuestion)
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterHandout);
+
+            ctx.CurrentSection = ParserSection.QuestionText;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Processes a line that may contain a section label or regular content.
+    /// </summary>
+    private static void ProcessLabelOrContent(string line, ParserContext ctx)
+    {
+        var (newSection, remainder) = DetectLabel(line);
+        if (newSection != null)
+        {
+            ctx.CurrentSection = newSection.Value;
+            line = remainder;
+        }
+
+        if (!string.IsNullOrWhiteSpace(line))
+            AppendToSection(ctx.CurrentSection, line, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+    }
+
+    /// <summary>
+    /// Handles a line that looked like a question start but failed validation.
+    /// </summary>
+    private static void ProcessAsRegularContent(string line, ParserContext ctx)
+    {
+        if (ctx.HasCurrentTour)
+        {
+            var (detectedSection, detectedRemainder) = DetectLabel(line);
+            if (detectedSection != null)
+            {
+                ctx.CurrentSection = detectedSection.Value;
+                line = detectedRemainder;
+            }
+
+            if (!string.IsNullOrWhiteSpace(line))
+                AppendToSection(ctx.CurrentSection, line, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+        }
+        else
+        {
+            ctx.HeaderBlocks.Add(line);
+        }
+    }
+
+    /// <summary>
+    /// Processes any remaining text after a question number (e.g., "1. [Роздатка: ...] Question text").
+    /// </summary>
+    private static void ProcessRemainingTextAfterQuestionNumber(string remainingText, QuestionDto question)
+    {
+        if (string.IsNullOrWhiteSpace(remainingText))
+            return;
+
+        if (TryExtractBracketedHandout(remainingText, out var handout, out var afterHandout))
+        {
+            if (!string.IsNullOrWhiteSpace(handout))
+                question.HandoutText = AppendText(question.HandoutText, handout);
+
+            if (!string.IsNullOrWhiteSpace(afterHandout))
+                question.Text = AppendText(question.Text, afterHandout);
+        }
+        else
+        {
+            question.Text = AppendText(question.Text, remainingText);
+        }
+    }
+
+    /// <summary>
+    /// Associates block assets with the current question or adds them to pending assets.
+    /// </summary>
+    private static void AssociateBlockAssets(List<AssetReference> assets, ParserContext ctx)
+    {
+        foreach (var asset in assets)
+        {
+            var isStandaloneHandoutBlock = ctx.CurrentSection == ParserSection.Handout && !ctx.QuestionCreatedInCurrentBlock;
+
+            if (isStandaloneHandoutBlock || !ctx.HasCurrentQuestion)
+            {
+                ctx.PendingAssets.Add((asset, ctx.CurrentSection));
+            }
+            else
+            {
+                AssociateAsset(asset, ctx.CurrentSection, ctx.CurrentQuestion);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies pending assets to the current question.
+    /// </summary>
+    private static void ApplyPendingAssets(ParserContext ctx)
+    {
+        foreach (var (asset, section) in ctx.PendingAssets)
+            AssociateAsset(asset, section, ctx.CurrentQuestion);
+
+        ctx.PendingAssets.Clear();
+    }
+
+    /// <summary>
+    /// Saves the current question to the current tour if both exist.
+    /// </summary>
+    private void SaveCurrentQuestion(ParserContext ctx)
+    {
+        if (ctx.CurrentQuestion != null && ctx.CurrentTour != null)
+        {
+            FinalizeQuestion(ctx.CurrentQuestion, ctx.AuthorRanges, ctx.Result);
+            ctx.CurrentTour.Questions.Add(ctx.CurrentQuestion);
+        }
+    }
+
+    /// <summary>
+    /// Ensures the package header is parsed before starting a tour.
+    /// </summary>
+    private static void EnsurePackageHeaderParsed(ParserContext ctx)
+    {
+        if (ctx.CurrentTour == null && ctx.HeaderBlocks.Count > 0)
+            ParsePackageHeader(ctx.HeaderBlocks, ctx.Result);
+    }
+
+    /// <summary>
+    /// Ensures a default tour exists when a question is found without a tour.
+    /// </summary>
+    private static void EnsureDefaultTourExists(ParserContext ctx)
+    {
+        if (ctx.CurrentTour != null)
+            return;
+
+        if (ctx.HeaderBlocks.Count > 0)
+            ParsePackageHeader(ctx.HeaderBlocks, ctx.Result);
+
+        ctx.CurrentTour = new TourDto { Number = "1" };
+        ctx.Result.Tours.Add(ctx.CurrentTour);
+        ctx.Result.Warnings.Add("Тур не знайдено, створено тур за замовчуванням");
+    }
+
+    /// <summary>
+    /// Finalizes the parsing result: saves the last question, parses remaining header, and calculates confidence.
+    /// </summary>
+    private void FinalizeParsingResult(ParserContext ctx)
+    {
+        SaveCurrentQuestion(ctx);
+
+        if (ctx.Result.Tours.Count == 0 && ctx.HeaderBlocks.Count > 0)
+            ParsePackageHeader(ctx.HeaderBlocks, ctx.Result);
+
+        CalculateConfidence(ctx.Result);
+    }
+
+    /// <summary>
+    /// Validates question numbering using the context's numbering state.
+    /// </summary>
+    private static bool IsValidNextQuestionNumber(string questionNumberStr, ParserContext ctx)
+    {
+        var expectedInTour = ctx.ExpectedNextQuestionInTour;
+        var expectedGlobal = ctx.ExpectedNextQuestionGlobal;
+        var mode = ctx.Mode;
+
+        var result = IsValidNextQuestionNumber(
+            questionNumberStr,
+            ref expectedInTour,
+            ref expectedGlobal,
+            ref mode);
+
+        ctx.ExpectedNextQuestionInTour = expectedInTour;
+        ctx.ExpectedNextQuestionGlobal = expectedGlobal;
+        ctx.Mode = mode;
 
         return result;
+    }
+
+    /// <summary>
+    /// Splits text into non-empty, trimmed lines.
+    /// </summary>
+    private static IEnumerable<string> SplitIntoLines(string text)
+    {
+        return text.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line));
     }
 
     private static string NormalizeText(string text)
@@ -377,21 +499,11 @@ public class PackageParser
     {
         tourNumber = "";
 
-        var match = ParserPatterns.TourStart().Match(text);
-        if (match.Success)
-        {
-            tourNumber = match.Groups[1].Value;
-            return true;
-        }
+        if (!TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartDashed()))
+            return false;
 
-        match = ParserPatterns.TourStartDashed().Match(text);
-        if (match.Success)
-        {
-            tourNumber = match.Groups[1].Value;
-            return true;
-        }
-
-        return false;
+        tourNumber = match.Groups[1].Value;
+        return true;
     }
 
     private static bool TryParseQuestionStart(string text, out string questionNumber, out string remainingText)
@@ -399,6 +511,7 @@ public class PackageParser
         questionNumber = "";
         remainingText = "";
 
+        // Try pattern with text first (captures remaining text in group 2)
         var match = ParserPatterns.QuestionStartWithText().Match(text);
         if (match.Success)
         {
@@ -407,20 +520,27 @@ public class PackageParser
             return true;
         }
 
-        match = ParserPatterns.QuestionStartNumberOnly().Match(text);
-        if (match.Success)
+        // Try other patterns (only capture question number)
+        if (!TryMatchFirst(text, out match, ParserPatterns.QuestionStartNumberOnly(), ParserPatterns.QuestionStartNamed()))
+            return false;
+
+        questionNumber = match.Groups[1].Value;
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to match text against multiple regex patterns, returning the first successful match.
+    /// </summary>
+    private static bool TryMatchFirst(string text, out Match match, params Regex[] patterns)
+    {
+        foreach (var pattern in patterns)
         {
-            questionNumber = match.Groups[1].Value;
-            return true;
+            match = pattern.Match(text);
+            if (match.Success)
+                return true;
         }
 
-        match = ParserPatterns.QuestionStartNamed().Match(text);
-        if (match.Success)
-        {
-            questionNumber = match.Groups[1].Value;
-            return true;
-        }
-
+        match = Match.Empty;
         return false;
     }
 
@@ -522,28 +642,28 @@ public class PackageParser
         return true;
     }
 
+    /// <summary>
+    /// Label patterns mapped to their corresponding parser sections.
+    /// </summary>
+    private static readonly (Func<Regex> GetPattern, ParserSection Section)[] LabelPatterns =
+    [
+        (ParserPatterns.AnswerLabel, ParserSection.Answer),
+        (ParserPatterns.AcceptedLabel, ParserSection.AcceptedAnswers),
+        (ParserPatterns.RejectedLabel, ParserSection.RejectedAnswers),
+        (ParserPatterns.CommentLabel, ParserSection.Comment),
+        (ParserPatterns.SourceLabel, ParserSection.Source),
+        (ParserPatterns.AuthorLabel, ParserSection.Authors),
+        (ParserPatterns.HandoutMarker, ParserSection.Handout)
+    ];
+
     private static (ParserSection? Section, string Remainder) DetectLabel(string text)
     {
-        var match = ParserPatterns.AnswerLabel().Match(text);
-        if (match.Success) return (ParserSection.Answer, match.Groups[1].Value.Trim());
-
-        match = ParserPatterns.AcceptedLabel().Match(text);
-        if (match.Success) return (ParserSection.AcceptedAnswers, match.Groups[1].Value.Trim());
-
-        match = ParserPatterns.RejectedLabel().Match(text);
-        if (match.Success) return (ParserSection.RejectedAnswers, match.Groups[1].Value.Trim());
-
-        match = ParserPatterns.CommentLabel().Match(text);
-        if (match.Success) return (ParserSection.Comment, match.Groups[1].Value.Trim());
-
-        match = ParserPatterns.SourceLabel().Match(text);
-        if (match.Success) return (ParserSection.Source, match.Groups[1].Value.Trim());
-
-        match = ParserPatterns.AuthorLabel().Match(text);
-        if (match.Success) return (ParserSection.Authors, match.Groups[1].Value.Trim());
-
-        match = ParserPatterns.HandoutMarker().Match(text);
-        if (match.Success) return (ParserSection.Handout, match.Groups[1].Value.Trim());
+        foreach (var (getPattern, section) in LabelPatterns)
+        {
+            var match = getPattern().Match(text);
+            if (match.Success)
+                return (section, match.Groups[1].Value.Trim());
+        }
 
         return (null, text);
     }
