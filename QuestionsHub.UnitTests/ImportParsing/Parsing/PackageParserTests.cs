@@ -555,6 +555,164 @@ public class PackageParserTests
         }
     }
 
+    [Fact]
+    public void Parse_MultilineBracketedHandoutSimple_ExtractsQuestionText()
+    {
+        // Arrange - Simplest multiline case: opening and closing in separate blocks
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("[Роздатка:"),
+            Block("]"),
+            Block("Текст після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().Contain("Питання");
+        question.Text.Should().Contain("Текст після роздатки.");
+    }
+
+    [Fact]
+    public void Parse_MultilineBracketedHandoutWithNamedQuestion_ExtractsQuestionText()
+    {
+        // Arrange - Using "Запитання N:" format like the real test
+        var imageAsset = new AssetReference
+        {
+            FileName = "image001.png",
+            RelativeUrl = "/media/image001.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1:"),
+            Block("[Роздатковий матеріал:"),
+            Block("", [imageAsset]),
+            Block("]"),
+            Block("Текст після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().Be("Текст після роздатки.");
+        question.HandoutAssetFileName.Should().Be("image001.png");
+    }
+
+    [Fact]
+    public void Parse_MultilineBracketedHandout_ClosingBracketAndTextInSameBlock()
+    {
+        // Arrange - Closing bracket and question text in same block (separated by newlines)
+        var imageAsset = new AssetReference
+        {
+            FileName = "image001.png",
+            RelativeUrl = "/media/image001.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1:"),
+            Block("[Роздатковий матеріал:"),
+            Block("", [imageAsset]),
+            Block(" \n  ] \nТекст після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().Be("Текст після роздатки.");
+        question.HandoutAssetFileName.Should().Be("image001.png");
+    }
+
+    [Fact]
+    public void Parse_MultilineBracketedHandoutWithImageAsset_ExtractsCleanQuestionText()
+    {
+        // Arrange - Multiline bracketed handout with image asset spanning multiple lines
+        // Format:
+        // Запитання 1:
+        // [Роздатковий матеріал:
+        // <imageAsset>
+        //   ]
+        // Перед вами одна з робіт проєкту...
+        var imageAsset = new AssetReference
+        {
+            FileName = "image001.png",
+            RelativeUrl = "/media/image001.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1:"),
+            Block("[Роздатковий матеріал:"),
+            Block("",[imageAsset]),
+            Block(" \n  ] \nПеред вами одна з робіт проєкту, автори якого займаються приверненням уваги до досліджень ЙОГО. Назвіть ЙОГО."),
+            Block("Відповідь: глобальне потепління.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+
+        // Question text should NOT contain the bracketed handout markers or empty brackets
+        question.Text.Should().Be("Перед вами одна з робіт проєкту, автори якого займаються приверненням уваги до досліджень ЙОГО. Назвіть ЙОГО.");
+        question.Text.Should().NotContain("[Роздатковий матеріал");
+        question.Text.Should().NotContain("]");
+
+        // The image asset should be associated with the handout
+        question.HandoutAssetFileName.Should().Be("image001.png");
+
+        // Handout text should be empty (only image was in the handout)
+        question.HandoutText.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Parse_MultilineBracketedHandoutWithTextAndImage_ExtractsHandoutTextAndQuestionText()
+    {
+        // Arrange - Multiline bracketed handout with both text and image
+        var imageAsset = new AssetReference
+        {
+            FileName = "image001.png",
+            RelativeUrl = "/media/image001.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатка: Опис зображення\n  ] \nЯке місто зображено?",
+                [imageAsset]),
+            Block("Відповідь: Київ")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().Be("Яке місто зображено?");
+        question.HandoutText.Should().Be("Опис зображення");
+        question.HandoutAssetFileName.Should().Be("image001.png");
+    }
+
     #endregion
 
     #region Package Header

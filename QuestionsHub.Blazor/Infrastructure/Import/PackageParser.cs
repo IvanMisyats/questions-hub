@@ -65,6 +65,16 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*([^\]]*)\]\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarkerBracket();
 
+    // Matches opening of a multiline bracketed handout (no closing bracket on same line)
+    // Captures any text after the colon as handout content
+    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
+    public static partial Regex HandoutMarkerBracketOpen();
+
+    // Matches a closing bracket with optional text after it (for multiline handouts)
+    // Captures any text after the bracket as question text
+    [GeneratedRegex(@"^\s*\]\s*(.*)$")]
+    public static partial Regex HandoutMarkerBracketClose();
+
     // Editors in header
     [GeneratedRegex(@"^\s*(?:Редактори?(?:\s*туру)?)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex EditorsLabel();
@@ -120,6 +130,11 @@ public class PackageParser
         public int? ExpectedNextQuestionInTour { get; set; }
         public int? ExpectedNextQuestionGlobal { get; set; }
         public bool QuestionCreatedInCurrentBlock { get; set; }
+
+        /// <summary>
+        /// Indicates we're inside a multiline bracketed handout [Роздатка: ... ] that spans multiple lines.
+        /// </summary>
+        public bool InsideMultilineHandoutBracket { get; set; }
 
         public bool HasCurrentQuestion => CurrentQuestion != null;
         public bool HasCurrentTour => CurrentTour != null;
@@ -177,6 +192,13 @@ public class PackageParser
     /// </summary>
     private void ProcessLine(string line, ParserContext ctx)
     {
+        // Handle multiline handout bracket closing first
+        if (ctx.InsideMultilineHandoutBracket)
+        {
+            if (TryProcessMultilineHandoutBracketContent(line, ctx))
+                return;
+        }
+
         if (TryProcessTourStart(line, ctx)) return;
         if (TryProcessAuthorRange(line, ctx)) return;
         if (TryProcessQuestionStart(line, ctx)) return;
@@ -185,6 +207,36 @@ public class PackageParser
         if (TryProcessBracketedHandout(line, ctx)) return;
 
         ProcessLabelOrContent(line, ctx);
+    }
+
+    /// <summary>
+    /// Processes content inside a multiline handout bracket or the closing bracket.
+    /// </summary>
+    private static bool TryProcessMultilineHandoutBracketContent(string line, ParserContext ctx)
+    {
+        // Check if this line closes the bracket
+        var closeMatch = ParserPatterns.HandoutMarkerBracketClose().Match(line);
+        if (closeMatch.Success)
+        {
+            ctx.InsideMultilineHandoutBracket = false;
+            ctx.CurrentSection = ParserSection.QuestionText;
+
+            var afterBracket = closeMatch.Groups[1].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(afterBracket) && ctx.HasCurrentQuestion)
+            {
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterBracket);
+            }
+
+            return true;
+        }
+
+        // Line is still inside the handout bracket - add to handout text (unless it's just whitespace)
+        if (!string.IsNullOrWhiteSpace(line) && ctx.HasCurrentQuestion)
+        {
+            ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, line);
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -252,7 +304,7 @@ public class PackageParser
         ctx.QuestionCreatedInCurrentBlock = true;
 
         ApplyPendingAssets(ctx);
-        ProcessRemainingTextAfterQuestionNumber(remainingText, ctx.CurrentQuestion);
+        ProcessRemainingTextAfterQuestionNumber(remainingText, ctx);
 
         _logger.LogDebug("Found question: {QuestionNumber}", questionNumber);
         return true;
@@ -291,26 +343,42 @@ public class PackageParser
 
     /// <summary>
     /// Attempts to extract and process bracketed handout [Роздатка: ...].
+    /// Handles both single-line and multiline (opening) bracketed handouts.
     /// </summary>
     private static bool TryProcessBracketedHandout(string line, ParserContext ctx)
     {
-        if (!TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
-            return false;
-
-        ctx.CurrentSection = ParserSection.Handout;
-
-        if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(handoutText))
-            ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, handoutText);
-
-        if (!string.IsNullOrWhiteSpace(afterHandout))
+        // Try single-line bracket first (has closing bracket on same line)
+        if (TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
         {
-            if (ctx.HasCurrentQuestion)
-                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterHandout);
+            ctx.CurrentSection = ParserSection.Handout;
 
-            ctx.CurrentSection = ParserSection.QuestionText;
+            if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(handoutText))
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, handoutText);
+
+            if (!string.IsNullOrWhiteSpace(afterHandout))
+            {
+                if (ctx.HasCurrentQuestion)
+                    ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterHandout);
+
+                ctx.CurrentSection = ParserSection.QuestionText;
+            }
+
+            return true;
         }
 
-        return true;
+        // Try multiline bracket opening (no closing bracket on this line)
+        if (TryExtractMultilineHandoutOpening(line, out var openingHandoutText))
+        {
+            ctx.CurrentSection = ParserSection.Handout;
+            ctx.InsideMultilineHandoutBracket = true;
+
+            if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(openingHandoutText))
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, openingHandoutText);
+
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -355,23 +423,44 @@ public class PackageParser
     /// <summary>
     /// Processes any remaining text after a question number (e.g., "1. [Роздатка: ...] Question text").
     /// </summary>
-    private static void ProcessRemainingTextAfterQuestionNumber(string remainingText, QuestionDto question)
+    private static void ProcessRemainingTextAfterQuestionNumber(string remainingText, ParserContext ctx)
     {
         if (string.IsNullOrWhiteSpace(remainingText))
             return;
 
+        var question = ctx.CurrentQuestion!;
+
+        // Try single-line bracketed handout
         if (TryExtractBracketedHandout(remainingText, out var handout, out var afterHandout))
         {
+            ctx.CurrentSection = ParserSection.Handout;
+
             if (!string.IsNullOrWhiteSpace(handout))
                 question.HandoutText = AppendText(question.HandoutText, handout);
 
             if (!string.IsNullOrWhiteSpace(afterHandout))
+            {
                 question.Text = AppendText(question.Text, afterHandout);
+                ctx.CurrentSection = ParserSection.QuestionText;
+            }
+
+            return;
         }
-        else
+
+        // Try multiline bracketed handout opening
+        if (TryExtractMultilineHandoutOpening(remainingText, out var openingHandout))
         {
-            question.Text = AppendText(question.Text, remainingText);
+            ctx.CurrentSection = ParserSection.Handout;
+            ctx.InsideMultilineHandoutBracket = true;
+
+            if (!string.IsNullOrWhiteSpace(openingHandout))
+                question.HandoutText = AppendText(question.HandoutText, openingHandout);
+
+            return;
         }
+
+        // Regular question text
+        question.Text = AppendText(question.Text, remainingText);
     }
 
     /// <summary>
@@ -381,15 +470,17 @@ public class PackageParser
     {
         foreach (var asset in assets)
         {
-            var isStandaloneHandoutBlock = ctx.CurrentSection == ParserSection.Handout && !ctx.QuestionCreatedInCurrentBlock;
-
-            if (isStandaloneHandoutBlock || !ctx.HasCurrentQuestion)
+            // If we have a current question, associate the asset directly
+            if (ctx.HasCurrentQuestion)
             {
-                ctx.PendingAssets.Add((asset, ctx.CurrentSection));
+                // When inside a multiline handout bracket, force association with handout section
+                var section = ctx.InsideMultilineHandoutBracket ? ParserSection.Handout : ctx.CurrentSection;
+                AssociateAsset(asset, section, ctx.CurrentQuestion);
             }
             else
             {
-                AssociateAsset(asset, ctx.CurrentSection, ctx.CurrentQuestion);
+                // No question yet - add to pending assets for later association
+                ctx.PendingAssets.Add((asset, ctx.CurrentSection));
             }
         }
     }
@@ -691,6 +782,25 @@ public class PackageParser
 
         handoutText = match.Groups[1].Value.Trim();
         remainingText = match.Groups[2].Value.Trim();
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to extract the opening of a multiline bracketed handout (no closing bracket on this line).
+    /// </summary>
+    private static bool TryExtractMultilineHandoutOpening(string text, out string handoutText)
+    {
+        handoutText = "";
+
+        // Don't match if the closing bracket is on the same line (single-line case)
+        if (text.Contains(']'))
+            return false;
+
+        var match = ParserPatterns.HandoutMarkerBracketOpen().Match(text);
+        if (!match.Success)
+            return false;
+
+        handoutText = match.Groups[1].Value.Trim();
         return true;
     }
 
