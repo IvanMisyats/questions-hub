@@ -9,6 +9,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
 {
     public DbSet<Package> Packages => Set<Package>();
     public DbSet<Tour> Tours => Set<Tour>();
+    public DbSet<Block> Blocks => Set<Block>();
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<Author> Authors => Set<Author>();
     public DbSet<PackageImportJob> PackageImportJobs => Set<PackageImportJob>();
@@ -37,6 +38,10 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasMany(a => a.Tours)
                 .WithMany(t => t.Editors)
                 .UsingEntity("TourEditors");
+
+            entity.HasMany(a => a.Blocks)
+                .WithMany(b => b.Editors)
+                .UsingEntity("BlockEditors");
         });
 
         builder.Entity<Package>(entity =>
@@ -68,6 +73,28 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
                 .WithOne(q => q.Tour)
                 .HasForeignKey(q => q.TourId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(t => t.Blocks)
+                .WithOne(b => b.Tour)
+                .HasForeignKey(b => b.TourId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Block>(entity =>
+        {
+            entity.HasKey(b => b.Id);
+            entity.Property(b => b.Name).HasMaxLength(200);
+            entity.Property(b => b.Preamble);
+
+            // Unique constraint on OrderIndex within Tour
+            entity.HasIndex(b => new { b.TourId, b.OrderIndex })
+                .IsUnique()
+                .HasDatabaseName("IX_Blocks_TourId_OrderIndex");
+
+            entity.HasMany(b => b.Questions)
+                .WithOne(q => q.Block)
+                .HasForeignKey(q => q.BlockId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Question>(entity =>

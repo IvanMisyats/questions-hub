@@ -70,6 +70,9 @@
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)
+                .ThenInclude(t => t.Blocks)
+                    .ThenInclude(b => b.Editors)
+            .Include(p => p.Tours)
                 .ThenInclude(t => t.Questions)
             .OrderByDescending(p => p.PlayedAt)
             .ToListAsync();

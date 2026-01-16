@@ -5,6 +5,9 @@
     <div class="nav-header mb-3">
         <button type="button" class="nav-link fw-bold" @onclick="@(() => ScrollToElementAsync("top"))">@Package.Title</button>
     </div>
+    @{
+        var blockNumberInPackage = 0;
+    }
     @foreach (var tour in Package.Tours)
     {
         var tourElementId = $"tour-{tour.Id}";
@@ -12,15 +15,43 @@
             <button type="button" class="nav-link tour-link" @onclick="@(() => ScrollToElementAsync(tourElementId))">
                 Тур @tour.Number
             </button>
-            <div class="question-links">
-                @foreach (var question in tour.Questions)
+            @if (tour.HasBlocks)
+            {
+                @* Tour with blocks - show blocks with their questions *@
+                @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
                 {
-                    var questionElementId = $"question-{question.Id}";
-                    <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
-                        @question.Number
-                    </button>
+                    blockNumberInPackage++;
+                    var blockElementId = $"block-{block.Id}";
+                    var currentBlockNumber = blockNumberInPackage;
+                    <div class="block-group ms-2">
+                        <button type="button" class="nav-link block-link small text-muted" @onclick="@(() => ScrollToElementAsync(blockElementId))">
+                            @block.GetDisplayName(currentBlockNumber)
+                        </button>
+                        <div class="question-links">
+                            @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
+                            {
+                                var questionElementId = $"question-{question.Id}";
+                                <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                                    @question.Number
+                                </button>
+                            }
+                        </div>
+                    </div>
                 }
-            </div>
+            }
+            else
+            {
+                @* Tour without blocks - show questions directly *@
+                <div class="question-links">
+                    @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
+                    {
+                        var questionElementId = $"question-{question.Id}";
+                        <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                            @question.Number
+                        </button>
+                    }
+                </div>
+            }
         </div>
     }
 </nav>

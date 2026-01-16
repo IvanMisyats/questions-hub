@@ -1,4 +1,4 @@
-﻿/* Two-column layout */
+﻿﻿/* Two-column layout */
 .package-container {
     display: flex;
     gap: 2rem;
@@ -26,6 +26,18 @@
     margin-bottom: 3rem;
 }
 
+/* Block sections */
+.block-section {
+    margin-bottom: 2rem;
+    padding-left: 1rem;
+    border-left: 3px solid #dee2e6;
+}
+
+.block-header {
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
 /* Smooth scrolling */
 html {
     scroll-behavior: smooth;
@@ -33,6 +45,7 @@ html {
 
 /* Add padding for anchor links (account for sticky header if any) */
 [id^="tour-"],
+[id^="block-"],
 [id^="question-"] {
     scroll-margin-top: 1rem;
 }

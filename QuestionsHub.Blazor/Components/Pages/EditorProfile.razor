@@ -133,13 +133,12 @@
                                 @if (packageItem.Tours.Any())
                                 {
                                     @TourSeparator
-                                    @for (var i = 0; i < packageItem.Tours.Count; i++)
+                                    @foreach (var (entry, isLast) in GetPackageEntries(packageItem))
                                     {
-                                        var tour = packageItem.Tours[i];
-                                        <a href="/package/@packageItem.PackageId#tour-@tour.TourId">Тур @tour.TourNumber</a>
-                                        @if (i < packageItem.Tours.Count - 1)
+                                        <a href="@entry.Href">@entry.Text</a>
+                                        @if (!isLast)
                                         {
-                                            @TourSeparator
+                                            @(" | ")
                                         }
                                     }
                                 }
@@ -282,6 +281,13 @@
     {
         public int TourId { get; set; }
         public required string TourNumber { get; set; }
+        public List<BlockListItem> Blocks { get; set; } = [];
+    }
+
+    private class BlockListItem
+    {
+        public int BlockId { get; set; }
+        public int BlockNumber { get; set; }
     }
 
     protected override async Task OnInitializedAsync()
@@ -302,34 +308,70 @@
             .Include(a => a.User)
             .Include(a => a.Tours)
                 .ThenInclude(t => t.Package)
+            .Include(a => a.Blocks)
+                .ThenInclude(b => b.Tour)
+                    .ThenInclude(t => t.Package)
             .Include(a => a.Questions)
             .FirstOrDefaultAsync(a => a.Id == Id);
 
         if (_author != null)
         {
-            _packagesCount = _author.Tours
-                .Select(t => t.PackageId)
-                .Distinct()
-                .Count();
+            // Count unique packages from tours and blocks
+            var packageIdsFromTours = _author.Tours.Select(t => t.PackageId);
+            var packageIdsFromBlocks = _author.Blocks.Select(b => b.Tour.PackageId);
+            _packagesCount = packageIdsFromTours.Union(packageIdsFromBlocks).Distinct().Count();
             _questionsCount = _author.Questions.Count;
 
-            // Build packages list grouped by package
-            _packagesList = _author.Tours
-                .GroupBy(t => new { t.PackageId, t.Package.Title })
+            // Build packages list grouped by package, including both tours and blocks
+            var tourItems = _author.Tours
+                .Select(t => new
+                {
+                    t.PackageId,
+                    PackageTitle = t.Package.Title,
+                    TourId = t.Id,
+                    TourNumber = t.Number,
+                    BlockId = (int?)null,
+                    BlockOrderIndex = (int?)null
+                });
+
+            var blockItems = _author.Blocks
+                .Select(b => new
+                {
+                    b.Tour.PackageId,
+                    PackageTitle = b.Tour.Package.Title,
+                    TourId = b.Tour.Id,
+                    TourNumber = b.Tour.Number,
+                    BlockId = (int?)b.Id,
+                    BlockOrderIndex = (int?)b.OrderIndex
+                });
+
+            _packagesList = tourItems.Union(blockItems)
+                .GroupBy(x => new { x.PackageId, x.PackageTitle })
                 .Select(g => new PackageListItem
                 {
                     PackageId = g.Key.PackageId,
-                    PackageTitle = g.Key.Title,
-                    Tours = g.Select(t => new TourListItem
-                    {
-                        TourId = t.Id,
-                        TourNumber = t.Number
-                    })
-                    .OrderBy(t => int.TryParse(t.TourNumber, out var num) ? num : int.MaxValue) // Numeric tours first
-                    .ThenBy(t => t.TourNumber) // Then non-numeric tours alphabetically
-                    .ToList()
+                    PackageTitle = g.Key.PackageTitle,
+                    Tours = g
+                        .GroupBy(x => new { x.TourId, x.TourNumber })
+                        .Select(tg => new TourListItem
+                        {
+                            TourId = tg.Key.TourId,
+                            TourNumber = tg.Key.TourNumber,
+                            Blocks = tg
+                                .Where(x => x.BlockId.HasValue)
+                                .OrderBy(x => x.BlockOrderIndex)
+                                .Select((x, index) => new BlockListItem
+                                {
+                                    BlockId = x.BlockId!.Value,
+                                    BlockNumber = index + 1
+                                })
+                                .ToList()
+                        })
+                        .OrderBy(t => int.TryParse(t.TourNumber, out var num) ? num : int.MaxValue)
+                        .ThenBy(t => t.TourNumber)
+                        .ToList()
                 })
-                .OrderByDescending(p => p.PackageId) // Show newest packages first
+                .OrderByDescending(p => p.PackageId)
                 .ToList();
 
             // Load linked user info
@@ -348,6 +390,39 @@
         _displayedPackagesCount += PackagesPerPage;
     }
 
+    private IEnumerable<((string Text, string Href) Entry, bool IsLast)> GetPackageEntries(PackageListItem packageItem)
+    {
+        var allEntries = new List<(string Text, string Href)>();
+
+        foreach (var tour in packageItem.Tours)
+        {
+            if (tour.Blocks.Any())
+            {
+                // Tour has blocks - show tour => block N for each block
+                foreach (var block in tour.Blocks)
+                {
+                    allEntries.Add((
+                        $"Тур {tour.TourNumber} → Блок {block.BlockNumber}",
+                        $"/package/{packageItem.PackageId}#block-{block.BlockId}"
+                    ));
+                }
+            }
+            else
+            {
+                // Tour without blocks - just show tour
+                allEntries.Add((
+                    $"Тур {tour.TourNumber}",
+                    $"/package/{packageItem.PackageId}#tour-{tour.TourId}"
+                ));
+            }
+        }
+
+        for (var i = 0; i < allEntries.Count; i++)
+        {
+            yield return (allEntries[i], i == allEntries.Count - 1);
+        }
+    }
+
     private void ShowPackagesList()
     {
         _showPackagesList = true;
@@ -358,7 +433,7 @@
     {
         _showPackagesList = false;
         _showQuestionsList = true;
-        
+
         if (_questionsList.Count == 0)
         {
             await LoadMoreQuestions();
@@ -435,7 +510,7 @@
         }
 
         _copyInProgress = true;
-        
+
         try
         {
             var baseUri = Navigation.BaseUri.TrimEnd('/');

@@ -73,6 +73,9 @@ else
 
                 <hr class="my-4" />
 
+                @{
+                    var blockNumberInPackage = 0;
+                }
                 @foreach (var tour in _package.Tours)
                 {
                     <div id="tour-@tour.Id" class="tour-section">
@@ -80,37 +83,82 @@ else
                             Тур @tour.Number
                         </h2>
 
-                        @if (tour.Editors.Any())
+                        @if (tour.HasBlocks)
                         {
-                            <p>
-                                <small>
-                                    <strong>Редактори туру:</strong>
-                                    @for (var i = 0; i < tour.Editors.Count; i++)
+                            @* Tour with blocks - display each block with its questions *@
+                            @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
+                            {
+                                blockNumberInPackage++;
+                                <div id="block-@block.Id" class="block-section ms-3">
+                                    <h4 class="block-header">
+                                        @block.GetDisplayName(blockNumberInPackage)
+                                    </h4>
+
+                                    @if (block.Editors.Any())
                                     {
-                                        var editor = tour.Editors[i];
-                                        @(" ")<a href="/editor/@editor.Id">@editor.FullName</a>@(i < tour.Editors.Count - 1 ? "," : "")
+                                        <p>
+                                            <small>
+                                                <strong>Редактори блоку:</strong>
+                                                @for (var i = 0; i < block.Editors.Count; i++)
+                                                {
+                                                    var editor = block.Editors[i];
+                                                    @(" ")<a href="/editor/@editor.Id">@editor.FullName</a>@(i < block.Editors.Count - 1 ? "," : "")
+                                                }
+                                            </small>
+                                        </p>
                                     }
-                                </small>
-                            </p>
-                        }
 
-                        @if (!string.IsNullOrEmpty(tour.Preamble))
-                        {
-                            <div class="preamble mb-3">
-                                <p style="white-space: pre-line;">@tour.Preamble</p>
-                            </div>
-                        }
+                                    @if (!string.IsNullOrEmpty(block.Preamble))
+                                    {
+                                        <div class="preamble mb-3">
+                                            <p style="white-space: pre-line;">@block.Preamble</p>
+                                        </div>
+                                    }
 
-                        @if (!string.IsNullOrEmpty(tour.Comment))
-                        {
-                            <p class="small">@tour.Comment</p>
+                                    @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
+                                    {
+                                        <div id="question-@question.Id">
+                                            <QuestionCard Question="@question" />
+                                        </div>
+                                    }
+                                </div>
+                            }
                         }
-
-                        @foreach (var question in tour.Questions)
+                        else
                         {
-                            <div id="question-@question.Id">
-                                <QuestionCard Question="@question" />
-                            </div>
+                            @* Tour without blocks - existing behavior *@
+                            @if (tour.Editors.Any())
+                            {
+                                <p>
+                                    <small>
+                                        <strong>Редактори туру:</strong>
+                                        @for (var i = 0; i < tour.Editors.Count; i++)
+                                        {
+                                            var editor = tour.Editors[i];
+                                            @(" ")<a href="/editor/@editor.Id">@editor.FullName</a>@(i < tour.Editors.Count - 1 ? "," : "")
+                                        }
+                                    </small>
+                                </p>
+                            }
+
+                            @if (!string.IsNullOrEmpty(tour.Preamble))
+                            {
+                                <div class="preamble mb-3">
+                                    <p style="white-space: pre-line;">@tour.Preamble</p>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(tour.Comment))
+                            {
+                                <p class="small">@tour.Comment</p>
+                            }
+
+                            @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
+                            {
+                                <div id="question-@question.Id">
+                                    <QuestionCard Question="@question" />
+                                </div>
+                            }
                         }
                     </div>
                 }
@@ -136,6 +184,9 @@ else
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)
+                .ThenInclude(t => t.Blocks)
+                    .ThenInclude(b => b.Editors)
+            .Include(p => p.Tours)
                 .ThenInclude(t => t.Questions)
                     .ThenInclude(q => q.Authors)
             .FirstOrDefaultAsync(p => p.Id == Id);
@@ -155,7 +206,7 @@ else
             return;
         }
 
-        // Sort tours by Number and questions by OrderIndex
+        // Sort tours by Number, blocks by OrderIndex, and questions by OrderIndex
         _package.Tours = _package.Tours
             .OrderBy(t => int.TryParse(t.Number, out var num) ? num : int.MaxValue)
             .ThenBy(t => t.Number)
@@ -163,6 +214,10 @@ else
 
         foreach (var tour in _package.Tours)
         {
+            tour.Blocks = tour.Blocks
+                .OrderBy(b => b.OrderIndex)
+                .ToList();
+
             tour.Questions = tour.Questions
                 .OrderBy(q => q.OrderIndex)
                 .ToList();

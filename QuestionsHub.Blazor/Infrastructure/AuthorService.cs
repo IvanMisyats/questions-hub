@@ -145,7 +145,11 @@ public class AuthorService
                 FirstName = a.FirstName,
                 LastName = a.LastName,
                 QuestionCount = a.Questions.Count,
-                PackageCount = a.Tours.Select(t => t.PackageId).Distinct().Count()
+                // Count packages from both tours (as tour editor) and blocks (as block editor)
+                PackageCount = a.Tours.Select(t => t.PackageId)
+                    .Union(a.Blocks.Select(b => b.Tour.PackageId))
+                    .Distinct()
+                    .Count()
             })
             .OrderByDescending(a => a.QuestionCount)
             .ThenBy(a => a.LastName)
@@ -165,7 +169,7 @@ public class AuthorService
     }
 
     /// <summary>
-    /// Attempts to delete an author if they are orphaned (no questions, no tours, and not linked to a user).
+    /// Attempts to delete an author if they are orphaned (no questions, no tours, no blocks, and not linked to a user).
     /// Uses the provided context.
     /// </summary>
     /// <param name="context">Database context to use.</param>
@@ -176,6 +180,7 @@ public class AuthorService
         var author = await context.Authors
             .Include(a => a.Questions)
             .Include(a => a.Tours)
+            .Include(a => a.Blocks)
             .FirstOrDefaultAsync(a => a.Id == authorId);
 
         if (author == null)
@@ -183,8 +188,8 @@ public class AuthorService
             return false;
         }
 
-        // Don't delete if author has any questions, tours, or is linked to a user
-        if (author.Questions.Count > 0 || author.Tours.Count > 0 || author.UserId != null)
+        // Don't delete if author has any questions, tours, blocks, or is linked to a user
+        if (author.Questions.Count > 0 || author.Tours.Count > 0 || author.Blocks.Count > 0 || author.UserId != null)
         {
             return false;
         }

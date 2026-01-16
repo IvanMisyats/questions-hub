@@ -30,5 +30,6 @@ public class Author
     // Navigation properties
     public List<Question> Questions { get; set; } = [];
     public List<Tour> Tours { get; set; } = [];
+    public List<Block> Blocks { get; set; } = [];
 }
 

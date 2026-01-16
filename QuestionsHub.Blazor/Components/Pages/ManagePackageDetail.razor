@@ -144,13 +144,26 @@
                                                 <input type="text" class="form-control form-control-sm"
                                                        @bind="tour.Number" @onblur="() => SaveTourAsync(tour)" />
                                             </div>
-                                            <div class="col-md-8">
-                                                <label class="form-label small">Редактори туру</label>
-                                                <AuthorSelector SelectedAuthors="tour.Editors"
-                                                                OnSelectionChanged="() => SaveTourAsync(tour)"
-                                                                OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
-                                                                Placeholder="Введіть прізвище редактора..." />
-                                            </div>
+                                            @if (!tour.HasBlocks)
+                                            {
+                                                <div class="col-md-8">
+                                                    <label class="form-label small">Редактори туру</label>
+                                                    <AuthorSelector SelectedAuthors="tour.Editors"
+                                                                    OnSelectionChanged="() => SaveTourAsync(tour)"
+                                                                    OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
+                                                                    Placeholder="Введіть прізвище редактора..." />
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="col-md-8">
+                                                    <label class="form-label small">Редактори туру</label>
+                                                    <div class="text-muted small">
+                                                        @string.Join(", ", tour.AllEditors.Select(e => e.FullName))
+                                                        <span class="text-muted ms-2">(визначаються з блоків)</span>
+                                                    </div>
+                                                </div>
+                                            }
                                             <div class="col-md-2 d-flex align-items-end">
                                                 <button class="btn btn-outline-danger btn-sm w-100"
                                                         @onclick="() => ConfirmDeleteTour(tour)">
@@ -165,38 +178,144 @@
                                             </div>
                                         </div>
 
-                                        <!-- Questions List -->
-                                        @if (tour.Questions.Count == 0)
+                                        @if (tour.HasBlocks)
                                         {
-                                            <div class="text-center py-3 text-muted">
-                                                <p class="mb-2">Тур ще не має питань.</p>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="list-group mb-3">
-                                                @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
+                                            <!-- Blocks Section -->
+                                            <div class="blocks-section mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <h6 class="mb-0">Блоки <span class="badge bg-secondary">@tour.Blocks.Count</span></h6>
+                                                    @if (tour.Blocks.Count < 6)
+                                                    {
+                                                        <button class="btn btn-outline-primary btn-sm" @onclick="() => AddBlockAsync(tour)">
+                                                            + Додати блок
+                                                        </button>
+                                                    }
+                                                </div>
+
+                                                @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
                                                 {
-                                                    <div class="list-group-item list-group-item-action d-flex align-items-center gap-2">
-                                                        <span class="badge bg-primary flex-shrink-0">@question.Number</span>
-                                                        <div class="flex-grow-1" style="cursor: pointer;"
-                                                             @onclick="() => OpenQuestionEditor(tour, question)">
-                                                            @question.Text
+                                                    var blockNumber = tour.Blocks.OrderBy(b => b.OrderIndex).ToList().IndexOf(block) + 1;
+                                                    var isBlockExpanded = IsBlockExpanded(block.Id);
+                                                    <div class="card mb-3">
+                                                        <div class="card-header d-flex justify-content-between align-items-center py-2"
+                                                             style="cursor: pointer;"
+                                                             @onclick="() => ToggleBlockExpand(block.Id)">
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <span style="font-size: 0.8rem;">@(isBlockExpanded ? "▼" : "▶")</span>
+                                                                <strong>Блок @blockNumber</strong>
+                                                                @if (!string.IsNullOrWhiteSpace(block.Name))
+                                                                {
+                                                                    <span class="text-muted">— @block.Name</span>
+                                                                }
+                                                                <span class="badge bg-secondary">@tour.Questions.Count(q => q.BlockId == block.Id) питань</span>
+                                                            </div>
+                                                            <button class="btn btn-outline-danger btn-sm d-flex align-items-center justify-content-center"
+                                                                    style="width: 24px; height: 24px; padding: 0; font-size: 1rem; line-height: 1;"
+                                                                    @onclick="() => ConfirmDeleteBlock(tour, block)"
+                                                                    @onclick:stopPropagation="true"
+                                                                    title="Видалити блок (питання залишаться у турі)">×</button>
                                                         </div>
-                                                        <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
-                                                                style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
-                                                                @onclick="() => ConfirmDeleteQuestion(tour, question)"
-                                                                @onclick:stopPropagation="true"
-                                                                title="Видалити">×</button>
+                                                        @if (isBlockExpanded)
+                                                        {
+                                                        <div class="card-body py-2">
+                                                            <div class="row g-2 mb-2">
+                                                                <div class="col-md-4">
+                                                                    <label class="form-label small">Назва блоку (необов'язково)</label>
+                                                                    <input type="text" class="form-control form-control-sm"
+                                                                           @bind="block.Name" @onblur="() => SaveBlockAsync(block)"
+                                                                           placeholder="@block.DisplayName" />
+                                                                </div>
+                                                                <div class="col-md-8">
+                                                                    <label class="form-label small">Редактори блоку</label>
+                                                                    <AuthorSelector SelectedAuthors="block.Editors"
+                                                                                    OnSelectionChanged="() => SaveBlockAsync(block)"
+                                                                                    OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
+                                                                                    Placeholder="Введіть прізвище редактора..." />
+                                                                </div>
+                                                                <div class="col-12">
+                                                                    <label class="form-label small">Преамбула блоку</label>
+                                                                    <textarea class="form-control form-control-sm auto-expand"
+                                                                              @bind="block.Preamble" @onblur="() => SaveBlockAsync(block)"
+                                                                              placeholder="Інформація від редактора блоку"></textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Questions in this block -->
+                                                            @{
+                                                                var blockQuestions = tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex).ToList();
+                                                            }
+                                                            @if (blockQuestions.Any())
+                                                            {
+                                                                <div class="list-group mb-2">
+                                                                    @foreach (var question in blockQuestions)
+                                                                    {
+                                                                        <div class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-1">
+                                                                            <span class="badge bg-primary flex-shrink-0">@question.Number</span>
+                                                                            <div class="flex-grow-1 small" style="cursor: pointer;"
+                                                                                 @onclick="() => OpenQuestionEditor(tour, question)">
+                                                                                @question.Text
+                                                                            </div>
+                                                                            <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
+                                                                                    style="width: 20px; height: 20px; padding: 0; font-size: 1rem; line-height: 1;"
+                                                                                    @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                                    @onclick:stopPropagation="true"
+                                                                                    title="Видалити">×</button>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                            <button class="btn btn-outline-success btn-sm"
+                                                                    @onclick="() => AddQuestionToBlockAsync(tour, block)">
+                                                                + Додати питання
+                                                            </button>
+                                                        </div>
+                                                        }
                                                     </div>
                                                 }
                                             </div>
                                         }
+                                        else
+                                        {
+                                            <!-- No blocks - show questions directly and "Add Block" button -->
+                                            <div class="mb-3">
+                                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => AddBlockAsync(tour)">
+                                                    ☰ Розділити на блоки
+                                                </button>
+                                            </div>
 
-                                        <button class="btn btn-outline-success btn-sm"
-                                                @onclick="() => AddQuestionAsync(tour)">
-                                            <i class="bi bi-plus-lg me-1"></i>Додати питання
-                                        </button>
+                                            <!-- Questions List -->
+                                            @if (tour.Questions.Count == 0)
+                                            {
+                                                <div class="text-center py-3 text-muted">
+                                                    <p class="mb-2">Тур ще не має питань.</p>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="list-group mb-3">
+                                                    @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
+                                                    {
+                                                        <div class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+                                                            <span class="badge bg-primary flex-shrink-0">@question.Number</span>
+                                                            <div class="flex-grow-1" style="cursor: pointer;"
+                                                                 @onclick="() => OpenQuestionEditor(tour, question)">
+                                                                @question.Text
+                                                            </div>
+                                                            <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
+                                                                    style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
+                                                                    @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                    @onclick:stopPropagation="true"
+                                                                    title="Видалити">×</button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+
+                                            <button class="btn btn-outline-success btn-sm"
+                                                    @onclick="() => AddQuestionAsync(tour)">
+                                                <i class="bi bi-plus-lg me-1"></i>Додати питання
+                                            </button>
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -262,6 +381,42 @@
     </div>
 }
 
+<!-- Delete Block Modal -->
+@if (_showDeleteBlockModal && _blockToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Видалити блок</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDeleteBlock"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Ви впевнені, що хочете видалити <strong>@_blockToDelete.DisplayName</strong>?</p>
+                    <p class="text-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        @{
+                            var blockQuestionCount = _blockToDeleteTour?.Questions.Count(q => q.BlockId == _blockToDelete.Id) ?? 0;
+                        }
+                        @if (blockQuestionCount > 0)
+                        {
+                            <text>@blockQuestionCount питань блоку залишаться у турі.</text>
+                        }
+                        else
+                        {
+                            <text>Блок не містить питань.</text>
+                        }
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDeleteBlock">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeleteBlockAsync">Видалити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Question Editor Modal -->
 @if (_showQuestionEditor && _editingQuestion != null && _editingTour != null)
 {
@@ -304,6 +459,24 @@
                             <input type="text" class="form-control" style="max-width: 100px;"
                                    @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync" />
                         </div>
+                        @if (_editingTour.HasBlocks)
+                        {
+                            <div class="col-md-2">
+                                <label class="col-form-label">Блок</label>
+                            </div>
+                            <div class="col-md-10">
+                                <select class="form-select" style="max-width: 300px;"
+                                        value="@_editingQuestion.BlockId"
+                                        @onchange="OnBlockChanged">
+                                    <option value="">-- Без блоку --</option>
+                                    @foreach (var block in _editingTour.Blocks.OrderBy(b => b.OrderIndex))
+                                    {
+                                        var blockNumber = _editingTour.Blocks.OrderBy(b => b.OrderIndex).ToList().IndexOf(block) + 1;
+                                        <option value="@block.Id">@block.GetDisplayName(blockNumber)</option>
+                                    }
+                                </select>
+                            </div>
+                        }
                         <div class="col-md-2">
                             <label class="col-form-label">Вказівка ведучому</label>
                         </div>
@@ -532,6 +705,7 @@
 
     // Accordion state
     private HashSet<int> _expandedTours = new();
+    private HashSet<int> _expandedBlocks = new();
 
     // Delete tour modal
     private bool _showDeleteTourModal;
@@ -541,6 +715,11 @@
     private bool _showDeleteQuestionModal;
     private Question? _questionToDelete;
     private Tour? _questionToDeleteTour;
+
+    // Delete block modal
+    private bool _showDeleteBlockModal;
+    private Block? _blockToDelete;
+    private Tour? _blockToDeleteTour;
 
     // Question editor modal
     private bool _showQuestionEditor;
@@ -615,6 +794,9 @@
                 _package = await context.Packages
                     .Include(p => p.Tours)
                         .ThenInclude(t => t.Editors)
+                    .Include(p => p.Tours)
+                        .ThenInclude(t => t.Blocks)
+                            .ThenInclude(b => b.Editors)
                     .Include(p => p.Tours)
                         .ThenInclude(t => t.Questions)
                             .ThenInclude(q => q.Authors)
@@ -1051,6 +1233,31 @@
         _areAuthorsEmpty = _editingQuestion.Authors == null || _editingQuestion.Authors.Count == 0;
     }
 
+    private async Task OnBlockChanged(ChangeEventArgs e)
+    {
+        if (_editingQuestion == null) return;
+
+        int? newBlockId = null;
+        if (int.TryParse(e.Value?.ToString(), out var parsedId))
+        {
+            newBlockId = parsedId;
+        }
+
+        _editingQuestion.BlockId = newBlockId;
+
+        // Save the change to database
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        var dbQuestion = await context.Questions.FindAsync(_editingQuestion.Id);
+        if (dbQuestion != null)
+        {
+            dbQuestion.BlockId = newBlockId;
+            await context.SaveChangesAsync();
+        }
+
+        _questionSaveStatus = "Збережено";
+        StateHasChanged();
+    }
+
     private async Task OnTextBlurAsync()
     {
         ValidateMandatoryFields();
@@ -1190,6 +1397,16 @@
             _expandedTours.Remove(tourId);
         else
             _expandedTours.Add(tourId);
+    }
+
+    private bool IsBlockExpanded(int blockId) => _expandedBlocks.Contains(blockId);
+
+    private void ToggleBlockExpand(int blockId)
+    {
+        if (_expandedBlocks.Contains(blockId))
+            _expandedBlocks.Remove(blockId);
+        else
+            _expandedBlocks.Add(blockId);
     }
 
 
@@ -1429,6 +1646,232 @@
     private async Task TryDeleteOrphanedAuthorAsync(Author author)
     {
         await AuthorService.TryDeleteAuthorIfOrphaned(author.Id);
+    }
+
+    // Block management methods
+
+    private async Task AddBlockAsync(Tour tour)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var newOrderIndex = tour.Blocks.Count;
+            var isFirstBlock = newOrderIndex == 0;
+
+            var block = new Block
+            {
+                TourId = tour.Id,
+                OrderIndex = newOrderIndex,
+                Name = null,
+                Preamble = null,
+                Editors = new List<Author>(),
+                Questions = new List<Question>()
+            };
+
+            context.Blocks.Add(block);
+            await context.SaveChangesAsync();
+
+            // If this is the first block, assign all existing unassigned questions to it
+            if (isFirstBlock)
+            {
+                var unassignedQuestions = await context.Questions
+                    .Where(q => q.TourId == tour.Id && q.BlockId == null)
+                    .ToListAsync();
+
+                foreach (var question in unassignedQuestions)
+                {
+                    question.BlockId = block.Id;
+                }
+                await context.SaveChangesAsync();
+
+                // Update local state
+                foreach (var question in tour.Questions.Where(q => q.BlockId == null))
+                {
+                    question.BlockId = block.Id;
+                }
+            }
+
+            tour.Blocks.Add(block);
+
+            // Auto-expand the newly added block
+            _expandedBlocks.Add(block.Id);
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveBlockAsync(Block block)
+    {
+        _saveStatus = "Збереження блоку...";
+        StateHasChanged();
+
+        try
+        {
+            // Trim whitespaces from text fields
+            block.Name = block.Name?.Trim();
+            block.Preamble = block.Preamble?.Trim();
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbBlock = await context.Blocks
+                .Include(b => b.Editors)
+                .FirstOrDefaultAsync(b => b.Id == block.Id);
+
+            if (dbBlock != null)
+            {
+                dbBlock.Name = block.Name;
+                dbBlock.Preamble = block.Preamble;
+                dbBlock.OrderIndex = block.OrderIndex;
+
+                // Update editors (many-to-many)
+                dbBlock.Editors.Clear();
+                foreach (var editor in block.Editors)
+                {
+                    var dbAuthor = await context.Authors.FindAsync(editor.Id);
+                    if (dbAuthor != null)
+                    {
+                        dbBlock.Editors.Add(dbAuthor);
+                    }
+                }
+
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteBlock(Tour tour, Block block)
+    {
+        _blockToDelete = block;
+        _blockToDeleteTour = tour;
+        _showDeleteBlockModal = true;
+    }
+
+    private void CancelDeleteBlock()
+    {
+        _blockToDelete = null;
+        _blockToDeleteTour = null;
+        _showDeleteBlockModal = false;
+    }
+
+    private async Task DeleteBlockAsync()
+    {
+        if (_blockToDelete == null || _blockToDeleteTour == null || _package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // Set BlockId = null for all questions in this block (they stay in the tour)
+            var questionsInBlock = await context.Questions
+                .Where(q => q.BlockId == _blockToDelete.Id)
+                .ToListAsync();
+
+            foreach (var question in questionsInBlock)
+            {
+                question.BlockId = null;
+            }
+
+            // Also update local state
+            foreach (var question in _blockToDeleteTour.Questions.Where(q => q.BlockId == _blockToDelete.Id))
+            {
+                question.BlockId = null;
+            }
+
+            // Delete the block
+            var dbBlock = await context.Blocks.FindAsync(_blockToDelete.Id);
+            if (dbBlock != null)
+            {
+                context.Blocks.Remove(dbBlock);
+            }
+
+            await context.SaveChangesAsync();
+
+            // Remove from local state
+            _blockToDeleteTour.Blocks.Remove(_blockToDelete);
+
+            // Reindex remaining blocks
+            var orderedBlocks = _blockToDeleteTour.Blocks.OrderBy(b => b.OrderIndex).ToList();
+            for (int i = 0; i < orderedBlocks.Count; i++)
+            {
+                orderedBlocks[i].OrderIndex = i;
+            }
+
+            _showDeleteBlockModal = false;
+            _blockToDelete = null;
+            _blockToDeleteTour = null;
+            _saveStatus = "Блок видалено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task AddQuestionToBlockAsync(Tour tour, Block block)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var newOrderIndex = tour.Questions.Count;
+            var newNumber = CalculateNextQuestionNumber(newOrderIndex);
+
+            var question = new Question
+            {
+                TourId = tour.Id,
+                BlockId = block.Id,
+                OrderIndex = newOrderIndex,
+                Number = newNumber,
+                Text = "",
+                Answer = "",
+                Authors = block.Editors.Select(e => new Author
+                {
+                    Id = e.Id,
+                    FirstName = e.FirstName,
+                    LastName = e.LastName
+                }).ToList()
+            };
+
+            context.Questions.Add(question);
+
+            foreach (var author in question.Authors)
+            {
+                context.Authors.Attach(author);
+            }
+
+            var dbPackage = await context.Packages.FindAsync(_package.Id);
+            if (dbPackage != null)
+            {
+                dbPackage.TotalQuestions++;
+            }
+
+            await context.SaveChangesAsync();
+
+            tour.Questions.Add(question);
+            _package.TotalQuestions++;
+
+            OpenQuestionEditor(tour, question);
+            _saveStatus = "Питання додано";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
     }
 }
 

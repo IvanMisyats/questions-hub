@@ -1,4 +1,4 @@
-﻿# Questions Hub - Site Specification
+# Questions Hub - Site Specification
 
 ## Overview
 
@@ -38,20 +38,29 @@
   - Has owner (User who created it)
   - Has status: Draft, Published, or Archived
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
-  - Editors are computed from all tour editors (not stored directly)
+  - Editors are computed from all tour editors/blocks (not stored directly)
 - **Tour (Тур)** - A round within a package, typically prepared by a specific editor
   - Has Number for display (e.g., "1", "2")
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
   - Has many-to-many relationship with Authors (as Editors)
+  - Can optionally contain Blocks (0-6 blocks per tour)
+  - When tour has blocks, tour editors are computed from block editors
+- **Block (Блок)** - Optional grouping within a tour (rare feature)
+  - Has OrderIndex for ordering within tour (0-based)
+  - Has optional Name (defaults to "Блок редактора: {editors names}")
+  - Has optional Preamble (Преамбула)
+  - Has many-to-many relationship with Authors (as Editors)
+  - Questions can optionally belong to a block (BlockId nullable)
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
   - Has OrderIndex for physical ordering within tour
   - Has Number for display (can be non-numeric, e.g., "F" for hexadecimal)
   - Has optional HostInstructions (Вказівка ведучому) for organizer guidance
   - Has many-to-many relationship with Authors
+  - Has optional BlockId (when tour uses blocks)
 - **Author (Автор/Редактор)** - A person who creates questions or edits tours
   - Has FirstName (Ім'я) and LastName (Прізвище)
   - Unique constraint on (FirstName, LastName)
-  - Can be linked to multiple Questions and Tours
+  - Can be linked to multiple Questions, Tours, and Blocks
   - Can be linked to a User account (optional one-to-one relationship)
 - **User (Користувач)** - Application user with profile information
   - Can be linked to an Author entity (for Editors)
@@ -397,6 +406,7 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 16, 2026 | 1.7 | Added Block entity: tours can optionally contain blocks, each with its own editors and preamble. Questions can belong to blocks. Updated PackageDetail, EditorProfile, and ManagePackageDetail pages |
 | Jan 10, 2026 | 1.6 | Email integration with Mailjet: email confirmation required for registration, password reset via email |
 | Jan 7, 2026 | 1.5 | New public Authors page (/editors) showing all authors ranked by question count, accessible from left navigation |
 | Jan 5, 2026 | 1.4 | Admin user management: editors list, users list, promote/demote editors, Author-User linking, enhanced editor profile page |
