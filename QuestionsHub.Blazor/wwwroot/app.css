@@ -6,6 +6,13 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+/* SVG Icon sprite helper */
+.icon {
+    display: inline-block;
+    vertical-align: -0.125em;
+    fill: currentColor;
+}
+
 a, .btn-link {
     color: #006bb7;
 }

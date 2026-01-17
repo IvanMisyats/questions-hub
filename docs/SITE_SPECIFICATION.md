@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: January 10, 2026
+**Last Updated**: January 17, 2026
 
 ---
 
@@ -297,6 +297,7 @@ Displays author profile with:
 - Full Ukrainian interface with Ukrainian date formatting (uk-UA)
 - Responsive mobile-friendly design using Bootstrap
 - Custom error page and form validation
+- **Icon System**: SVG sprite (`icons.svg`) with reusable `Icon.razor` component. Icons inherit text color via `fill: currentColor` and work with Bootstrap utilities. Available icons: check, link, drag, search, close, group, shield-exclamation, person-plus, person-minus. See [ICONS.md](ICONS.md) for details.
 
 ---
 
@@ -340,6 +341,7 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 │   │   └── Search.razor   # Search page
 │   ├── AddAuthorModal.razor # Modal for creating new authors
 │   ├── AuthorSelector.razor # Multi-select autocomplete for authors/editors
+│   ├── Icon.razor         # Reusable SVG icon component (uses sprite)
 │   ├── QuestionCard.razor # Question display component
 │   └── TourNavigation.razor # Tour sidebar navigation
 ├── Controllers/           # API controllers
@@ -348,6 +350,9 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 │   └── Dto/               # Data transfer objects
 ├── Data/                  # Database context, seeding, migrations
 ├── Domain/                # Domain models (User, Package, Tour, Question, Author)
+├── wwwroot/
+│   ├── app.css            # Global styles
+│   └── icons.svg          # SVG sprite with all UI icons
 └── Infrastructure/        # Utilities and services
     ├── AuthorUserLinkingService.cs  # Author-User linking operations
     ├── MediaService.cs    # Media file handling
@@ -417,6 +422,7 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 17, 2026 | 1.8 | Icon system: replaced inline SVGs with centralized SVG sprite (icons.svg) and reusable Icon.razor component |
 | Jan 16, 2026 | 1.7 | Added Block entity: tours can optionally contain blocks, each with its own editors and preamble. Questions can belong to blocks. Updated PackageDetail, EditorProfile, and ManagePackageDetail pages |
 | Jan 10, 2026 | 1.6 | Email integration with Mailjet: email confirmation required for registration, password reset via email |
 | Jan 7, 2026 | 1.5 | New public Authors page (/editors) showing all authors ranked by question count, accessible from left navigation |

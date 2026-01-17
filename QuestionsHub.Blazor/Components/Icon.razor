@@ -1,0 +1,67 @@
+﻿@*
+    Reusable SVG icon component that references the centralized icon sprite.
+    Usage: <Icon Name="search" Class="text-muted me-2" Size="20" />
+*@
+
+@{
+    var symbolId = GetSymbolId(Name);
+    var cssClass = string.IsNullOrEmpty(Class) ? "icon" : $"icon {Class}";
+}
+
+@if (!string.IsNullOrEmpty(Title))
+{
+    <svg class="@cssClass" width="@Size" height="@Size" role="img" focusable="false">
+        <title>@Title</title>
+        <use href="/icons.svg#@symbolId"></use>
+    </svg>
+}
+else
+{
+    <svg class="@cssClass" width="@Size" height="@Size" aria-hidden="true" focusable="false">
+        <use href="/icons.svg#@symbolId"></use>
+    </svg>
+}
+
+@code {
+    /// <summary>
+    /// Icon name. Supported values: check, link, drag, search, close, group, shield-exclamation, person-plus, person-minus.
+    /// Aliases: trash/delete → close, users → group, handle/grip → drag.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Name { get; set; }
+
+    /// <summary>
+    /// Additional CSS classes to add to the SVG element (e.g., Bootstrap utilities like text-danger, me-2).
+    /// </summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>
+    /// Width and height in pixels. Default is 16.
+    /// </summary>
+    [Parameter]
+    public int Size { get; set; } = 16;
+
+    /// <summary>
+    /// Optional accessible title. If provided, the icon will have role="img" instead of aria-hidden="true".
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    private static string GetSymbolId(string name)
+    {
+        return name.ToLowerInvariant() switch
+        {
+            "check" or "copied" => "i-check",
+            "link" => "i-link",
+            "drag" or "handle" or "grip" => "i-drag",
+            "search" => "i-search",
+            "close" or "x" => "i-close",
+            "group" or "users" or "people" => "i-group",
+            "shield-exclamation" or "shield" => "i-shield-exclamation",
+            "person-plus" or "user-plus" => "i-person-plus",
+            "person-minus" or "user-minus" => "i-person-minus",
+            _ => $"i-{name.ToLowerInvariant()}"
+        };
+    }
+}

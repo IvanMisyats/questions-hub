@@ -130,9 +130,7 @@
                             <div class="accordion-item" data-tour-id="@tour.Id">
                                 <h2 class="accordion-header d-flex align-items-center">
                                     <span class="tour-drag-handle" title="Перетягніть для зміни порядку">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                            <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
-                                        </svg>
+                                        <Icon Name="drag" />
                                     </span>
                                     <button class="accordion-button flex-grow-1 @(IsExpanded(tour.Id) ? "" : "collapsed")" type="button"
                                             @onclick="() => ToggleExpand(tour.Id)">
@@ -208,9 +206,7 @@
                                                         <div class="card-header d-flex justify-content-between align-items-center py-2">
                                                             <div class="d-flex align-items-center gap-2">
                                                                 <span class="block-drag-handle" title="Перетягніть для зміни порядку">
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                                                        <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
-                                                                    </svg>
+                                                                    <Icon Name="drag" />
                                                                 </span>
                                                                 <span style="font-size: 0.8rem; cursor: pointer;" @onclick="() => ToggleBlockExpand(block.Id)">@(isBlockExpanded ? "▼" : "▶")</span>
                                                                 <strong style="cursor: pointer;" @onclick="() => ToggleBlockExpand(block.Id)">Блок @blockNumber</strong>
@@ -263,9 +259,7 @@
                                                                     <div @key="question.Id" class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-1"
                                                                          data-question-id="@question.Id">
                                                                         <span class="question-drag-handle flex-shrink-0" title="Перетягніть для зміни порядку">
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                                                                                <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
-                                                                            </svg>
+                                                                            <Icon Name="drag" Size="14" />
                                                                         </span>
                                                                         <span class="badge bg-primary flex-shrink-0">@question.Number</span>
                                                                         <div class="flex-grow-1 small" style="cursor: pointer;"
@@ -321,9 +315,7 @@
                                                     <div @key="question.Id" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
                                                          data-question-id="@question.Id">
                                                         <span class="question-drag-handle flex-shrink-0" title="Перетягніть для зміни порядку">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                                                <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
-                                                            </svg>
+                                                            <Icon Name="drag" />
                                                         </span>
                                                         <span class="badge bg-primary flex-shrink-0">@question.Number</span>
                                                         <div class="flex-grow-1" style="cursor: pointer;"

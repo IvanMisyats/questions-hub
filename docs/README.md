@@ -59,6 +59,13 @@ Automatic package import from DOC/DOCX files:
 - Document structure recognition
 - Architecture and configuration
 
+### [ICONS.md](ICONS.md)
+Icon system documentation:
+- SVG sprite approach for icons
+- Using the Icon component
+- Available icons and how to add new ones
+- Styling with Bootstrap utilities
+
 ## Quick Start
 
 ### For Developers
