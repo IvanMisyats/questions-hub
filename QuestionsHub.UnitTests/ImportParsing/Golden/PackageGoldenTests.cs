@@ -1,8 +1,9 @@
-﻿using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.Extensions.Logging.Abstractions;
+
 using QuestionsHub.Blazor.Infrastructure.Import;
 using QuestionsHub.UnitTests.Assertions;
 using QuestionsHub.UnitTests.TestInfrastructure;
+
 using Xunit;
 
 namespace QuestionsHub.UnitTests.ImportParsing.Golden;
@@ -53,11 +54,10 @@ public class PackageGoldenTests : IDisposable
         var packagePath = TestFiles.GetPackagePath(packageFileName);
         var expectedPath = TestFiles.GetExpectedPath(expectedFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act - Extract
-        var extraction = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var extraction = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
 
         // Act - Parse
         var result = _parser.Parse(extraction.Blocks, extraction.Assets);
@@ -78,11 +78,10 @@ public class PackageGoldenTests : IDisposable
         // Arrange
         var packagePath = TestFiles.GetPackagePath(packageFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var extraction = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var extraction = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
         var result = _parser.Parse(extraction.Blocks, extraction.Assets);
 
         // Assert - basic structural validation
@@ -101,11 +100,10 @@ public class PackageGoldenTests : IDisposable
         var packagePath = TestFiles.GetPackagePath(packageFileName);
         var expectedPath = TestFiles.GetExpectedPathForPackage(packageFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var extraction = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var extraction = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
         var result = _parser.Parse(extraction.Blocks, extraction.Assets);
 
         // Save as expected

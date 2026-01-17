@@ -133,7 +133,7 @@ public class PackageImportService
             // Step 1: Extract content from DOCX
             await UpdateProgress(db, job, "Extracting", 20, ct);
 
-            var extractionResult = await extractor.Extract(docxPath, jobId, assetsFolder, ct);
+            var extractionResult = await extractor.Extract(docxPath, assetsFolder, ct);
 
             // Save extraction result for debugging
             var extractedJsonPath = Path.Combine(workingFolder, "extracted.json");

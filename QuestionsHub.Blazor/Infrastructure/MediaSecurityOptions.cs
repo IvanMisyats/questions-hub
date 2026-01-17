@@ -1,4 +1,6 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure;
+﻿using System.Security.Cryptography;
+
+namespace QuestionsHub.Blazor.Infrastructure;
 
 /// <summary>
 /// Type of media content.
@@ -27,11 +29,11 @@ public static class MediaSecurityOptions
         ".png",
         ".gif",
         ".webp",
-        
+
         // Videos
         ".mp4",
         ".webm",
-        
+
         // Audio
         ".mp3",
         ".ogg",
@@ -49,11 +51,11 @@ public static class MediaSecurityOptions
         { ".png", "image/png" },
         { ".gif", "image/gif" },
         { ".webp", "image/webp" },
-        
+
         // Videos
         { ".mp4", "video/mp4" },
         { ".webm", "video/webm" },
-        
+
         // Audio
         { ".mp3", "audio/mpeg" },
         { ".ogg", "audio/ogg" },
@@ -102,7 +104,7 @@ public static class MediaSecurityOptions
             return MediaType.Unknown;
 
         var extension = Path.GetExtension(path).ToLowerInvariant();
-        
+
         return extension switch
         {
             ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" => MediaType.Image,
@@ -124,6 +126,57 @@ public static class MediaSecurityOptions
 
         var extension = Path.GetExtension(path);
         return GetContentType(extension);
+    }
+
+    /// <summary>
+    /// Gets the file extension for a given MIME content type.
+    /// </summary>
+    /// <param name="contentType">MIME content type (e.g., "image/png").</param>
+    /// <returns>File extension with leading dot, or ".bin" if not recognized.</returns>
+    public static string GetExtensionFromContentType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+            return ".bin";
+
+        return contentType.ToLowerInvariant() switch
+        {
+            // Images
+            "image/png" => ".png",
+            "image/jpeg" => ".jpeg",
+            "image/jpg" => ".jpg",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "image/bmp" => ".bmp",
+            "image/tiff" => ".tiff",
+
+            // Videos
+            "video/mp4" => ".mp4",
+            "video/webm" => ".webm",
+
+            // Audio
+            "audio/mpeg" => ".mp3",
+            "audio/ogg" => ".ogg",
+            "audio/wav" => ".wav",
+
+            _ => ".bin"
+        };
+    }
+
+    /// <summary>
+    /// Generates a cryptographically secure random filename with the given extension.
+    /// Uses 32 bytes (256 bits) of entropy, making brute-force impractical.
+    /// </summary>
+    /// <param name="extension">File extension (with or without leading dot).</param>
+    /// <returns>Random filename in format: {64-char-hex}.{extension}</returns>
+    public static string GenerateRandomFileName(string extension)
+    {
+        // Ensure extension has leading dot
+        if (!string.IsNullOrEmpty(extension) && !extension.StartsWith('.'))
+            extension = "." + extension;
+
+        var randomBytes = RandomNumberGenerator.GetBytes(32);
+        var randomName = Convert.ToHexString(randomBytes).ToLowerInvariant();
+        return $"{randomName}{extension}";
     }
 }
 

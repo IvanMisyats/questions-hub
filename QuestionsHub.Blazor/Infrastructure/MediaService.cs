@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-
-namespace QuestionsHub.Blazor.Infrastructure;
+﻿namespace QuestionsHub.Blazor.Infrastructure;
 
 /// <summary>
 /// Result of a media file upload operation.
@@ -66,12 +64,7 @@ public class MediaService
         try
         {
             var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
-
-            // Generate a cryptographically secure random filename
-            // Using 32 bytes = 256 bits of entropy, making brute-force impractical
-            var randomBytes = RandomNumberGenerator.GetBytes(32);
-            var randomName = Convert.ToHexString(randomBytes).ToLowerInvariant();
-            var newFileName = $"{randomName}{extension}";
+            var newFileName = MediaSecurityOptions.GenerateRandomFileName(extension);
 
             var filePath = Path.Combine(_handoutsPath, newFileName);
 

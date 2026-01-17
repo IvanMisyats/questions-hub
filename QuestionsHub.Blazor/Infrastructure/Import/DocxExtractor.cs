@@ -21,20 +21,17 @@ public class DocxExtractor
     /// Extracts content from a DOCX file.
     /// </summary>
     /// <param name="docxPath">Path to the DOCX file.</param>
-    /// <param name="jobId">Job ID for naming extracted assets.</param>
     /// <param name="assetsOutputPath">Directory where images will be saved.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Extraction result with blocks, assets, and warnings.</returns>
     public async Task<ExtractionResult> Extract(
         string docxPath,
-        Guid jobId,
         string assetsOutputPath,
         CancellationToken ct)
     {
         var blocks = new List<DocBlock>();
         var assets = new List<AssetReference>();
         var warnings = new List<string>();
-        var imageIndex = 0;
 
         _logger.LogInformation("Extracting DOCX: {Path}", docxPath);
 
@@ -67,8 +64,6 @@ public class DocxExtractor
                         var asset = await ExtractImage(
                             drawing,
                             doc.MainDocumentPart,
-                            jobId,
-                            ++imageIndex,
                             assetsOutputPath,
                             ct);
 
@@ -428,8 +423,6 @@ public class DocxExtractor
     private async Task<AssetReference?> ExtractImage(
         Drawing drawing,
         MainDocumentPart mainPart,
-        Guid jobId,
-        int imageIndex,
         string outputPath,
         CancellationToken ct)
     {
@@ -441,8 +434,8 @@ public class DocxExtractor
             var part = mainPart.GetPartById(blip.Embed.Value);
             if (part is not ImagePart imagePart) return null;
 
-            var extension = GetImageExtension(imagePart.ContentType);
-            var fileName = $"{jobId:N}_img_{imageIndex:D3}{extension}";
+            var extension = MediaSecurityOptions.GetExtensionFromContentType(imagePart.ContentType);
+            var fileName = MediaSecurityOptions.GenerateRandomFileName(extension);
             var filePath = Path.Combine(outputPath, fileName);
 
             await using var stream = imagePart.GetStream();
@@ -464,24 +457,9 @@ public class DocxExtractor
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to extract image at index {Index}", imageIndex);
+            _logger.LogWarning(ex, "Failed to extract image");
             return null;
         }
-    }
-
-    private static string GetImageExtension(string contentType)
-    {
-        return contentType.ToLowerInvariant() switch
-        {
-            "image/png" => ".png",
-            "image/jpeg" => ".jpeg",
-            "image/jpg" => ".jpg",
-            "image/gif" => ".gif",
-            "image/webp" => ".webp",
-            "image/bmp" => ".bmp",
-            "image/tiff" => ".tiff",
-            _ => ".png" // Default to PNG
-        };
     }
 }
 

@@ -50,11 +50,10 @@ public class DocxExtractorTests : IDisposable
         // Arrange
         var packagePath = TestFiles.GetPackagePath(packageFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var result = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var result = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
 
         // Assert
         result.Blocks.Should().NotBeEmpty("DOCX should contain text blocks");
@@ -70,11 +69,10 @@ public class DocxExtractorTests : IDisposable
         // Arrange
         var packagePath = TestFiles.GetPackagePath(packageFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var result = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var result = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
 
         // Assert
         result.Blocks.Should().AllSatisfy(block =>
@@ -94,11 +92,10 @@ public class DocxExtractorTests : IDisposable
         // Arrange
         var packagePath = TestFiles.GetPackagePath(packageFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var result = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var result = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
 
         // Assert - at least one block should match tour pattern
         var tourPattern = ParserPatterns.TourStart();
@@ -119,11 +116,10 @@ public class DocxExtractorTests : IDisposable
         // Arrange
         var packagePath = TestFiles.GetPackagePath(packageFileName);
 
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var result = await _extractor.Extract(packagePath, jobId, assetsPath, CancellationToken.None);
+        var result = await _extractor.Extract(packagePath, assetsPath, CancellationToken.None);
 
         // Assert
         var answerPattern = ParserPatterns.AnswerLabel();
@@ -137,11 +133,10 @@ public class DocxExtractorTests : IDisposable
     {
         // Arrange
         var nonExistentPath = Path.Combine(_tempDirectory, "non_existent.docx");
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
 
         // Act
-        var act = () => _extractor.Extract(nonExistentPath, jobId, assetsPath, CancellationToken.None);
+        var act = () => _extractor.Extract(nonExistentPath, assetsPath, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<Exception>();
@@ -156,13 +151,12 @@ public class DocxExtractorTests : IDisposable
             return; // No files to test with
 
         var packagePath = TestFiles.GetPackagePath(packageFiles[0]);
-        var jobId = Guid.NewGuid();
-        var assetsPath = Path.Combine(_tempDirectory, jobId.ToString("N"));
+        var assetsPath = Path.Combine(_tempDirectory, Guid.NewGuid().ToString("N"));
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act
-        var act = () => _extractor.Extract(packagePath, jobId, assetsPath, cts.Token);
+        var act = () => _extractor.Extract(packagePath, assetsPath, cts.Token);
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
