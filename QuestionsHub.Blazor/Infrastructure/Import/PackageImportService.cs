@@ -283,31 +283,48 @@ public class PackageImportService
     }
 
     /// <summary>
-    /// Gets import jobs for a user.
+    /// Gets active (in-progress) import jobs for a user.
     /// </summary>
-    public async Task<List<PackageImportJob>> GetJobsForUser(string userId, int limit = 10)
+    public async Task<List<PackageImportJob>> GetActiveJobsForUser(string userId)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
 
         return await db.PackageImportJobs
-            .Where(j => j.OwnerId == userId)
+            .Where(j => j.OwnerId == userId &&
+                        (j.Status == ImportJobStatus.Queued || j.Status == ImportJobStatus.Running))
             .OrderByDescending(j => j.CreatedAt)
-            .Take(limit)
             .ToListAsync();
     }
 
     /// <summary>
-    /// Gets all import jobs (for admins).
+    /// Gets all active (in-progress) import jobs (for admins).
     /// </summary>
-    public async Task<List<PackageImportJob>> GetAllJobs(int limit = 50)
+    public async Task<List<PackageImportJob>> GetActiveJobs()
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
 
         return await db.PackageImportJobs
+            .Where(j => j.Status == ImportJobStatus.Queued || j.Status == ImportJobStatus.Running)
             .OrderByDescending(j => j.CreatedAt)
-            .Take(limit)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// Gets import jobs by their IDs.
+    /// </summary>
+    public async Task<List<PackageImportJob>> GetJobsByIds(List<Guid> jobIds)
+    {
+        if (jobIds.Count == 0)
+            return [];
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+
+        return await db.PackageImportJobs
+            .Where(j => jobIds.Contains(j.Id))
+            .OrderByDescending(j => j.CreatedAt)
             .ToListAsync();
     }
 }

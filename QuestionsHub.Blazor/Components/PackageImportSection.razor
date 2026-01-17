@@ -110,6 +110,8 @@
     public EventCallback OnImportCompleted { get; set; }
 
     private List<PackageImportJob> _importJobs = [];
+    // Track job IDs that were active in this session to keep showing completed ones
+    private HashSet<Guid> _sessionTrackedJobIds = [];
     private bool _isUploading;
     private string? _uploadError;
     private Timer? _pollTimer;
@@ -133,9 +135,32 @@
     {
         try
         {
-            _importJobs = IsAdmin
-                ? await ImportService.GetAllJobs(20)
-                : await ImportService.GetJobsForUser(UserId);
+            // Load only in-progress jobs from database
+            var activeJobs = IsAdmin
+                ? await ImportService.GetActiveJobs()
+                : await ImportService.GetActiveJobsForUser(UserId);
+
+            // Track active job IDs for this session
+            foreach (var job in activeJobs)
+            {
+                _sessionTrackedJobIds.Add(job.Id);
+            }
+
+            // For jobs we were tracking in this session, load their current state
+            // (to show completed status until page refresh)
+            var completedTrackedJobs = new List<PackageImportJob>();
+            if (_sessionTrackedJobIds.Count > 0)
+            {
+                var allTrackedJobs = await ImportService.GetJobsByIds(_sessionTrackedJobIds.ToList());
+                completedTrackedJobs = allTrackedJobs
+                    .Where(j => j.Status is not (ImportJobStatus.Queued or ImportJobStatus.Running))
+                    .ToList();
+            }
+
+            _importJobs = activeJobs.Concat(completedTrackedJobs)
+                .DistinctBy(j => j.Id)
+                .OrderByDescending(j => j.CreatedAt)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -168,6 +193,7 @@
             var job = await ImportService.Enqueue(UserId, file.Name, stream, file.Size);
 
             _importJobs.Insert(0, job);
+            _sessionTrackedJobIds.Add(job.Id);
             StartPollingIfNeeded();
         }
         catch (Infrastructure.Import.ValidationException ex)
