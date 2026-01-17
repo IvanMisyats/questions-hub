@@ -688,11 +688,11 @@
                             }
                         </div>
                         <div class="col-md-2">
-                            <label class="col-form-label">Джерело</label>
+                            <label class="col-form-label @(_isSourceEmpty ? "text-danger" : "")">Джерело <span class="text-danger">*</span></label>
                         </div>
                         <div class="col-md-10">
-                            <textarea class="form-control auto-expand" placeholder="Джерела інформації (кожне з нового рядка)"
-                                      @bind="_editingQuestion.Source" @onblur="SaveEditingQuestionAsync"></textarea>
+                            <textarea class="form-control auto-expand @(_isSourceEmpty ? "field-required-empty" : "")" placeholder="Джерела інформації (кожне з нового рядка)"
+                                      @bind="_editingQuestion.Source" @onblur="OnSourceBlurAsync"></textarea>
                         </div>
                         <div class="col-md-2">
                             <label class="col-form-label @(_areAuthorsEmpty ? "text-danger" : "")">Автори <span class="text-danger">*</span></label>
@@ -769,6 +769,7 @@
     // Validation state for mandatory fields
     private bool _isTextEmpty;
     private bool _isAnswerEmpty;
+    private bool _isSourceEmpty;
     private bool _areAuthorsEmpty;
 
     // JS Interop for sortable
@@ -1656,6 +1657,7 @@
 
         _isTextEmpty = string.IsNullOrWhiteSpace(_editingQuestion.Text);
         _isAnswerEmpty = string.IsNullOrWhiteSpace(_editingQuestion.Answer);
+        _isSourceEmpty = string.IsNullOrWhiteSpace(_editingQuestion.Source);
         _areAuthorsEmpty = _editingQuestion.Authors == null || _editingQuestion.Authors.Count == 0;
     }
 
@@ -1667,6 +1669,12 @@
     }
 
     private async Task OnAnswerBlurAsync()
+    {
+        ValidateMandatoryFields();
+        await SaveEditingQuestionAsync();
+    }
+
+    private async Task OnSourceBlurAsync()
     {
         ValidateMandatoryFields();
         await SaveEditingQuestionAsync();
