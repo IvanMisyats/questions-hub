@@ -70,3 +70,73 @@ h1:focus {
     resize: none;
 }
 
+/* Sortable drag and drop styles */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: #c8ebfb;
+}
+
+.sortable-chosen {
+    background-color: #f8f9fa;
+}
+
+.sortable-drag {
+    opacity: 1;
+    background-color: #fff;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.tour-drag-handle,
+.question-drag-handle,
+.block-drag-handle {
+    cursor: grab;
+    color: #6c757d;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    touch-action: none;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tour-drag-handle:hover,
+.question-drag-handle:hover,
+.block-drag-handle:hover {
+    color: #495057;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.tour-drag-handle:active,
+.question-drag-handle:active,
+.block-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Prevent text selection during drag on sortable items */
+.accordion-item[data-tour-id],
+.list-group-item[data-question-id],
+.block-item[data-block-id] {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Ensure accordion items are block level for sortable */
+.accordion-item[data-tour-id] {
+    display: block;
+}
+
+/* Accordion header with drag handle */
+.accordion-header.d-flex .tour-drag-handle {
+    font-size: 1.25rem;
+    background-color: #f8f9fa;
+    border-right: 1px solid rgba(0, 0, 0, 0.125);
+    min-width: 40px;
+    align-self: stretch;
+}
+
+

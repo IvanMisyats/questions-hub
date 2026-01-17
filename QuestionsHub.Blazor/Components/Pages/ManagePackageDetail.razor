@@ -2,15 +2,18 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
 @using System.Security.Claims
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @attribute [Authorize(Roles = "Editor,Admin")]
+@implements IAsyncDisposable
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject NavigationManager Navigation
 @inject MediaService MediaService
 @inject AuthorService AuthorService
+@inject IJSRuntime JS
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - QuestionsHub</PageTitle>
 
@@ -124,9 +127,14 @@
                     <div class="accordion" id="toursAccordion">
                         @foreach (var tour in _package.Tours.OrderBy(t => t.Number))
                         {
-                            <div class="accordion-item">
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button @(IsExpanded(tour.Id) ? "" : "collapsed")" type="button"
+                            <div class="accordion-item" data-tour-id="@tour.Id">
+                                <h2 class="accordion-header d-flex align-items-center">
+                                    <span class="tour-drag-handle" title="Перетягніть для зміни порядку">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                                        </svg>
+                                    </span>
+                                    <button class="accordion-button flex-grow-1 @(IsExpanded(tour.Id) ? "" : "collapsed")" type="button"
                                             @onclick="() => ToggleExpand(tour.Id)">
                                         <span class="me-2">
                                             <strong>Тур @tour.Number</strong>
@@ -181,7 +189,7 @@
                                         @if (tour.HasBlocks)
                                         {
                                             <!-- Blocks Section -->
-                                            <div class="blocks-section mb-3">
+                                            <div class="blocks-section mb-3" id="blocks-tour-@tour.Id" data-tour-id="@tour.Id">
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                                     <h6 class="mb-0">Блоки <span class="badge bg-secondary">@tour.Blocks.Count</span></h6>
                                                     @if (tour.Blocks.Count < 6)
@@ -196,16 +204,19 @@
                                                 {
                                                     var blockNumber = tour.Blocks.OrderBy(b => b.OrderIndex).ToList().IndexOf(block) + 1;
                                                     var isBlockExpanded = IsBlockExpanded(block.Id);
-                                                    <div class="card mb-3">
-                                                        <div class="card-header d-flex justify-content-between align-items-center py-2"
-                                                             style="cursor: pointer;"
-                                                             @onclick="() => ToggleBlockExpand(block.Id)">
+                                                    <div class="card mb-3 block-item" data-block-id="@block.Id">
+                                                        <div class="card-header d-flex justify-content-between align-items-center py-2">
                                                             <div class="d-flex align-items-center gap-2">
-                                                                <span style="font-size: 0.8rem;">@(isBlockExpanded ? "▼" : "▶")</span>
-                                                                <strong>Блок @blockNumber</strong>
+                                                                <span class="block-drag-handle" title="Перетягніть для зміни порядку">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                                        <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                                                                    </svg>
+                                                                </span>
+                                                                <span style="font-size: 0.8rem; cursor: pointer;" @onclick="() => ToggleBlockExpand(block.Id)">@(isBlockExpanded ? "▼" : "▶")</span>
+                                                                <strong style="cursor: pointer;" @onclick="() => ToggleBlockExpand(block.Id)">Блок @blockNumber</strong>
                                                                 @if (!string.IsNullOrWhiteSpace(block.Name))
                                                                 {
-                                                                    <span class="text-muted">— @block.Name</span>
+                                                                    <span class="text-muted" style="cursor: pointer;" @onclick="() => ToggleBlockExpand(block.Id)">— @block.Name</span>
                                                                 }
                                                                 <span class="badge bg-secondary">@tour.Questions.Count(q => q.BlockId == block.Id) питань</span>
                                                             </div>
@@ -244,26 +255,38 @@
                                                             @{
                                                                 var blockQuestions = tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex).ToList();
                                                             }
+                                                            <div class="list-group mb-2" id="questions-block-@block.Id" data-block-id="@block.Id" data-tour-id="@tour.Id">
                                                             @if (blockQuestions.Any())
                                                             {
-                                                                <div class="list-group mb-2">
-                                                                    @foreach (var question in blockQuestions)
-                                                                    {
-                                                                        <div class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-1">
-                                                                            <span class="badge bg-primary flex-shrink-0">@question.Number</span>
-                                                                            <div class="flex-grow-1 small" style="cursor: pointer;"
-                                                                                 @onclick="() => OpenQuestionEditor(tour, question)">
-                                                                                @question.Text
-                                                                            </div>
-                                                                            <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
-                                                                                    style="width: 20px; height: 20px; padding: 0; font-size: 1rem; line-height: 1;"
-                                                                                    @onclick="() => ConfirmDeleteQuestion(tour, question)"
-                                                                                    @onclick:stopPropagation="true"
-                                                                                    title="Видалити">×</button>
+                                                                @foreach (var question in blockQuestions)
+                                                                {
+                                                                    <div @key="question.Id" class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-1"
+                                                                         data-question-id="@question.Id">
+                                                                        <span class="question-drag-handle flex-shrink-0" title="Перетягніть для зміни порядку">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                                                                <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                                                                            </svg>
+                                                                        </span>
+                                                                        <span class="badge bg-primary flex-shrink-0">@question.Number</span>
+                                                                        <div class="flex-grow-1 small" style="cursor: pointer;"
+                                                                             @onclick="() => OpenQuestionEditor(tour, question)">
+                                                                            @question.Text
                                                                         </div>
-                                                                    }
+                                                                        <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
+                                                                                style="width: 20px; height: 20px; padding: 0; font-size: 1rem; line-height: 1;"
+                                                                                @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                                @onclick:stopPropagation="true"
+                                                                                title="Видалити">×</button>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="list-group-item text-center text-muted py-2">
+                                                                    <small>Перетягніть сюди питання</small>
                                                                 </div>
                                                             }
+                                                            </div>
                                                             <button class="btn btn-outline-success btn-sm"
                                                                     @onclick="() => AddQuestionToBlockAsync(tour, block)">
                                                                 + Додати питання
@@ -284,32 +307,38 @@
                                             </div>
 
                                             <!-- Questions List -->
+                                            <div class="list-group mb-3" id="questions-tour-@tour.Id" data-tour-id="@tour.Id">
                                             @if (tour.Questions.Count == 0)
                                             {
-                                                <div class="text-center py-3 text-muted">
-                                                    <p class="mb-2">Тур ще не має питань.</p>
+                                                <div class="list-group-item text-center text-muted py-3">
+                                                    <p class="mb-0">Тур ще не має питань. Перетягніть сюди питання або додайте нове.</p>
                                                 </div>
                                             }
                                             else
                                             {
-                                                <div class="list-group mb-3">
-                                                    @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
-                                                    {
-                                                        <div class="list-group-item list-group-item-action d-flex align-items-center gap-2">
-                                                            <span class="badge bg-primary flex-shrink-0">@question.Number</span>
-                                                            <div class="flex-grow-1" style="cursor: pointer;"
-                                                                 @onclick="() => OpenQuestionEditor(tour, question)">
-                                                                @question.Text
-                                                            </div>
-                                                            <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
-                                                                    style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
-                                                                    @onclick="() => ConfirmDeleteQuestion(tour, question)"
-                                                                    @onclick:stopPropagation="true"
-                                                                    title="Видалити">×</button>
+                                                @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
+                                                {
+                                                    <div @key="question.Id" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                                                         data-question-id="@question.Id">
+                                                        <span class="question-drag-handle flex-shrink-0" title="Перетягніть для зміни порядку">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                                <path d="M7 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M7 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                                                            </svg>
+                                                        </span>
+                                                        <span class="badge bg-primary flex-shrink-0">@question.Number</span>
+                                                        <div class="flex-grow-1" style="cursor: pointer;"
+                                                             @onclick="() => OpenQuestionEditor(tour, question)">
+                                                            @question.Text
                                                         </div>
-                                                    }
-                                                </div>
+                                                        <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
+                                                                style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
+                                                                @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Видалити">×</button>
+                                                    </div>
+                                                }
                                             }
+                                            </div>
 
                                             <button class="btn btn-outline-success btn-sm"
                                                     @onclick="() => AddQuestionAsync(tour)">
@@ -741,13 +770,301 @@
     private bool _isAnswerEmpty;
     private bool _areAuthorsEmpty;
 
+    // JS Interop for sortable
+    private DotNetObjectReference<ManagePackageDetail>? _dotNetRef;
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        _dotNetRef = DotNetObjectReference.Create(this);
         await CheckUserAsync();
         await LoadPackageAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_needsSortableInit && !_isLoading && _package != null)
+        {
+            _needsSortableInit = false;
+            // Small delay to ensure DOM is fully rendered
+            await Task.Delay(50);
+            await InitializeSortables();
+        }
+    }
+
+    private bool _needsSortableInit = true;
+
+    private async Task InitializeSortables()
+    {
+        if (_package == null || _dotNetRef == null) return;
+
+        try
+        {
+            // Initialize tours sortable
+            await JS.InvokeVoidAsync("sortableInterop.initToursSortable", "toursAccordion", _dotNetRef);
+
+            // Initialize sortables for each tour
+            foreach (var tour in _package.Tours)
+            {
+                if (tour.HasBlocks)
+                {
+                    // Initialize blocks sortable for this tour
+                    await JS.InvokeVoidAsync("sortableInterop.initBlocksSortable",
+                        $"blocks-tour-{tour.Id}", tour.Id, _dotNetRef);
+
+                    // Initialize questions sortable for each block
+                    foreach (var block in tour.Blocks)
+                    {
+                        await JS.InvokeVoidAsync("sortableInterop.initBlockQuestionsSortable",
+                            $"questions-block-{block.Id}", tour.Id, block.Id, _dotNetRef);
+                    }
+                }
+                else
+                {
+                    // Initialize questions sortable for tour (no blocks)
+                    await JS.InvokeVoidAsync("sortableInterop.initQuestionsSortable",
+                        $"questions-tour-{tour.Id}", tour.Id, _dotNetRef);
+                }
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore - component is being disposed
+        }
+        catch (JSException ex)
+        {
+            Console.WriteLine($"Error initializing sortables: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("sortableInterop.destroyAll");
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore - already disconnected
+        }
+
+        _dotNetRef?.Dispose();
+    }
+
+    [JSInvokable]
+    public async Task OnToursReordered(int[] tourIds)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            _saveStatus = "Зміна порядку турів...";
+            StateHasChanged();
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // Update tour numbers based on new order
+            for (int i = 0; i < tourIds.Length; i++)
+            {
+                var tour = _package.Tours.FirstOrDefault(t => t.Id == tourIds[i]);
+                if (tour != null)
+                {
+                    tour.Number = (i + 1).ToString();
+
+                    var dbTour = await context.Tours.FindAsync(tour.Id);
+                    if (dbTour != null)
+                    {
+                        dbTour.Number = tour.Number;
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync();
+
+            // Renumber all questions
+            await RenumberAllQuestions();
+
+            _saveStatus = "Порядок турів змінено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnBlocksReordered(int tourId, int[] blockIds)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            _saveStatus = "Зміна порядку блоків...";
+            StateHasChanged();
+
+            var tour = _package.Tours.FirstOrDefault(t => t.Id == tourId);
+            if (tour == null) return;
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // Update block order indices based on new order
+            for (int i = 0; i < blockIds.Length; i++)
+            {
+                var block = tour.Blocks.FirstOrDefault(b => b.Id == blockIds[i]);
+                if (block != null)
+                {
+                    block.OrderIndex = i;
+
+                    var dbBlock = await context.Blocks.FindAsync(block.Id);
+                    if (dbBlock != null)
+                    {
+                        dbBlock.OrderIndex = i;
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync();
+
+            _saveStatus = "Порядок блоків змінено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnQuestionMoved(int questionId, int fromTourId, int toTourId, int newIndex, int? fromBlockId = null, int? toBlockId = null)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            _saveStatus = "Переміщення питання...";
+            StateHasChanged();
+
+            var sourceTour = _package.Tours.FirstOrDefault(t => t.Id == fromTourId);
+            var targetTour = _package.Tours.FirstOrDefault(t => t.Id == toTourId);
+            var question = sourceTour?.Questions.FirstOrDefault(q => q.Id == questionId);
+
+            if (sourceTour == null || targetTour == null || question == null)
+            {
+                _saveStatus = "Помилка: питання або тур не знайдено";
+                StateHasChanged();
+                return;
+            }
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var isSameTour = fromTourId == toTourId;
+            var isSameBlock = fromBlockId == toBlockId;
+
+            if (isSameTour && isSameBlock)
+            {
+                // Reordering within the same tour/block
+                var questions = (toBlockId.HasValue
+                    ? sourceTour.Questions.Where(q => q.BlockId == toBlockId)
+                    : sourceTour.Questions.Where(q => q.BlockId == null))
+                    .OrderBy(q => q.OrderIndex).ToList();
+
+                var oldIndex = questions.IndexOf(question);
+
+                if (oldIndex >= 0 && oldIndex != newIndex)
+                {
+                    questions.RemoveAt(oldIndex);
+                    if (newIndex > questions.Count) newIndex = questions.Count;
+                    questions.Insert(newIndex, question);
+
+                    for (int i = 0; i < questions.Count; i++)
+                    {
+                        questions[i].OrderIndex = i;
+                        var dbQuestion = await context.Questions.FindAsync(questions[i].Id);
+                        if (dbQuestion != null)
+                        {
+                            dbQuestion.OrderIndex = i;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Moving between tours or blocks
+
+                // Get the database question first
+                var dbMovedQuestion = await context.Questions.FindAsync(questionId);
+                if (dbMovedQuestion == null)
+                {
+                    _saveStatus = "Помилка: питання не знайдено в базі";
+                    StateHasChanged();
+                    return;
+                }
+
+                // Update tour if moving between tours
+                if (!isSameTour)
+                {
+                    sourceTour.Questions.Remove(question);
+                    question.TourId = toTourId;
+                    dbMovedQuestion.TourId = toTourId;
+                    targetTour.Questions.Add(question);
+                }
+
+                // Update block assignment
+                question.BlockId = toBlockId;
+                dbMovedQuestion.BlockId = toBlockId;
+
+                // Reindex source questions (same tour and block as original, excluding moved question)
+                var sourceQuestions = sourceTour.Questions
+                    .Where(q => q.BlockId == fromBlockId && q.Id != questionId)
+                    .OrderBy(q => q.OrderIndex).ToList();
+
+                for (int i = 0; i < sourceQuestions.Count; i++)
+                {
+                    sourceQuestions[i].OrderIndex = i;
+                    var dbQuestion = await context.Questions.FindAsync(sourceQuestions[i].Id);
+                    if (dbQuestion != null)
+                    {
+                        dbQuestion.OrderIndex = i;
+                    }
+                }
+
+                // Reindex target questions (insert moved question at new position)
+                var targetQuestions = targetTour.Questions
+                    .Where(q => q.BlockId == toBlockId && q.Id != questionId)
+                    .OrderBy(q => q.OrderIndex).ToList();
+
+                if (newIndex > targetQuestions.Count) newIndex = targetQuestions.Count;
+                targetQuestions.Insert(newIndex, question);
+
+                for (int i = 0; i < targetQuestions.Count; i++)
+                {
+                    targetQuestions[i].OrderIndex = i;
+                    var dbQuestion = await context.Questions.FindAsync(targetQuestions[i].Id);
+                    if (dbQuestion != null)
+                    {
+                        dbQuestion.OrderIndex = i;
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync();
+
+            // Renumber all questions
+            await RenumberAllQuestions();
+
+            _saveStatus = "Питання переміщено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+
+        StateHasChanged();
     }
 
     private async Task CheckUserAsync()
@@ -818,6 +1135,8 @@
                     {
                         _expandedTours.Add(_package.Tours.First().Id);
                     }
+                    // Trigger sortable initialization on next render
+                    _needsSortableInit = true;
                 }
             }
         }
@@ -957,6 +1276,7 @@
             _package.Tours.Add(tour);
             _expandedTours.Add(tour.Id);
             _saveStatus = "Тур додано";
+            _needsSortableInit = true;
         }
         catch (Exception ex)
         {
@@ -1022,6 +1342,7 @@
         var question = await CreateQuestionAsync(tour);
         if (question != null)
         {
+            _needsSortableInit = true;
             OpenQuestionEditor(tour, question);
         }
         StateHasChanged();
@@ -1143,6 +1464,7 @@
             _questionToDelete = null;
             _questionToDeleteTour = null;
             _saveStatus = "Питання видалено";
+            _needsSortableInit = true;
         }
         catch (Exception ex)
         {
@@ -1401,12 +1723,48 @@
 
     private bool IsBlockExpanded(int blockId) => _expandedBlocks.Contains(blockId);
 
-    private void ToggleBlockExpand(int blockId)
+    private async Task ToggleBlockExpand(int blockId)
     {
         if (_expandedBlocks.Contains(blockId))
+        {
             _expandedBlocks.Remove(blockId);
+        }
         else
+        {
             _expandedBlocks.Add(blockId);
+            // Need to initialize sortable after DOM is updated
+            StateHasChanged();
+            await Task.Delay(50); // Wait for DOM to render
+            await InitializeBlockQuestionsSortable(blockId);
+        }
+    }
+
+    private async Task InitializeBlockQuestionsSortable(int blockId)
+    {
+        if (_package == null || _dotNetRef == null) return;
+
+        try
+        {
+            // Find the block and its tour
+            foreach (var tour in _package.Tours)
+            {
+                var block = tour.Blocks.FirstOrDefault(b => b.Id == blockId);
+                if (block != null)
+                {
+                    await JS.InvokeVoidAsync("sortableInterop.initBlockQuestionsSortable",
+                        $"questions-block-{block.Id}", tour.Id, block.Id, _dotNetRef);
+                    break;
+                }
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore - component is being disposed
+        }
+        catch (JSException ex)
+        {
+            Console.WriteLine($"Error initializing block questions sortable: {ex.Message}");
+        }
     }
 
 
@@ -1648,6 +2006,33 @@
         await AuthorService.TryDeleteAuthorIfOrphaned(author.Id);
     }
 
+    private async Task RenumberAllQuestions()
+    {
+        if (_package == null) return;
+
+        // Collect all questions in order (by tour number, then by order index)
+        var allQuestions = _package.Tours
+            .OrderBy(t => t.Number)
+            .SelectMany(t => t.Questions.OrderBy(q => q.OrderIndex))
+            .ToList();
+
+        // Assign sequential numbers
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        for (int i = 0; i < allQuestions.Count; i++)
+        {
+            var newNumber = (i + 1).ToString();
+            allQuestions[i].Number = newNumber;
+
+            var dbQuestion = await context.Questions.FindAsync(allQuestions[i].Id);
+            if (dbQuestion != null)
+            {
+                dbQuestion.Number = newNumber;
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
     // Block management methods
 
     private async Task AddBlockAsync(Tour tour)
@@ -1698,6 +2083,18 @@
 
             // Auto-expand the newly added block
             _expandedBlocks.Add(block.Id);
+
+            // Initialize sortables after DOM is updated
+            StateHasChanged();
+            await Task.Delay(50);
+            await InitializeBlockQuestionsSortable(block.Id);
+
+            // If this is the first block, also initialize the blocks sortable
+            if (isFirstBlock)
+            {
+                await JS.InvokeVoidAsync("sortableInterop.initBlocksSortable",
+                    $"blocks-tour-{tour.Id}", tour.Id, _dotNetRef);
+            }
         }
         catch (Exception ex)
         {
