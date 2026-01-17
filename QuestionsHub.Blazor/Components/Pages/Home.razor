@@ -74,7 +74,7 @@
                     .ThenInclude(b => b.Editors)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Questions)
-            .OrderByDescending(p => p.PlayedAt)
+            .OrderByDescending(p => p.Id)
             .ToListAsync();
     }
     private int GetQuestionsCount(Package package)
