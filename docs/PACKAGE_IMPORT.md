@@ -136,12 +136,33 @@ Tours are detected by patterns like:
 - `- Тур 1 -`
 - `ТУР 1`
 
+**Warmup Tour Detection:**
+The parser also detects warmup tours using patterns like:
+- `Розминка`
+- `Warmup`
+- `Тур 0`
+- `Розминковий тур`
+
+When a warmup tour is detected, it is automatically placed first in the tour order (OrderIndex = 0) and marked with `IsWarmup = true`.
+
 ### Question Detection
 
 Questions are detected by patterns like:
 - `1. Question text`
 - `Питання 1.`
 - `Запитання 1.`
+
+### Numbering Mode Detection
+
+The parser automatically detects the question numbering mode based on the question numbers in the document:
+
+| Mode | Detection Criteria | Result |
+|------|-------------------|--------|
+| **Global** | Question numbers are sequential across all tours (1, 2, 3, ... 36) | Questions renumbered globally |
+| **PerTour** | Question numbers restart at 1 in each tour | Questions numbered 1..N per tour |
+| **Manual** | Any non-numeric question numbers (e.g., "A", "F", "0") | Numbers preserved as-is |
+
+The detected mode is saved to `Package.NumberingMode` and affects how questions are renumbered during editing.
 
 ## Image Handling
 

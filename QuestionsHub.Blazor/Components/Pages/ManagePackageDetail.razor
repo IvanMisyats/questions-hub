@@ -13,6 +13,7 @@
 @inject NavigationManager Navigation
 @inject MediaService MediaService
 @inject AuthorService AuthorService
+@inject PackageRenumberingService RenumberingService
 @inject IJSRuntime JS
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - QuestionsHub</PageTitle>
@@ -92,6 +93,16 @@
                             <option value="@PackageStatus.Archived">Архів</option>
                         </select>
                     </div>
+                    <div class="col-md-4">
+                        <label for="packageNumberingMode" class="form-label">Нумерація питань</label>
+                        <select class="form-select" id="packageNumberingMode"
+                                value="@_package.NumberingMode"
+                                @onchange="OnNumberingModeChanged">
+                            <option value="@QuestionNumberingMode.Global">Наскрізна</option>
+                            <option value="@QuestionNumberingMode.PerTour">Потурова</option>
+                            <option value="@QuestionNumberingMode.Manual">Ручна</option>
+                        </select>
+                    </div>
                     @if (_package.Editors.Any())
                     {
                         <div class="col-12">
@@ -125,7 +136,7 @@
                 else
                 {
                     <div class="accordion" id="toursAccordion">
-                        @foreach (var tour in _package.Tours.OrderBy(t => t.Number))
+                        @foreach (var tour in _package.Tours.OrderBy(t => t.OrderIndex))
                         {
                             <div class="accordion-item" data-tour-id="@tour.Id">
                                 <h2 class="accordion-header d-flex align-items-center">
@@ -135,7 +146,14 @@
                                     <button class="accordion-button flex-grow-1 @(IsExpanded(tour.Id) ? "" : "collapsed")" type="button"
                                             @onclick="() => ToggleExpand(tour.Id)">
                                         <span class="me-2">
-                                            <strong>Тур @tour.Number</strong>
+                                            @if (tour.IsWarmup)
+                                            {
+                                                <span class="badge bg-warning text-dark me-1">Розминка</span>
+                                            }
+                                            else
+                                            {
+                                                <strong>Тур @tour.Number</strong>
+                                            }
                                         </span>
                                         <span class="badge bg-info ms-auto me-2">@tour.Questions.Count питань</span>
                                     </button>
@@ -145,10 +163,14 @@
                                     <div class="accordion-body">
                                         <!-- Tour Edit Controls -->
                                         <div class="row g-2 mb-3 pb-3 border-bottom">
-                                            <div class="col-md-2">
-                                                <label class="form-label small">Номер</label>
-                                                <input type="text" class="form-control form-control-sm"
-                                                       @bind="tour.Number" @onblur="() => SaveTourAsync(tour)" />
+                                            <div class="col-md-2 d-flex align-items-center">
+                                                <div class="form-check">
+                                                    <input type="checkbox" class="form-check-input" id="warmup-@tour.Id"
+                                                           checked="@tour.IsWarmup"
+                                                           @onchange="e => OnWarmupChanged(tour, (bool)(e.Value ?? false))"
+                                                           disabled="@(_package.Tours.Any(t => t.IsWarmup && t.Id != tour.Id) && !tour.IsWarmup ? false : false)" />
+                                                    <label class="form-check-label small" for="warmup-@tour.Id">Розминка</label>
+                                                </div>
                                             </div>
                                             @if (!tour.HasBlocks)
                                             {
@@ -478,26 +500,13 @@
                         </div>
                         <div class="col-md-10">
                             <input type="text" class="form-control" style="max-width: 100px;"
-                                   @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync" />
+                                   @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync"
+                                   disabled="@(_package?.NumberingMode != QuestionNumberingMode.Manual)" />
+                            @if (_package?.NumberingMode != QuestionNumberingMode.Manual)
+                            {
+                                <small class="text-muted">Автоматична нумерація</small>
+                            }
                         </div>
-                        @if (_editingTour.HasBlocks)
-                        {
-                            <div class="col-md-2">
-                                <label class="col-form-label">Блок</label>
-                            </div>
-                            <div class="col-md-10">
-                                <select class="form-select" style="max-width: 300px;"
-                                        value="@_editingQuestion.BlockId"
-                                        @onchange="OnBlockChanged">
-                                    <option value="">-- Без блоку --</option>
-                                    @foreach (var block in _editingTour.Blocks.OrderBy(b => b.OrderIndex))
-                                    {
-                                        var blockNumber = _editingTour.Blocks.OrderBy(b => b.OrderIndex).ToList().IndexOf(block) + 1;
-                                        <option value="@block.Id">@block.GetDisplayName(blockNumber)</option>
-                                    }
-                                </select>
-                            </div>
-                        }
                         <div class="col-md-2">
                             <label class="col-form-label">Вказівка ведучому</label>
                         </div>
@@ -857,26 +866,29 @@
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
 
-            // Update tour numbers based on new order
+            // Update tour OrderIndex based on new order
             for (int i = 0; i < tourIds.Length; i++)
             {
                 var tour = _package.Tours.FirstOrDefault(t => t.Id == tourIds[i]);
                 if (tour != null)
                 {
-                    tour.Number = (i + 1).ToString();
+                    tour.OrderIndex = i;
 
                     var dbTour = await context.Tours.FindAsync(tour.Id);
                     if (dbTour != null)
                     {
-                        dbTour.Number = tour.Number;
+                        dbTour.OrderIndex = i;
                     }
                 }
             }
 
             await context.SaveChangesAsync();
 
-            // Renumber all questions
-            await RenumberAllQuestions();
+            // Renumber using the service
+            await RenumberingService.RenumberPackage(_package.Id);
+
+            // Reload to get updated numbers
+            await ReloadPackageData();
 
             _saveStatus = "Порядок турів змінено";
         }
@@ -929,6 +941,98 @@
         }
 
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// DTO for receiving question order from JavaScript.
+    /// </summary>
+    public class QuestionOrderItem
+    {
+        public int QuestionId { get; set; }
+        public int? BlockId { get; set; }
+    }
+
+    [JSInvokable]
+    public async Task OnTourQuestionsReordered(int toTourId, List<QuestionOrderItem> toTourOrder, int? fromTourId, List<QuestionOrderItem>? fromTourOrder)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            _saveStatus = "Оновлення порядку питань...";
+            StateHasChanged();
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // Process target tour
+            await UpdateTourQuestionOrder(context, toTourId, toTourOrder);
+
+            // Process source tour if different
+            if (fromTourId.HasValue && fromTourId.Value != toTourId && fromTourOrder != null)
+            {
+                await UpdateTourQuestionOrder(context, fromTourId.Value, fromTourOrder);
+            }
+
+            await context.SaveChangesAsync();
+
+            // Renumber using the service
+            await RenumberingService.RenumberPackage(_package.Id);
+
+            // Reload to get updated numbers
+            await ReloadPackageData();
+
+            _saveStatus = "Порядок питань оновлено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task UpdateTourQuestionOrder(QuestionsHubDbContext context, int tourId, List<QuestionOrderItem> order)
+    {
+        var tour = _package!.Tours.FirstOrDefault(t => t.Id == tourId);
+        if (tour == null) return;
+
+        for (int i = 0; i < order.Count; i++)
+        {
+            var item = order[i];
+            var question = tour.Questions.FirstOrDefault(q => q.Id == item.QuestionId);
+
+            // If question is from a different tour, we need to move it
+            if (question == null)
+            {
+                // Find the question in other tours
+                foreach (var otherTour in _package.Tours.Where(t => t.Id != tourId))
+                {
+                    question = otherTour.Questions.FirstOrDefault(q => q.Id == item.QuestionId);
+                    if (question != null)
+                    {
+                        // Move question to this tour
+                        otherTour.Questions.Remove(question);
+                        question.TourId = tourId;
+                        tour.Questions.Add(question);
+                        break;
+                    }
+                }
+            }
+
+            if (question != null)
+            {
+                question.OrderIndex = i;
+                question.BlockId = item.BlockId;
+
+                var dbQuestion = await context.Questions.FindAsync(question.Id);
+                if (dbQuestion != null)
+                {
+                    dbQuestion.OrderIndex = i;
+                    dbQuestion.BlockId = item.BlockId;
+                    dbQuestion.TourId = tourId;
+                }
+            }
+        }
     }
 
     [JSInvokable]
@@ -1046,8 +1150,11 @@
 
             await context.SaveChangesAsync();
 
-            // Renumber all questions
-            await RenumberAllQuestions();
+            // Renumber using the service
+            await RenumberingService.RenumberPackage(_package.Id);
+
+            // Reload to get updated numbers
+            await ReloadPackageData();
 
             _saveStatus = "Питання переміщено";
         }
@@ -1245,17 +1352,22 @@
         {
             await using var context = await DbContextFactory.CreateDbContextAsync();
 
-            // Auto-increment from the highest existing tour number
-            var maxNumber = _package.Tours
-                .Select(t => int.TryParse(t.Number, out var n) ? n : 0)
-                .DefaultIfEmpty(0)
-                .Max();
-            var newNumber = (maxNumber + 1).ToString();
+            // Get the next OrderIndex
+            var maxOrderIndex = _package.Tours.Count > 0
+                ? _package.Tours.Max(t => t.OrderIndex)
+                : -1;
+            var newOrderIndex = maxOrderIndex + 1;
+
+            // Calculate the new tour number (count of non-warmup tours + 1)
+            var mainTourCount = _package.Tours.Count(t => !t.IsWarmup);
+            var newNumber = (mainTourCount + 1).ToString();
 
             var tour = new Tour
             {
                 PackageId = _package.Id,
                 Number = newNumber,
+                OrderIndex = newOrderIndex,
+                IsWarmup = false,
                 Editors = new List<Author>(),
                 Preamble = null,
                 Comment = null,
@@ -1344,9 +1456,9 @@
     {
         if (_package == null) return (fallbackOrderIndex + 1).ToString();
 
-        // Find the last question across all tours (by tour order, then question order)
+        // Find the last question across all tours (by tour OrderIndex, then by question OrderIndex)
         var lastQuestion = _package.Tours
-            .OrderBy(t => t.Number)
+            .OrderBy(t => t.OrderIndex)
             .SelectMany(t => t.Questions.OrderBy(q => q.OrderIndex))
             .LastOrDefault();
 
@@ -1547,30 +1659,6 @@
         _areAuthorsEmpty = _editingQuestion.Authors == null || _editingQuestion.Authors.Count == 0;
     }
 
-    private async Task OnBlockChanged(ChangeEventArgs e)
-    {
-        if (_editingQuestion == null) return;
-
-        int? newBlockId = null;
-        if (int.TryParse(e.Value?.ToString(), out var parsedId))
-        {
-            newBlockId = parsedId;
-        }
-
-        _editingQuestion.BlockId = newBlockId;
-
-        // Save the change to database
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-        var dbQuestion = await context.Questions.FindAsync(_editingQuestion.Id);
-        if (dbQuestion != null)
-        {
-            dbQuestion.BlockId = newBlockId;
-            await context.SaveChangesAsync();
-        }
-
-        _questionSaveStatus = "Збережено";
-        StateHasChanged();
-    }
 
     private async Task OnTextBlurAsync()
     {
@@ -1601,7 +1689,7 @@
         // Can navigate prev if not first question, or if there's a previous tour
         if (currentIndex > 0) return true;
 
-        var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+        var orderedTours = _package.Tours.OrderBy(t => t.OrderIndex).ToList();
         var tourIndex = orderedTours.IndexOf(_editingTour);
         return tourIndex > 0 && orderedTours[tourIndex - 1].Questions.Count > 0;
     }
@@ -1616,7 +1704,7 @@
         // Can navigate next if not last question, or if there's a next tour
         if (currentIndex < orderedQuestions.Count - 1) return true;
 
-        var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+        var orderedTours = _package.Tours.OrderBy(t => t.OrderIndex).ToList();
         var tourIndex = orderedTours.IndexOf(_editingTour);
         return tourIndex < orderedTours.Count - 1 && orderedTours[tourIndex + 1].Questions.Count > 0;
     }
@@ -1638,7 +1726,7 @@
         else
         {
             // Go to previous tour
-            var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+            var orderedTours = _package.Tours.OrderBy(t => t.OrderIndex).ToList();
             var tourIndex = orderedTours.IndexOf(_editingTour);
             if (tourIndex > 0)
             {
@@ -1670,7 +1758,7 @@
         else
         {
             // Go to next tour
-            var orderedTours = _package.Tours.OrderBy(t => t.Number).ToList();
+            var orderedTours = _package.Tours.OrderBy(t => t.OrderIndex).ToList();
             var tourIndex = orderedTours.IndexOf(_editingTour);
             if (tourIndex < orderedTours.Count - 1)
             {
@@ -1998,31 +2086,120 @@
         await AuthorService.TryDeleteAuthorIfOrphaned(author.Id);
     }
 
-    private async Task RenumberAllQuestions()
+    private async Task OnNumberingModeChanged(ChangeEventArgs e)
     {
         if (_package == null) return;
 
-        // Collect all questions in order (by tour number, then by order index)
-        var allQuestions = _package.Tours
-            .OrderBy(t => t.Number)
-            .SelectMany(t => t.Questions.OrderBy(q => q.OrderIndex))
-            .ToList();
-
-        // Assign sequential numbers
-        await using var context = await DbContextFactory.CreateDbContextAsync();
-        for (int i = 0; i < allQuestions.Count; i++)
+        if (Enum.TryParse<QuestionNumberingMode>(e.Value?.ToString(), out var mode))
         {
-            var newNumber = (i + 1).ToString();
-            allQuestions[i].Number = newNumber;
+            _package.NumberingMode = mode;
 
-            var dbQuestion = await context.Questions.FindAsync(allQuestions[i].Id);
-            if (dbQuestion != null)
+            try
             {
-                dbQuestion.Number = newNumber;
-            }
-        }
+                _saveStatus = "Зміна режиму нумерації...";
+                StateHasChanged();
 
-        await context.SaveChangesAsync();
+                await using var context = await DbContextFactory.CreateDbContextAsync();
+                var dbPackage = await context.Packages.FindAsync(_package.Id);
+                if (dbPackage != null)
+                {
+                    dbPackage.NumberingMode = mode;
+                    await context.SaveChangesAsync();
+                }
+
+                // Renumber using the service
+                await RenumberingService.RenumberPackage(_package.Id);
+
+                // Reload to get updated numbers
+                await ReloadPackageData();
+
+                _saveStatus = "Режим нумерації змінено";
+            }
+            catch (Exception ex)
+            {
+                _saveStatus = $"Помилка: {ex.Message}";
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnWarmupChanged(Tour tour, bool isWarmup)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            _saveStatus = isWarmup ? "Встановлення розминки..." : "Скасування розминки...";
+            StateHasChanged();
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // Unset warmup on all tours first
+            var allTours = await context.Tours.Where(t => t.PackageId == _package.Id).ToListAsync();
+            foreach (var t in allTours)
+            {
+                t.IsWarmup = false;
+            }
+
+            if (isWarmup)
+            {
+                // Set the specified tour as warmup
+                var dbTour = allTours.FirstOrDefault(t => t.Id == tour.Id);
+                if (dbTour != null)
+                {
+                    dbTour.IsWarmup = true;
+                    dbTour.OrderIndex = 0;
+
+                    // Shift other tours
+                    var otherTours = allTours
+                        .Where(t => t.Id != tour.Id)
+                        .OrderBy(t => t.OrderIndex)
+                        .ToList();
+                    for (int i = 0; i < otherTours.Count; i++)
+                    {
+                        otherTours[i].OrderIndex = i + 1;
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync();
+
+            // Renumber using the service
+            await RenumberingService.RenumberPackage(_package.Id);
+
+            // Reload to get updated data
+            await ReloadPackageData();
+
+            _saveStatus = isWarmup ? "Розминку встановлено" : "Розминку скасовано";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task ReloadPackageData()
+    {
+        if (_package == null) return;
+
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+        var reloadedPackage = await context.Packages
+            .Include(p => p.Tours)
+                .ThenInclude(t => t.Editors)
+            .Include(p => p.Tours)
+                .ThenInclude(t => t.Blocks)
+                    .ThenInclude(b => b.Editors)
+            .Include(p => p.Tours)
+                .ThenInclude(t => t.Questions)
+                    .ThenInclude(q => q.Authors)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == _package.Id);
+
+        if (reloadedPackage != null)
+        {
+            _package = reloadedPackage;
+        }
     }
 
     // Block management methods

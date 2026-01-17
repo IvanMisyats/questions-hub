@@ -68,6 +68,7 @@ internal static class ServiceCollectionExtensions
         services.AddScoped<SearchService>();
         services.AddScoped<AuthorService>();
         services.AddScoped<PackageService>();
+        services.AddScoped<PackageRenumberingService>();
 
         return services;
     }

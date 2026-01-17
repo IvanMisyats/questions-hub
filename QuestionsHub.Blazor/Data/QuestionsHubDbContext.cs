@@ -50,6 +50,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(p => p.Title).IsRequired().HasMaxLength(500);
             entity.Property(p => p.Description).HasMaxLength(2000);
             entity.Property(p => p.Status).HasDefaultValue(PackageStatus.Draft);
+            entity.Property(p => p.NumberingMode).HasDefaultValue(QuestionNumberingMode.Global);
 
             entity.HasOne(p => p.Owner)
                 .WithMany()
@@ -68,6 +69,8 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(t => t.Number).IsRequired().HasMaxLength(50);
             entity.Property(t => t.Preamble);
             entity.Property(t => t.Comment).HasMaxLength(2000);
+            entity.Property(t => t.OrderIndex).HasDefaultValue(0);
+            entity.Property(t => t.IsWarmup).HasDefaultValue(false);
 
             entity.HasMany(t => t.Questions)
                 .WithOne(q => q.Tour)

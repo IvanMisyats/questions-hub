@@ -4,6 +4,29 @@ using NpgsqlTypes;
 namespace QuestionsHub.Blazor.Domain;
 
 /// <summary>
+/// Defines how question numbers are assigned within a package.
+/// </summary>
+public enum QuestionNumberingMode
+{
+    /// <summary>
+    /// Questions are numbered sequentially across all main tours (1, 2, 3, ...).
+    /// Warmup tour questions are numbered separately (1..k).
+    /// </summary>
+    Global,
+
+    /// <summary>
+    /// Questions are numbered sequentially within each tour (1, 2, ... per tour).
+    /// </summary>
+    PerTour,
+
+    /// <summary>
+    /// Question numbers are not auto-assigned. Users can edit them manually.
+    /// Used for special cases like hexadecimal numbering (e.g., "IT-cup").
+    /// </summary>
+    Manual
+}
+
+/// <summary>
 /// Represents a single question in the game.
 /// </summary>
 public class Question
@@ -73,7 +96,13 @@ public class Tour
 {
     public int Id { get; set; }
 
-    /// <summary>Tour number (e.g., "1", "2").</summary>
+    /// <summary>Physical order of the tour within the package (0-based). Source of truth for ordering.</summary>
+    public int OrderIndex { get; set; }
+
+    /// <summary>Whether this is a warmup tour. At most one warmup tour per package. If present, it must be the first tour (OrderIndex = 0).</summary>
+    public bool IsWarmup { get; set; }
+
+    /// <summary>Tour number for display (e.g., "1", "2"). For main tours, assigned sequentially. For warmup, may be "0" or empty.</summary>
     public required string Number { get; set; }
 
     /// <summary>Tour editors/authors.</summary>
@@ -129,6 +158,9 @@ public class Package
 
     /// <summary>Package visibility status.</summary>
     public PackageStatus Status { get; set; } = PackageStatus.Draft;
+
+    /// <summary>How question numbers are assigned in this package.</summary>
+    public QuestionNumberingMode NumberingMode { get; set; } = QuestionNumberingMode.Global;
 
     /// <summary>The ID of the user who owns this package.</summary>
     public string? OwnerId { get; set; }

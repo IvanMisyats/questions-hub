@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text.RegularExpressions;
+using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -14,6 +15,16 @@ public static partial class ParserPatterns
 
     [GeneratedRegex(@"^\s*[-–—]\s*(?:ТУР|Тур)\s+(\d+)\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStartDashed();
+
+    // Warmup tour detection: "Розминка", "Warmup", "Тур 0", "Розминковий тур"
+    [GeneratedRegex(@"^\s*(?:Розминка|Warmup|Розминковий\s+тур)\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex WarmupTourStart();
+
+    [GeneratedRegex(@"^\s*[-–—]\s*(?:Розминка|Warmup)\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex WarmupTourStartDashed();
+
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+0\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourZeroStart();
 
     // Question detection
     [GeneratedRegex(@"^\s*(\d+)\.\s+(.*)$")]
@@ -254,23 +265,40 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Attempts to parse and handle a tour start line.
+    /// Attempts to parse and handle a tour start line (including warmup tours).
     /// </summary>
     private bool TryProcessTourStart(string line, ParserContext ctx)
     {
-        if (!TryParseTourStart(line, out var tourNumber))
+        var isWarmup = false;
+        string tourNumber;
+
+        // Check for warmup tour first
+        if (TryParseWarmupTourStart(line))
+        {
+            isWarmup = true;
+            tourNumber = "0";
+        }
+        else if (!TryParseTourStart(line, out tourNumber))
+        {
             return false;
+        }
 
         SaveCurrentQuestion(ctx);
         EnsurePackageHeaderParsed(ctx);
 
-        ctx.CurrentTour = new TourDto { Number = tourNumber };
+        var orderIndex = ctx.Result.Tours.Count;
+        ctx.CurrentTour = new TourDto
+        {
+            Number = tourNumber,
+            OrderIndex = orderIndex,
+            IsWarmup = isWarmup
+        };
         ctx.Result.Tours.Add(ctx.CurrentTour);
         ctx.CurrentQuestion = null;
         ctx.CurrentSection = ParserSection.TourHeader;
         ctx.ExpectedNextQuestionInTour = null;
 
-        _logger.LogDebug("Found tour: {TourNumber}", tourNumber);
+        _logger.LogDebug("Found tour: {TourNumber}, IsWarmup: {IsWarmup}", tourNumber, isWarmup);
         return true;
     }
 
@@ -584,7 +612,72 @@ public class PackageParser
         if (ctx.Result.Tours.Count == 0 && ctx.HeaderBlocks.Count > 0)
             ParsePackageHeader(ctx.HeaderBlocks, ctx.Result);
 
+        // Ensure warmup tour is at the front if present
+        EnsureWarmupTourFirst(ctx.Result);
+
+        // Detect and set numbering mode
+        DetectNumberingMode(ctx);
+
+        // Assign OrderIndex values
+        AssignTourOrderIndices(ctx.Result);
+
         CalculateConfidence(ctx.Result);
+    }
+
+    /// <summary>
+    /// Ensures the warmup tour (if any) is positioned first in the tour list.
+    /// </summary>
+    private static void EnsureWarmupTourFirst(ParseResult result)
+    {
+        var warmupTour = result.Tours.FirstOrDefault(t => t.IsWarmup);
+        if (warmupTour == null)
+            return;
+
+        var warmupIndex = result.Tours.IndexOf(warmupTour);
+        if (warmupIndex <= 0)
+            return; // Already first or not found
+
+        // Move warmup to front
+        result.Tours.RemoveAt(warmupIndex);
+        result.Tours.Insert(0, warmupTour);
+    }
+
+    /// <summary>
+    /// Assigns sequential OrderIndex values to tours.
+    /// </summary>
+    private static void AssignTourOrderIndices(ParseResult result)
+    {
+        for (int i = 0; i < result.Tours.Count; i++)
+        {
+            result.Tours[i].OrderIndex = i;
+        }
+    }
+
+    /// <summary>
+    /// Detects the numbering mode based on parsed questions.
+    /// </summary>
+    private static void DetectNumberingMode(ParserContext ctx)
+    {
+        var result = ctx.Result;
+
+        // Check if any question has non-numeric number (suggests Manual mode)
+        var hasNonNumericNumbers = result.Tours
+            .SelectMany(t => t.Questions)
+            .Any(q => !int.TryParse(q.Number, out _));
+
+        if (hasNonNumericNumbers)
+        {
+            result.NumberingMode = QuestionNumberingMode.Manual;
+            return;
+        }
+
+        // Use the detected mode from parsing
+        result.NumberingMode = ctx.Mode switch
+        {
+            NumberingMode.PerTour => QuestionNumberingMode.PerTour,
+            NumberingMode.Global => QuestionNumberingMode.Global,
+            _ => QuestionNumberingMode.Global // Default to Global if unknown
+        };
     }
 
     /// <summary>
@@ -636,6 +729,13 @@ public class PackageParser
 
         tourNumber = match.Groups[1].Value;
         return true;
+    }
+
+    private static bool TryParseWarmupTourStart(string text)
+    {
+        return ParserPatterns.WarmupTourStart().IsMatch(text) ||
+               ParserPatterns.WarmupTourStartDashed().IsMatch(text) ||
+               ParserPatterns.TourZeroStart().IsMatch(text);
     }
 
     private static bool TryParseQuestionStart(string text, out string questionNumber, out string remainingText, out QuestionFormat format)

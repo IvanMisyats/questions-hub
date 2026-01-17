@@ -2,6 +2,40 @@
 window.sortableInterop = {
     instances: {},
 
+    // Helper: Collect full question order for a container (tour or block)
+    collectQuestionOrder: function (container) {
+        const items = container.querySelectorAll('.list-group-item[data-question-id]');
+        const result = [];
+        items.forEach(item => {
+            result.push({
+                questionId: parseInt(item.dataset.questionId),
+                blockId: container.dataset.blockId ? parseInt(container.dataset.blockId) : null
+            });
+        });
+        return result;
+    },
+
+    // Helper: Collect all question orders for a tour (across all blocks if any)
+    collectTourQuestionOrder: function (tourId) {
+        // Find all question containers for this tour
+        const containers = document.querySelectorAll(`[data-tour-id="${tourId}"]`);
+        const result = [];
+
+        containers.forEach(container => {
+            const items = container.querySelectorAll('.list-group-item[data-question-id]');
+            const blockId = container.dataset.blockId ? parseInt(container.dataset.blockId) : null;
+
+            items.forEach(item => {
+                result.push({
+                    questionId: parseInt(item.dataset.questionId),
+                    blockId: blockId
+                });
+            });
+        });
+
+        return result;
+    },
+
     // Initialize sortable for tours
     initToursSortable: function (elementId, dotNetRef) {
         const element = document.getElementById(elementId);
@@ -121,31 +155,28 @@ window.sortableInterop = {
                 // Only process if dragging an actual question (has data-question-id)
                 if (!evt.item.dataset.questionId) return;
 
-                const questionId = parseInt(evt.item.dataset.questionId);
-
-                // Calculate the correct newIndex by counting only valid question items
-                const validItems = Array.from(evt.to.querySelectorAll('.list-group-item[data-question-id]'));
-                const newIndex = validItems.indexOf(evt.item);
-
-                // Get source info (tour or block)
+                // Get source and target tour IDs
                 const fromTourId = parseInt(evt.from.dataset.tourId);
-                const fromBlockId = evt.from.dataset.blockId ? parseInt(evt.from.dataset.blockId) : null;
-
-                // Get target info (tour or block)
                 const toTourId = parseInt(evt.to.dataset.tourId);
-                const toBlockId = evt.to.dataset.blockId ? parseInt(evt.to.dataset.blockId) : null;
+
+                // Collect full question order for affected tour(s)
+                const toTourOrder = window.sortableInterop.collectTourQuestionOrder(toTourId);
+
+                // If moving between tours, also collect source tour order
+                let fromTourOrder = null;
+                if (fromTourId !== toTourId) {
+                    fromTourOrder = window.sortableInterop.collectTourQuestionOrder(fromTourId);
+                }
 
                 // Revert the DOM change - move the item back to its original position
                 // Blazor will re-render the correct state
                 if (evt.from !== evt.to) {
-                    // Item was moved to a different container, move it back
                     if (evt.oldIndex < evt.from.children.length) {
                         evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]);
                     } else {
                         evt.from.appendChild(evt.item);
                     }
                 } else if (evt.oldIndex !== evt.newIndex) {
-                    // Item was reordered within the same container, move it back
                     if (evt.oldIndex < evt.from.children.length) {
                         evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]);
                     } else {
@@ -153,7 +184,8 @@ window.sortableInterop = {
                     }
                 }
 
-                dotNetRef.invokeMethodAsync('OnQuestionMoved', questionId, fromTourId, toTourId, newIndex >= 0 ? newIndex : 0, fromBlockId, toBlockId);
+                // Send full order to .NET
+                dotNetRef.invokeMethodAsync('OnTourQuestionsReordered', toTourId, toTourOrder, fromTourId, fromTourOrder);
             }
         });
 
@@ -203,31 +235,28 @@ window.sortableInterop = {
                 // Only process if dragging an actual question (has data-question-id)
                 if (!evt.item.dataset.questionId) return;
 
-                const questionId = parseInt(evt.item.dataset.questionId);
-
-                // Calculate the correct newIndex by counting only valid question items
-                const validItems = Array.from(evt.to.querySelectorAll('.list-group-item[data-question-id]'));
-                const newIndex = validItems.indexOf(evt.item);
-
-                // Get source info
+                // Get source and target tour IDs
                 const fromTourId = parseInt(evt.from.dataset.tourId);
-                const fromBlockId = evt.from.dataset.blockId ? parseInt(evt.from.dataset.blockId) : null;
-
-                // Get target info
                 const toTourId = parseInt(evt.to.dataset.tourId);
-                const toBlockId = evt.to.dataset.blockId ? parseInt(evt.to.dataset.blockId) : null;
+
+                // Collect full question order for affected tour(s)
+                const toTourOrder = window.sortableInterop.collectTourQuestionOrder(toTourId);
+
+                // If moving between tours, also collect source tour order
+                let fromTourOrder = null;
+                if (fromTourId !== toTourId) {
+                    fromTourOrder = window.sortableInterop.collectTourQuestionOrder(fromTourId);
+                }
 
                 // Revert the DOM change - move the item back to its original position
                 // Blazor will re-render the correct state
                 if (evt.from !== evt.to) {
-                    // Item was moved to a different container, move it back
                     if (evt.oldIndex < evt.from.children.length) {
                         evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]);
                     } else {
                         evt.from.appendChild(evt.item);
                     }
                 } else if (evt.oldIndex !== evt.newIndex) {
-                    // Item was reordered within the same container, move it back
                     if (evt.oldIndex < evt.from.children.length) {
                         evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]);
                     } else {
@@ -235,7 +264,8 @@ window.sortableInterop = {
                     }
                 }
 
-                dotNetRef.invokeMethodAsync('OnQuestionMoved', questionId, fromTourId, toTourId, newIndex >= 0 ? newIndex : 0, fromBlockId, toBlockId);
+                // Send full order to .NET
+                dotNetRef.invokeMethodAsync('OnTourQuestionsReordered', toTourId, toTourOrder, fromTourId, fromTourOrder);
             }
         });
 

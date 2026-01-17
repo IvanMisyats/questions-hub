@@ -1,4 +1,6 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure.Import;
+﻿using QuestionsHub.Blazor.Domain;
+
+namespace QuestionsHub.Blazor.Infrastructure.Import;
 
 /// <summary>
 /// Represents a block of content extracted from a DOCX document.
@@ -67,6 +69,9 @@ public class ParseResult
     /// <summary>Parser confidence score (0.0 - 1.0).</summary>
     public double Confidence { get; set; } = 1.0;
 
+    /// <summary>Detected numbering mode for the package.</summary>
+    public QuestionNumberingMode NumberingMode { get; set; } = QuestionNumberingMode.Global;
+
     /// <summary>Total number of questions across all tours.</summary>
     public int TotalQuestions => Tours.Sum(t => t.Questions.Count);
 }
@@ -77,6 +82,13 @@ public class ParseResult
 public class TourDto
 {
     public required string Number { get; set; }
+
+    /// <summary>Order index within the package (0-based).</summary>
+    public int OrderIndex { get; set; }
+
+    /// <summary>Whether this tour is a warmup tour.</summary>
+    public bool IsWarmup { get; set; }
+
     public List<string> Editors { get; set; } = [];
     public string? Preamble { get; set; }
     public List<QuestionDto> Questions { get; set; } = [];

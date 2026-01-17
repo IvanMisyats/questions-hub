@@ -1,5 +1,5 @@
 ﻿using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
+
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 
@@ -57,7 +57,8 @@ public partial class PackageDbImporter
                 Preamble = parseResult.Preamble,
                 Status = PackageStatus.Draft,
                 OwnerId = ownerId,
-                TotalQuestions = parseResult.TotalQuestions
+                TotalQuestions = parseResult.TotalQuestions,
+                NumberingMode = parseResult.NumberingMode
             };
 
             _db.Packages.Add(package);
@@ -69,6 +70,8 @@ public partial class PackageDbImporter
                 var tour = new Tour
                 {
                     Number = tourDto.Number,
+                    OrderIndex = tourDto.OrderIndex,
+                    IsWarmup = tourDto.IsWarmup,
                     Preamble = tourDto.Preamble,
                     PackageId = package.Id,
                     Editors = await ResolveAuthors(tourDto.Editors, ct)

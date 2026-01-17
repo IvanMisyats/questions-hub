@@ -38,9 +38,12 @@
   - Has owner (User who created it)
   - Has status: Draft, Published, or Archived
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
+  - Has NumberingMode: Global (sequential across package), PerTour (restart at 1 each tour), or Manual (user-controlled)
   - Editors are computed from all tour editors/blocks (not stored directly)
 - **Tour (Тур)** - A round within a package, typically prepared by a specific editor
-  - Has Number for display (e.g., "1", "2")
+  - Has OrderIndex for ordering within package (0-based, source of truth for order)
+  - Has Number for display (e.g., "1", "2", "0" for warmup)
+  - Has IsWarmup flag (at most one warmup tour per package, always first if present)
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
   - Has many-to-many relationship with Authors (as Editors)
   - Can optionally contain Blocks (0-6 blocks per tour)
@@ -52,8 +55,8 @@
   - Has many-to-many relationship with Authors (as Editors)
   - Questions can optionally belong to a block (BlockId nullable)
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
-  - Has OrderIndex for physical ordering within tour
-  - Has Number for display (can be non-numeric, e.g., "F" for hexadecimal)
+  - Has OrderIndex for physical ordering within tour (0-based, unique within tour)
+  - Has Number for display (auto-assigned based on package NumberingMode, or user-editable in Manual mode)
   - Has optional HostInstructions (Вказівка ведучому) for organizer guidance
   - Has many-to-many relationship with Authors
   - Has optional BlockId (when tour uses blocks)
@@ -176,23 +179,33 @@ Single-page editor for complete package management:
 
 **Package Properties**:
 - Title, description, play date, status (Draft/Published/Archived)
+- **Numbering Mode** - Controls how question numbers are assigned:
+  - **Global (Наскрізна)** - Questions numbered sequentially across all main tours (1, 2, 3...)
+  - **PerTour (Потурова)** - Questions numbered starting from 1 in each tour
+  - **Manual (Ручна)** - Question numbers are not auto-assigned; user can edit them directly
 - Editors list displayed as read-only (computed from all tour editors)
 - Auto-save on field blur
 
 **Tours Management**:
-- Collapsible accordion showing all tours
-- Inline editing of tour number, editors (via AuthorSelector component)
+- Collapsible accordion showing all tours, ordered by OrderIndex
+- **Warmup checkbox** - Mark a tour as warmup (at most one per package, auto-moved to first position)
+- Inline editing of tour editors (via AuthorSelector component)
+- Tour numbers are auto-assigned: warmup gets "0", main tours get 1, 2, 3...
 - Add/delete tours with confirmation
+- Drag & drop reordering of tours (updates OrderIndex, triggers renumbering)
 
 **Questions Management**:
 - List of questions within each tour, ordered by OrderIndex
 - Add/delete questions with confirmation
 - Question count auto-calculated
+- Drag & drop reordering (within tour, across blocks, or across tours)
+- After any reorder/move operation, questions are automatically renumbered based on package NumberingMode
 
 **Question Editor Modal**:
-- Full question editing: number, text, answer, accepted/rejected answers, comment, source, authors (via AuthorSelector)
+- Number field (read-only unless package is in Manual numbering mode)
+- Full question editing: text, answer, accepted/rejected answers, comment, source, authors (via AuthorSelector)
 - Authors prefilled from tour editors when creating new question
-- Prev/Next navigation buttons (including cross-tour navigation)
+- Prev/Next navigation buttons (including cross-tour navigation by OrderIndex)
 - Auto-save on field blur
 - Handout text field and media upload for handout and comment attachments
 
