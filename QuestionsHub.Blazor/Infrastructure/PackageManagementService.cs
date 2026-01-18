@@ -1,4 +1,4 @@
-﻿﻿using System.Globalization;
+﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
