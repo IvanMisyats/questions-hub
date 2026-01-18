@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+﻿﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
@@ -265,8 +265,9 @@ public class PackageManagementService(
             await context.SaveChangesAsync();
             await renumberingService.RenumberPackage(tour.PackageId);
 
-            // Reload to get the updated number
-            var reloadedQuestion = await context.Questions
+            // Reload from a fresh context to get the updated number after renumbering
+            await using var reloadContext = await dbContextFactory.CreateDbContextAsync();
+            var reloadedQuestion = await reloadContext.Questions
                 .Include(q => q.Authors)
                 .FirstOrDefaultAsync(q => q.Id == question.Id);
 

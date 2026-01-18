@@ -38,6 +38,20 @@
                         </div>
                     </div>
                 }
+                @* Orphan questions (not assigned to any block) *@
+                var orphanQuestions = tour.Questions.Where(q => q.BlockId == null).OrderBy(q => q.OrderIndex).ToList();
+                if (orphanQuestions.Any())
+                {
+                    <div class="question-links ms-2">
+                        @foreach (var question in orphanQuestions)
+                        {
+                            var questionElementId = $"question-{question.Id}";
+                            <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                                @question.Number
+                            </button>
+                        }
+                    </div>
+                }
             }
             else
             {

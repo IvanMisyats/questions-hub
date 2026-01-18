@@ -312,6 +312,45 @@
                                                     </div>
                                                 }
                                             </div>
+
+                                            @* Orphan questions section - questions not assigned to any block *@
+                                            var orphanQuestions = tour.Questions.Where(q => q.BlockId == null).OrderBy(q => q.OrderIndex).ToList();
+                                            if (orphanQuestions.Any())
+                                            {
+                                                <div class="card mb-3 border-warning">
+                                                    <div class="card-header d-flex justify-content-between align-items-center py-2 bg-warning-subtle">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <i class="bi bi-exclamation-triangle text-warning"></i>
+                                                            <strong>Питання поза блоками</strong>
+                                                            <span class="badge bg-warning text-dark">@orphanQuestions.Count питань</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-body py-2">
+                                                        <p class="text-muted small mb-2">Ці питання не належать жодному блоку. Перетягніть їх до відповідного блоку.</p>
+                                                        <div class="list-group mb-2" id="questions-orphan-@tour.Id" data-tour-id="@tour.Id" data-block-id="">
+                                                            @foreach (var question in orphanQuestions)
+                                                            {
+                                                                <div @key="question.Id" class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-1"
+                                                                     data-question-id="@question.Id">
+                                                                    <span class="question-drag-handle flex-shrink-0" title="Перетягніть для зміни порядку">
+                                                                        <Icon Name="drag" Size="14" />
+                                                                    </span>
+                                                                    <span class="badge bg-primary flex-shrink-0">@question.Number</span>
+                                                                    <div class="flex-grow-1 small" style="cursor: pointer;"
+                                                                         @onclick="() => OpenQuestionEditor(tour, question)">
+                                                                        @question.Text
+                                                                    </div>
+                                                                    <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
+                                                                            style="width: 20px; height: 20px; padding: 0; font-size: 1rem; line-height: 1;"
+                                                                            @onclick="() => ConfirmDeleteQuestion(tour, question)"
+                                                                            @onclick:stopPropagation="true"
+                                                                            title="Видалити">×</button>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
                                         }
                                         else
                                         {
@@ -817,6 +856,14 @@
                     {
                         await JS.InvokeVoidAsync("sortableInterop.initBlockQuestionsSortable",
                             $"questions-block-{block.Id}", tour.Id, block.Id, _dotNetRef);
+                    }
+
+                    // Initialize orphan questions sortable (questions without block)
+                    var hasOrphanQuestions = tour.Questions.Any(q => q.BlockId == null);
+                    if (hasOrphanQuestions)
+                    {
+                        await JS.InvokeVoidAsync("sortableInterop.initBlockQuestionsSortable",
+                            $"questions-orphan-{tour.Id}", tour.Id, null, _dotNetRef);
                     }
                 }
                 else
@@ -1449,7 +1496,7 @@
         StateHasChanged();
     }
 
-    private async Task<Question?> CreateQuestionAsync(Tour tour)
+    private async Task<Question?> CreateQuestionAsync(Tour tour, Block? block = null)
     {
         if (_package == null) return null;
 
@@ -1459,14 +1506,18 @@
 
             var newOrderIndex = tour.Questions.Count;
 
+            // If a block is specified, use block editors; otherwise use tour editors
+            var editors = block?.Editors ?? tour.Editors;
+
             var question = new Question
             {
                 TourId = tour.Id,
+                BlockId = block?.Id,
                 OrderIndex = newOrderIndex,
                 Number = "0", // Temporary number, will be set by renumbering
                 Text = "",
                 Answer = "",
-                Authors = tour.Editors.Select(e => new Author
+                Authors = editors.Select(e => new Author
                 {
                     Id = e.Id,
                     FirstName = e.FirstName,
@@ -1769,11 +1820,19 @@
         if (_editingTour == null || _package == null) return;
 
         var tourId = _editingTour.Id;
+        var currentBlockId = _editingQuestion?.BlockId;
 
         // Save current question first
         await SaveEditingQuestionAsync();
 
-        var question = await CreateQuestionAsync(_editingTour);
+        // Find the block if the current question belongs to one
+        Block? block = null;
+        if (currentBlockId.HasValue)
+        {
+            block = _editingTour.Blocks.FirstOrDefault(b => b.Id == currentBlockId.Value);
+        }
+
+        var question = await CreateQuestionAsync(_editingTour, block);
         if (question != null)
         {
             // Update _editingTour reference since package data was reloaded

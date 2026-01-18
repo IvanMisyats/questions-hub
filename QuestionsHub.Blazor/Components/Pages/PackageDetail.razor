@@ -132,6 +132,20 @@ else
                                     }
                                 </div>
                             }
+
+                            @* Display orphan questions (not assigned to any block) after all blocks *@
+                            var orphanQuestions = tour.Questions.Where(q => q.BlockId == null).OrderBy(q => q.OrderIndex).ToList();
+                            if (orphanQuestions.Any())
+                            {
+                                <div class="orphan-questions-section ms-3">
+                                    @foreach (var question in orphanQuestions)
+                                    {
+                                        <div id="question-@question.Id">
+                                            <QuestionCard Question="@question" />
+                                        </div>
+                                    }
+                                </div>
+                            }
                         }
                         else
                         {

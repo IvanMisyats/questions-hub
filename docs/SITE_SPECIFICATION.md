@@ -54,12 +54,14 @@
   - Has optional Preamble (Преамбула)
   - Has many-to-many relationship with Authors (as Editors)
   - Questions can optionally belong to a block (BlockId nullable)
+  - When first block is created, all existing questions are moved to it
+  - A tour can have both questions in blocks and "orphan" questions outside blocks
 - **Question (Запитання)** - A single question with answer, handouts, and metadata
   - Has OrderIndex for physical ordering within tour (0-based, unique within tour)
   - Has Number for display (auto-assigned based on package NumberingMode, or user-editable in Manual mode)
   - Has optional HostInstructions (Вказівка ведучому) for organizer guidance
   - Has many-to-many relationship with Authors
-  - Has optional BlockId (when tour uses blocks)
+  - Has optional BlockId (when tour uses blocks, null means question is outside any block)
 - **Author (Автор/Редактор)** - A person who creates questions or edits tours
   - Has FirstName (Ім'я) and LastName (Прізвище)
   - Unique constraint on (FirstName, LastName)
@@ -200,12 +202,19 @@ Single-page editor for complete package management:
 - Question count auto-calculated
 - Drag & drop reordering (within tour, across blocks, or across tours)
 - After any reorder/move operation, questions are automatically renumbered based on package NumberingMode
+- **Blocks support**: When tour has blocks:
+  - Questions are grouped by blocks
+  - "Orphan" questions (not assigned to any block) shown in a separate highlighted section
+  - Orphan questions can be dragged to blocks
+  - When creating a question via "Create next" button, new question inherits the block of the current question
+  - When first block is created, all existing questions are automatically moved to it
 
 **Question Editor Modal**:
 - Number field (read-only unless package is in Manual numbering mode)
 - Full question editing: text, answer, accepted/rejected answers, comment, source, authors (via AuthorSelector)
-- Authors prefilled from tour editors when creating new question
+- Authors prefilled from tour editors (or block editors if question belongs to a block) when creating new question
 - Prev/Next navigation buttons (including cross-tour navigation by OrderIndex)
+- **"Create next" button** - Creates new question and navigates to it; inherits block from current question if applicable
 - Auto-save on field blur
 - Handout text field and media upload for handout and comment attachments
 
@@ -435,6 +444,7 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jan 18, 2026 | 1.9 | Fixed: "Create next" button now inherits block from current question. Added: orphan questions (not in any block) are now visible and can be dragged to blocks |
 | Jan 17, 2026 | 1.8 | Icon system: replaced inline SVGs with centralized SVG sprite (icons.svg) and reusable Icon.razor component |
 | Jan 16, 2026 | 1.7 | Added Block entity: tours can optionally contain blocks, each with its own editors and preamble. Questions can belong to blocks. Updated PackageDetail, EditorProfile, and ManagePackageDetail pages |
 | Jan 10, 2026 | 1.6 | Email integration with Mailjet: email confirmation required for registration, password reset via email |
