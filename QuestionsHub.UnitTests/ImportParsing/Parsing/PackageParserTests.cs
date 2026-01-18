@@ -566,6 +566,47 @@ public class PackageParserTests
         q.AcceptedAnswers.Should().Contain("Київ; столиця");
     }
 
+    [Fact]
+    public void Parse_InlineZalikOnSameLineAsAnswer_ExtractsBoth()
+    {
+        // Arrange - "Залік:" appears on the same line as the answer
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: «Сяйво». Залік: The Shining.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("«Сяйво».");
+        q.AcceptedAnswers.Should().Be("The Shining.");
+    }
+
+    [Fact]
+    public void Parse_MultipleInlineLabels_ExtractsAll()
+    {
+        // Arrange - Multiple labels on the same line
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: answer. Залік: accepted. Коментар: comment text")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("answer.");
+        q.AcceptedAnswers.Should().Be("accepted.");
+        q.Comment.Should().Be("comment text");
+    }
+
     #endregion
 
     #region Comment and Source
@@ -646,6 +687,8 @@ public class PackageParserTests
     [InlineData("Автори: Іван, Марія", new[] { "Іван", "Марія" })]
     [InlineData("Автор: Іван та Марія", new[] { "Іван", "Марія" })]
     [InlineData("Автори: Іван; Марія; Петро", new[] { "Іван", "Марія", "Петро" })]
+    [InlineData("Авторка: Галина Синєока (Львів)", new[] { "Галина Синєока (Львів)" })]
+    [InlineData("Авторки: Марія, Олена", new[] { "Марія", "Олена" })]
     public void Parse_AuthorLabel_ExtractsAuthors(string line, string[] expectedAuthors)
     {
         // Arrange
@@ -925,6 +968,48 @@ public class PackageParserTests
         question.HandoutAssetFileName.Should().Be("image001.png");
     }
 
+    [Fact]
+    public void Parse_MultilineBracketedHandout_ClosingBracketOnSameLineAsHandoutText()
+    {
+        // Arrange - Case where closing bracket is on the same line as handout text (not at start)
+        // Format: [Роздатка:\nZoozeum] Текст питання
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатка:\nZoozeum] Яке слово утворено?"),
+            Block("Відповідь: зоопарк")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Zoozeum");
+        question.Text.Should().Be("Яке слово утворено?");
+    }
+
+    [Fact]
+    public void Parse_MultilineBracketedHandout_ClosingBracketOnSameLineAsHandoutTextNoQuestionText()
+    {
+        // Arrange - Case where closing bracket is on the same line as handout text, no text after bracket
+        // Format: [Роздатка:\nZoozeum]\nТекст питання
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатка:\nZoozeum]\nЯке слово утворено?"),
+            Block("Відповідь: зоопарк")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Zoozeum");
+        question.Text.Should().Be("Яке слово утворено?");
+    }
+
     #endregion
 
     #region Package Header
@@ -948,6 +1033,26 @@ public class PackageParserTests
         // Assert
         result.Title.Should().Be("Назва пакету питань");
         result.Editors.Should().Contain("Іван Петренко");
+    }
+
+    [Fact]
+    public void Parse_PackageHeader_ExtractsFeminineEditorForm()
+    {
+        // Arrange - Test "Редакторка" (feminine form of editor)
+        var blocks = new List<DocBlock>
+        {
+            Block("Назва пакету"),
+            Block("Редакторка: Марія Коваленко"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Editors.Should().Contain("Марія Коваленко");
     }
 
     [Fact]

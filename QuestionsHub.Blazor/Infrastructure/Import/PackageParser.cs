@@ -58,12 +58,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\))\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
-    // Matches: "Автор:", "Автори:", "Автора:"
-    [GeneratedRegex(@"^\s*Автор(?:а|и)?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:"
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ка|ки)?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorLabel();
 
-    // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ..."
-    [GeneratedRegex(@"^\s*Автор(?:а)?\s+запитань\s+(\d+)\s*[-–—]\s*(\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ..."
+    [GeneratedRegex(@"^\s*Автор(?:а|ка)?\s+запитань\s+(\d+)\s*[-–—]\s*(\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorRangeLabel();
 
     // Special markers
@@ -90,8 +90,8 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*\]\s*(.*)$")]
     public static partial Regex HandoutMarkerBracketClose();
 
-    // Editors in header
-    [GeneratedRegex(@"^\s*(?:Редактори?(?:\s*туру)?)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    // Editors in header: "Редактор:", "Редактори:", "Редактор туру:", "Редакторка:", "Редакторки:"
+    [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*туру)?)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex EditorsLabel();
 }
 
@@ -239,7 +239,7 @@ public class PackageParser
     /// </summary>
     private static bool TryProcessMultilineHandoutBracketContent(string line, ParserContext ctx)
     {
-        // Check if this line closes the bracket
+        // Check if this line closes the bracket (bracket at start of line)
         var closeMatch = ParserPatterns.HandoutMarkerBracketClose().Match(line);
         if (closeMatch.Success)
         {
@@ -247,6 +247,30 @@ public class PackageParser
             ctx.CurrentSection = ParserSection.QuestionText;
 
             var afterBracket = closeMatch.Groups[1].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(afterBracket) && ctx.HasCurrentQuestion)
+            {
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterBracket);
+            }
+
+            return true;
+        }
+
+        // Check if this line contains a closing bracket mid-line (e.g., "Zoozeum] question text")
+        var bracketIndex = line.IndexOf(']');
+        if (bracketIndex >= 0)
+        {
+            ctx.InsideMultilineHandoutBracket = false;
+            ctx.CurrentSection = ParserSection.QuestionText;
+
+            // Text before the bracket is handout text
+            var beforeBracket = line[..bracketIndex].Trim();
+            if (!string.IsNullOrWhiteSpace(beforeBracket) && ctx.HasCurrentQuestion)
+            {
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, beforeBracket);
+            }
+
+            // Text after the bracket is question text
+            var afterBracket = line[(bracketIndex + 1)..].Trim();
             if (!string.IsNullOrWhiteSpace(afterBracket) && ctx.HasCurrentQuestion)
             {
                 ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterBracket);
@@ -450,6 +474,7 @@ public class PackageParser
 
     /// <summary>
     /// Processes a line that may contain a section label or regular content.
+    /// Handles multiple inline labels on the same line (e.g., "Відповідь: answer. Залік: accepted").
     /// </summary>
     private static void ProcessLabelOrContent(string line, ParserContext ctx)
     {
@@ -460,8 +485,67 @@ public class PackageParser
             line = remainder;
         }
 
-        if (!string.IsNullOrWhiteSpace(line))
+        if (string.IsNullOrWhiteSpace(line))
+            return;
+
+        // Check if there's another label inline (e.g., "answer text. Залік: accepted")
+        var inlineLabelIndex = FindInlineLabelStart(line);
+        if (inlineLabelIndex > 0)
+        {
+            // Process the text before the inline label
+            var beforeLabel = line[..inlineLabelIndex].Trim();
+            if (!string.IsNullOrWhiteSpace(beforeLabel))
+                AppendToSection(ctx.CurrentSection, beforeLabel, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+
+            // Recursively process the inline label and its content
+            var labelAndAfter = line[inlineLabelIndex..];
+            ProcessLabelOrContent(labelAndAfter, ctx);
+        }
+        else
+        {
             AppendToSection(ctx.CurrentSection, line, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+        }
+    }
+
+    /// <summary>
+    /// Finds the start index of an inline label in text.
+    /// Returns -1 if no inline label is found, or the index of the label start.
+    /// </summary>
+    private static int FindInlineLabelStart(string text)
+    {
+        var minIndex = int.MaxValue;
+
+        // Label keywords that can appear inline (without ^ anchor)
+        // These are the prefixes we look for to split inline labels
+        string[] labelKeywords =
+        [
+            "Відповідь:",
+            "Залік:",
+            "Заліки:",
+            "Незалік:",
+            "Не залік:",
+            "Не приймається:",
+            "Коментар:",
+            "Джерело:",
+            "Джерела:",
+            "Автор:",
+            "Автори:",
+            "Авторка:",
+            "Авторки:",
+            "Роздатка:",
+            "Роздатковий матеріал:"
+        ];
+
+        foreach (var keyword in labelKeywords)
+        {
+            var index = text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+            if (index > 0 && index < minIndex)
+            {
+                minIndex = index;
+            }
+        }
+
+        return minIndex == int.MaxValue ? -1 : minIndex;
     }
 
     /// <summary>
@@ -471,15 +555,7 @@ public class PackageParser
     {
         if (ctx.HasCurrentTour)
         {
-            var (detectedSection, detectedRemainder) = DetectLabel(line);
-            if (detectedSection != null)
-            {
-                ctx.CurrentSection = detectedSection.Value;
-                line = detectedRemainder;
-            }
-
-            if (!string.IsNullOrWhiteSpace(line))
-                AppendToSection(ctx.CurrentSection, line, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+            ProcessLabelOrContent(line, ctx);
         }
         else
         {
