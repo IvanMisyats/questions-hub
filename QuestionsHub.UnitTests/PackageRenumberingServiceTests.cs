@@ -322,4 +322,202 @@ public class PackageRenumberingServiceTests
     }
 
     #endregion
+
+    #region Warmup Tour With Existing Questions Tests
+
+    [Fact]
+    public void RenumberPackageInMemory_GlobalWithWarmupFirst_MainQuestionsStartAt1()
+    {
+        // This test reproduces a defect where:
+        // 1. Package has 1 tour with 31 questions (numbered 1-31)
+        // 2. User adds new tour at first position with 1 question
+        // 3. User marks this tour as warmup
+        // 4. Expected: warmup question = 1, main tour questions = 1-31
+        // Defect: the warmup question was getting number 32 instead of 1
+
+        // Arrange
+        var service = CreateService();
+        var package = CreatePackage(QuestionNumberingMode.Global);
+
+        // Simulate existing main tour with 31 questions
+        var mainTour = CreateTour(1, 1);
+        for (int i = 0; i < 31; i++)
+        {
+            mainTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString()));
+        }
+
+        // Simulate new warmup tour at first position with 1 question
+        // The question was initially assigned number 32 (last question + 1)
+        var warmupTour = CreateTour(2, 0, isWarmup: true);
+        warmupTour.Questions.Add(CreateQuestion(32, 0, "32"));
+
+        package.Tours.Add(mainTour);
+        package.Tours.Add(warmupTour);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        // Warmup tour should have number "0"
+        Assert.Equal("0", warmupTour.Number);
+        Assert.Equal("1", mainTour.Number);
+
+        // Warmup question should be renumbered to 1
+        Assert.Equal("1", warmupTour.Questions.First().Number);
+
+        // Main tour questions should be 1-31
+        var mainQuestions = mainTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        for (int i = 0; i < 31; i++)
+        {
+            Assert.Equal((i + 1).ToString(), mainQuestions[i].Number);
+        }
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_NewTourDraggedToFirst_RenumbersAllQuestionsFrom1()
+    {
+        // This test reproduces a defect where:
+        // 1. Package has 1 tour with 12 questions (numbered 1-12)
+        // 2. User adds new tour, adds 3 questions (numbered 13, 14, 15 initially)
+        // 3. User drags this new tour to first position
+        // 4. Expected: new tour questions = 1-3, original tour questions = 4-15
+
+        // Arrange
+        var service = CreateService();
+        var package = CreatePackage(QuestionNumberingMode.Global);
+
+        // New tour (now at first position) with 3 questions
+        var newTour = CreateTour(2, 0);
+        newTour.Questions.Add(CreateQuestion(13, 0, "13"));
+        newTour.Questions.Add(CreateQuestion(14, 1, "14"));
+        newTour.Questions.Add(CreateQuestion(15, 2, "15"));
+
+        // Original tour (now at second position) with 12 questions
+        var originalTour = CreateTour(1, 1);
+        for (int i = 0; i < 12; i++)
+        {
+            originalTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString()));
+        }
+
+        package.Tours.Add(newTour);
+        package.Tours.Add(originalTour);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        Assert.Equal("1", newTour.Number);
+        Assert.Equal("2", originalTour.Number);
+
+        // New tour questions should be 1-3
+        var newTourQuestions = newTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal("1", newTourQuestions[0].Number);
+        Assert.Equal("2", newTourQuestions[1].Number);
+        Assert.Equal("3", newTourQuestions[2].Number);
+
+        // Original tour questions should be 4-15
+        var originalTourQuestions = originalTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        for (int i = 0; i < 12; i++)
+        {
+            Assert.Equal((i + 4).ToString(), originalTourQuestions[i].Number);
+        }
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_AddQuestionToWarmupTour_NumbersStartAt1()
+    {
+        // When adding questions to warmup tour, they should be numbered
+        // independently starting from 1, not continue from main tour questions
+
+        // Arrange
+        var service = CreateService();
+        var package = CreatePackage(QuestionNumberingMode.Global);
+
+        // Warmup tour with questions (initially numbered incorrectly as 32, 33)
+        var warmupTour = CreateTour(1, 0, isWarmup: true);
+        warmupTour.Questions.Add(CreateQuestion(32, 0, "32"));
+        warmupTour.Questions.Add(CreateQuestion(33, 1, "33"));
+
+        // Main tour with 31 questions
+        var mainTour = CreateTour(2, 1);
+        for (int i = 0; i < 31; i++)
+        {
+            mainTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString()));
+        }
+
+        package.Tours.Add(warmupTour);
+        package.Tours.Add(mainTour);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        var warmupQuestions = warmupTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal("1", warmupQuestions[0].Number);
+        Assert.Equal("2", warmupQuestions[1].Number);
+
+        // Main tour questions should still be 1-31
+        var mainQuestions = mainTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        for (int i = 0; i < 31; i++)
+        {
+            Assert.Equal((i + 1).ToString(), mainQuestions[i].Number);
+        }
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_MultipleToursWithWarmup_CorrectGlobalNumbering()
+    {
+        // Test with warmup + multiple main tours to ensure global numbering works correctly
+
+        // Arrange
+        var service = CreateService();
+        var package = CreatePackage(QuestionNumberingMode.Global);
+
+        // Warmup tour with 2 questions
+        var warmupTour = CreateTour(1, 0, isWarmup: true);
+        warmupTour.Questions.Add(CreateQuestion(100, 0, "100"));
+        warmupTour.Questions.Add(CreateQuestion(101, 1, "101"));
+
+        // Main tour 1 with 5 questions
+        var mainTour1 = CreateTour(2, 1);
+        for (int i = 0; i < 5; i++)
+        {
+            mainTour1.Questions.Add(CreateQuestion(i + 1, i));
+        }
+
+        // Main tour 2 with 3 questions
+        var mainTour2 = CreateTour(3, 2);
+        for (int i = 0; i < 3; i++)
+        {
+            mainTour2.Questions.Add(CreateQuestion(i + 6, i));
+        }
+
+        package.Tours.Add(warmupTour);
+        package.Tours.Add(mainTour1);
+        package.Tours.Add(mainTour2);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        // Warmup questions: 1, 2
+        var warmupQuestions = warmupTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal("1", warmupQuestions[0].Number);
+        Assert.Equal("2", warmupQuestions[1].Number);
+
+        // Main tour 1 questions: 1-5 (global numbering starts at 1)
+        var main1Questions = mainTour1.Questions.OrderBy(q => q.OrderIndex).ToList();
+        for (int i = 0; i < 5; i++)
+        {
+            Assert.Equal((i + 1).ToString(), main1Questions[i].Number);
+        }
+
+        // Main tour 2 questions: 6-8 (continues global numbering)
+        var main2Questions = mainTour2.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal("6", main2Questions[0].Number);
+        Assert.Equal("7", main2Questions[1].Number);
+        Assert.Equal("8", main2Questions[2].Number);
+    }
+
+    #endregion
 }

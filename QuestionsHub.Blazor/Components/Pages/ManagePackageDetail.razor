@@ -1439,28 +1439,14 @@
         if (question != null)
         {
             _needsSortableInit = true;
-            OpenQuestionEditor(tour, question);
+            // Find the reloaded tour since package data was reloaded
+            var reloadedTour = _package.Tours.FirstOrDefault(t => t.Id == tour.Id);
+            if (reloadedTour != null)
+            {
+                OpenQuestionEditor(reloadedTour, question);
+            }
         }
         StateHasChanged();
-    }
-
-    private string CalculateNextQuestionNumber(int fallbackOrderIndex)
-    {
-        if (_package == null) return (fallbackOrderIndex + 1).ToString();
-
-        // Find the last question across all tours (by tour OrderIndex, then by question OrderIndex)
-        var lastQuestion = _package.Tours
-            .OrderBy(t => t.OrderIndex)
-            .SelectMany(t => t.Questions.OrderBy(q => q.OrderIndex))
-            .LastOrDefault();
-
-        if (lastQuestion != null && int.TryParse(lastQuestion.Number, out var lastNum))
-        {
-            return (lastNum + 1).ToString();
-        }
-
-        // Fallback to 1-based index within the tour
-        return (fallbackOrderIndex + 1).ToString();
     }
 
     private async Task<Question?> CreateQuestionAsync(Tour tour)
@@ -1472,13 +1458,12 @@
             await using var context = await DbContextFactory.CreateDbContextAsync();
 
             var newOrderIndex = tour.Questions.Count;
-            var newNumber = CalculateNextQuestionNumber(newOrderIndex);
 
             var question = new Question
             {
                 TourId = tour.Id,
                 OrderIndex = newOrderIndex,
-                Number = newNumber,
+                Number = "0", // Temporary number, will be set by renumbering
                 Text = "",
                 Answer = "",
                 Authors = tour.Editors.Select(e => new Author
@@ -1504,11 +1489,18 @@
 
             await context.SaveChangesAsync();
 
-            tour.Questions.Add(question);
-            _package.TotalQuestions++;
+            // Renumber to get correct question number based on position
+            await RenumberingService.RenumberPackage(_package.Id);
+
+            // Reload to get updated numbers
+            await ReloadPackageData();
+
+            // Find the created question in the reloaded data
+            var reloadedTour = _package.Tours.FirstOrDefault(t => t.Id == tour.Id);
+            var reloadedQuestion = reloadedTour?.Questions.FirstOrDefault(q => q.Id == question.Id);
 
             _saveStatus = "Питання додано";
-            return question;
+            return reloadedQuestion ?? question;
         }
         catch (Exception ex)
         {
@@ -1776,12 +1768,16 @@
     {
         if (_editingTour == null || _package == null) return;
 
+        var tourId = _editingTour.Id;
+
         // Save current question first
         await SaveEditingQuestionAsync();
 
         var question = await CreateQuestionAsync(_editingTour);
         if (question != null)
         {
+            // Update _editingTour reference since package data was reloaded
+            _editingTour = _package.Tours.FirstOrDefault(t => t.Id == tourId);
             _editingQuestion = question;
             _questionSaveStatus = null;
             ResetMediaInputState();
@@ -2393,14 +2389,13 @@
             await using var context = await DbContextFactory.CreateDbContextAsync();
 
             var newOrderIndex = tour.Questions.Count;
-            var newNumber = CalculateNextQuestionNumber(newOrderIndex);
 
             var question = new Question
             {
                 TourId = tour.Id,
                 BlockId = block.Id,
                 OrderIndex = newOrderIndex,
-                Number = newNumber,
+                Number = "0", // Temporary number, will be set by renumbering
                 Text = "",
                 Answer = "",
                 Authors = block.Editors.Select(e => new Author
@@ -2426,10 +2421,20 @@
 
             await context.SaveChangesAsync();
 
-            tour.Questions.Add(question);
-            _package.TotalQuestions++;
+            // Renumber to get correct question number based on position
+            await RenumberingService.RenumberPackage(_package.Id);
 
-            OpenQuestionEditor(tour, question);
+            // Reload to get updated numbers
+            await ReloadPackageData();
+
+            // Find the created question in the reloaded data
+            var reloadedTour = _package.Tours.FirstOrDefault(t => t.Id == tour.Id);
+            var reloadedQuestion = reloadedTour?.Questions.FirstOrDefault(q => q.Id == question.Id);
+
+            if (reloadedTour != null && reloadedQuestion != null)
+            {
+                OpenQuestionEditor(reloadedTour, reloadedQuestion);
+            }
             _saveStatus = "Питання додано";
         }
         catch (Exception ex)
