@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@using System.Security.Claims
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
@@ -10,6 +9,7 @@
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject PackageService PackageService
+@inject AccessControlService AccessControl
 @inject NavigationManager Navigation
 
 <PageTitle>Мої пакети - QuestionsHub</PageTitle>
@@ -156,9 +156,6 @@
     // Component reference
     private PackageImportSection? _importSection;
 
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthenticationState { get; set; }
-
     protected override async Task OnInitializedAsync()
     {
         await CheckUser();
@@ -167,12 +164,8 @@
 
     private async Task CheckUser()
     {
-        if (AuthenticationState != null)
-        {
-            var authState = await AuthenticationState;
-            _isAdmin = authState.User.IsInRole("Admin");
-            _userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        }
+        _isAdmin = await AccessControl.IsAdmin();
+        _userId = await AccessControl.GetCurrentUserId();
     }
 
     private async Task LoadPackages()
@@ -259,16 +252,13 @@
 
     private async Task DeletePackage()
     {
-        if (_packageToDelete == null || _userId == null) return;
+        if (_packageToDelete == null) return;
 
         _isDeleting = true;
 
         try
         {
-            var result = await PackageService.DeletePackage(
-                _packageToDelete.Id,
-                _userId,
-                _isAdmin);
+            var result = await PackageService.DeletePackage(_packageToDelete.Id);
 
             if (result.Success)
             {

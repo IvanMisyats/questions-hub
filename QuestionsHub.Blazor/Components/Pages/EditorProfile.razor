@@ -8,7 +8,7 @@
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject AuthorService AuthorService
-@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AccessControlService AccessControl
 
 <PageTitle>@(_author?.FullName ?? "Редактор")</PageTitle>
 
@@ -289,8 +289,7 @@
     protected override async Task OnInitializedAsync()
     {
         // Check if current user is admin
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _isAdmin = authState.User.IsInRole("Admin");
+        _isAdmin = await AccessControl.IsAdmin();
 
         await LoadAuthorDataAsync();
         _isLoading = false;

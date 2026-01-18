@@ -4,10 +4,11 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Infrastructure
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject UserManager<ApplicationUser> UserManager
-@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AccessControlService AccessControl
 
 <PageTitle>Редактори - QuestionsHub</PageTitle>
 
@@ -143,8 +144,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _isAdmin = authState.User.IsInRole("Admin");
+        _isAdmin = await AccessControl.IsAdmin();
 
         await LoadEditorsAsync();
         _isLoading = false;

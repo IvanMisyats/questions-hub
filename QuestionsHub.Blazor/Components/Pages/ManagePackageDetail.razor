@@ -3,7 +3,6 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.JSInterop
-@using System.Security.Claims
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @attribute [Authorize(Roles = "Editor,Admin")]
@@ -14,6 +13,7 @@
 @inject MediaService MediaService
 @inject AuthorService AuthorService
 @inject PackageRenumberingService RenumberingService
+@inject AccessControlService AccessControl
 @inject IJSRuntime JS
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - QuestionsHub</PageTitle>
@@ -729,7 +729,6 @@
     private bool _isLoading = true;
     private string? _errorMessage;
     private string? _userId;
-    private bool _isAdmin;
     private bool _isSaving;
     private string? _saveStatus;
 
@@ -774,9 +773,6 @@
 
     // JS Interop for sortable
     private DotNetObjectReference<ManagePackageDetail>? _dotNetRef;
-
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -1169,12 +1165,7 @@
 
     private async Task CheckUserAsync()
     {
-        if (AuthenticationState != null)
-        {
-            var authState = await AuthenticationState;
-            _isAdmin = authState.User.IsInRole("Admin");
-            _userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        }
+        _userId = await AccessControl.GetCurrentUserId();
     }
 
     private async Task LoadPackageAsync()
@@ -1223,7 +1214,7 @@
                 {
                     _errorMessage = "Пакет не знайдено.";
                 }
-                else if (!_isAdmin && _package.OwnerId != _userId)
+                else if (!await AccessControl.CanEditPackage(_package))
                 {
                     _errorMessage = "Ви не маєте доступу до цього пакету.";
                     _package = null;

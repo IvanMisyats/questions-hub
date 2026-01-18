@@ -1,10 +1,11 @@
 ﻿@page "/package/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
-@using System.Security.Claims
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 @inject QuestionsHubDbContext DbContext
+@inject AccessControlService AccessControl
 
 <PageTitle>@(_package?.Title ?? "Пакет не знайдено") - База українських запитань</PageTitle>
 
@@ -36,7 +37,15 @@ else
             <!-- Main Content -->
             <div class="col-md-9 col-lg-10 main-content">
                 <div id="top">
-                    <h1>@_package.Title</h1>
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h1 class="mb-0">@_package.Title</h1>
+                        @if (_canEdit)
+                        {
+                            <a href="/manage/package/@_package.Id" class="btn btn-outline-primary btn-sm ms-3">
+                                <i class="bi bi-pencil me-1"></i>Редагувати
+                            </a>
+                        }
+                    </div>
 
                     @if (!string.IsNullOrEmpty(_package.Description))
                     {
@@ -173,9 +182,7 @@ else
 
     private Package? _package;
     private bool _notFound;
-
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthenticationState { get; set; }
+    private bool _canEdit;
 
     protected override async Task OnInitializedAsync()
     {
@@ -198,13 +205,16 @@ else
         }
 
         // Check visibility based on package status
-        var canView = await CanViewPackageAsync(_package);
+        var canView = await AccessControl.CanViewPackage(_package);
         if (!canView)
         {
             _package = null;
             _notFound = true;
             return;
         }
+
+        // Check if the current user can edit the package
+        _canEdit = await AccessControl.CanEditPackage(_package);
 
         // Sort tours by Number, blocks by OrderIndex, and questions by OrderIndex
         _package.Tours = _package.Tours
@@ -222,35 +232,6 @@ else
                 .OrderBy(q => q.OrderIndex)
                 .ToList();
         }
-    }
-
-    private async Task<bool> CanViewPackageAsync(Package package)
-    {
-        // Published packages are visible to everyone
-        if (package.Status == PackageStatus.Published)
-            return true;
-
-        // Archived packages are accessible via direct link
-        if (package.Status == PackageStatus.Archived)
-            return true;
-
-        // Draft packages require authentication
-        if (AuthenticationState == null)
-            return false;
-
-        var authState = await AuthenticationState;
-        var user = authState.User;
-
-        if (!user.Identity?.IsAuthenticated ?? true)
-            return false;
-
-        // Admins can see all packages
-        if (user.IsInRole("Admin"))
-            return true;
-
-        // Owners can see their own draft packages
-        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return package.OwnerId == userId;
     }
 }
 

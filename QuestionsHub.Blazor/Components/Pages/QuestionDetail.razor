@@ -1,10 +1,11 @@
 @page "/question/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
-@using System.Security.Claims
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 @inject QuestionsHubDbContext DbContext
+@inject AccessControlService AccessControl
 
 <PageTitle>Питання @(_question?.Number ?? "") - База українських запитань</PageTitle>
 
@@ -61,9 +62,6 @@ else
     private Question? _question;
     private bool _notFound;
 
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthenticationState { get; set; }
-
     protected override async Task OnInitializedAsync()
     {
         _question = await DbContext.Questions
@@ -80,40 +78,11 @@ else
         }
 
         // Check visibility based on package status
-        var canView = await CanViewPackageAsync(_question.Tour.Package);
+        var canView = await AccessControl.CanViewPackage(_question.Tour.Package);
         if (!canView)
         {
             _question = null;
             _notFound = true;
         }
-    }
-
-    private async Task<bool> CanViewPackageAsync(Package package)
-    {
-        // Published packages are visible to everyone
-        if (package.Status == PackageStatus.Published)
-            return true;
-
-        // Archived packages are accessible via direct link
-        if (package.Status == PackageStatus.Archived)
-            return true;
-
-        // Draft packages require authentication
-        if (AuthenticationState == null)
-            return false;
-
-        var authState = await AuthenticationState;
-        var user = authState.User;
-
-        if (!user.Identity?.IsAuthenticated ?? true)
-            return false;
-
-        // Admins can see all packages
-        if (user.IsInRole("Admin"))
-            return true;
-
-        // Owners can see their own draft packages
-        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return package.OwnerId == userId;
     }
 }

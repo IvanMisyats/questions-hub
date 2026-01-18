@@ -12,25 +12,26 @@ public class PackageService
     private readonly IDbContextFactory<QuestionsHubDbContext> _dbContextFactory;
     private readonly MediaUploadOptions _mediaOptions;
     private readonly ILogger<PackageService> _logger;
+    private readonly AccessControlService _accessControl;
 
     public PackageService(
         IDbContextFactory<QuestionsHubDbContext> dbContextFactory,
         MediaUploadOptions mediaOptions,
-        ILogger<PackageService> logger)
+        ILogger<PackageService> logger,
+        AccessControlService accessControl)
     {
         _dbContextFactory = dbContextFactory;
         _mediaOptions = mediaOptions;
         _logger = logger;
+        _accessControl = accessControl;
     }
 
     /// <summary>
     /// Deletes a package and all its associated artifacts (images, files, import job).
     /// </summary>
     /// <param name="packageId">The ID of the package to delete.</param>
-    /// <param name="requestingUserId">The ID of the user requesting deletion.</param>
-    /// <param name="isAdmin">Whether the requesting user is an admin.</param>
     /// <returns>Result indicating success or failure with details.</returns>
-    public async Task<DeleteResult> DeletePackage(int packageId, string requestingUserId, bool isAdmin)
+    public async Task<DeleteResult> DeletePackage(int packageId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -44,8 +45,8 @@ public class PackageService
             return new DeleteResult(false, "Пакет не знайдено.");
         }
 
-        // Check authorization
-        if (!isAdmin && package.OwnerId != requestingUserId)
+        // Check authorization using AccessControlService
+        if (!await _accessControl.CanDeletePackage(package))
         {
             return new DeleteResult(false, "Ви не маєте прав на видалення цього пакету.");
         }
