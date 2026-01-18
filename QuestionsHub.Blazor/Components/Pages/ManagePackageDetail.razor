@@ -120,7 +120,7 @@
         <!-- Tours Section -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Тури <span class="badge bg-secondary ms-2">@_package.Tours.Count</span></h5>
+                <h5 class="mb-0">Тури <span class="badge bg-secondary ms-2">@_package.Tours.Count(t => !t.IsWarmup)</span></h5>
                 <button class="btn btn-success btn-sm" @onclick="AddTourAsync">
                     <i class="bi bi-plus-lg me-1"></i>Додати тур
                 </button>
