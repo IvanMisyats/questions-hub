@@ -25,6 +25,10 @@ public class PackageParserTests
     [InlineData("Тур 2", "2")]
     [InlineData("Tour 3", "3")]
     [InlineData("  ТУР 1  ", "1")]
+    [InlineData("ТУР 2.", "2")]
+    [InlineData("Тур 3.", "3")]
+    [InlineData("Тур 1:", "1")]
+    [InlineData("ТУР 4:", "4")]
     public void Parse_TourStart_DetectsTour(string tourLine, string expectedNumber)
     {
         // Arrange
@@ -731,6 +735,66 @@ public class PackageParserTests
 
         // Assert
         result.Tours[0].Questions[0].HostInstructions.Should().Contain(expectedInstruction);
+    }
+
+    /// <summary>
+    /// Tests that host instructions on the same line as question number are correctly extracted.
+    /// Real case: "6. [Ведучому: не оголошувати лапки в жодному з питань!]"
+    /// </summary>
+    [Fact]
+    public void Parse_HostInstructionsOnQuestionLine_ExtractsInstructions()
+    {
+        // Arrange - host instructions immediately after question number
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Ведучому: не оголошувати лапки в жодному з питань!]"),
+            Block("Бліц, після якого, можливо, ви захочете вбити ведучого."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[0].Questions[0];
+        question.Number.Should().Be("1");
+        question.HostInstructions.Should().Contain("не оголошувати лапки в жодному з питань!");
+        question.Text.Should().Contain("Бліц");
+        question.Text.Should().NotContain("Ведучому");
+        question.Text.Should().NotContain("[");
+    }
+
+    /// <summary>
+    /// Tests host instructions followed by question text on the same line as question number.
+    /// </summary>
+    [Fact]
+    public void Parse_HostInstructionsWithTextOnQuestionLine_ExtractsBoth()
+    {
+        // Arrange - host instructions with text after the closing bracket
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Ведучому: читати повільно] Перше питання про щось цікаве."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[0].Questions[0];
+        question.Number.Should().Be("1");
+        question.HostInstructions.Should().Contain("читати повільно");
+        question.Text.Should().Contain("Перше питання про щось цікаве");
+        question.Text.Should().NotContain("Ведучому");
+        question.Text.Should().NotContain("[");
     }
 
     #endregion

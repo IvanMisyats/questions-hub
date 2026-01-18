@@ -10,10 +10,10 @@ namespace QuestionsHub.Blazor.Infrastructure.Import;
 public static partial class ParserPatterns
 {
     // Tour detection
-    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+(\d+)\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+(\d+)[\.:]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStart();
 
-    [GeneratedRegex(@"^\s*[-–—]\s*(?:ТУР|Тур)\s+(\d+)\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*[-–—]\s*(?:ТУР|Тур)\s+(\d+)[\.:]?\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStartDashed();
 
     // Warmup tour detection: "Розминка", "Warmup", "Тур 0", "Розминковий тур"
@@ -600,6 +600,17 @@ public class PackageParser
 
             if (!string.IsNullOrWhiteSpace(openingHandout))
                 question.HandoutText = AppendText(question.HandoutText, openingHandout);
+
+            return;
+        }
+
+        // Try host instructions (e.g., "6. [Ведучому: ...] Question text")
+        if (TryExtractHostInstructions(remainingText, out var instructions, out var afterInstructions))
+        {
+            question.HostInstructions = AppendText(question.HostInstructions, instructions);
+
+            if (!string.IsNullOrWhiteSpace(afterInstructions))
+                question.Text = AppendText(question.Text, afterInstructions);
 
             return;
         }
