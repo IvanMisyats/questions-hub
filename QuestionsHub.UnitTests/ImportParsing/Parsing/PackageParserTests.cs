@@ -65,6 +65,112 @@ public class PackageParserTests
         result.Tours[0].Number.Should().Be(expectedNumber);
     }
 
+    /// <summary>
+    /// Tests parsing of a tour block that contains tour header, preamble, and question in one block.
+    /// Real case format:
+    /// - Тур 3 -
+    ///
+    /// Редактор: Володимир Островський (Київ)
+    ///
+    /// Запитання 25. Для низки закладів у Новій Зеландії...
+    /// </summary>
+    [Fact]
+    public void Parse_TourWithPreambleAndQuestionInSameBlock_ParsesQuestion()
+    {
+        // Arrange - single block with tour, editor, and question on different lines
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("- Тур 2 - \n\nРедактор: Тестовий Редактор (Київ)\n\nЗапитання 2. Для низки закладів випустили спеціальний наклад."),
+            Block("Відповідь: Happy Meal."),
+            Block("Залік: Хеппі Міл"),
+            Block("Коментар: Роальд Даль відомий своїми книжками."),
+            Block("Джерело: https://example.com"),
+            Block("Автор: Тестовий Автор (Київ)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[1].Questions[0];
+        question.Number.Should().Be("2");
+        question.Text.Should().Contain("Для низки закладів випустили спеціальний наклад");
+        question.Answer.Should().Be("Happy Meal.");
+        question.AcceptedAnswers.Should().Be("Хеппі Міл");
+    }
+
+    /// <summary>
+    /// Tests parsing of a tour with global question numbering where the question is in the same block as tour header.
+    /// In real packages, sometimes Tour 3 starts with question 25 (after 2 tours of 12 questions each).
+    /// </summary>
+    [Fact]
+    public void Parse_TourWithGlobalNumberingAndQuestionInSameBlock_ParsesQuestion()
+    {
+        // Arrange - Tour 2 with global numbering (question 2 following question 1)
+        // Using minimal example: 1 question per tour
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1. Питання 1"),
+            Block("Відповідь: В1"),
+            // Tour 2 with embedded question 2 in same block
+            Block("- Тур 2 - \n\nРедактор: Володимир Островський (Київ)\n\nЗапитання 2. Для низки закладів у Новій Зеландії 2019 року випустили спеціальний наклад."),
+            Block("Відповідь: Happy Meal."),
+            Block("Залік: Хеппі Міл"),
+            Block("Коментар: Роальд Даль відомий своїми дитячими книжками."),
+            Block("Джерело: https://www.independent.co.uk/life-style/food-and-drink/mcdonalds-roald-dahl-free-book.html"),
+            Block("Автор: Володимир Островський (Київ)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[1].Questions[0];
+        question.Number.Should().Be("2");
+        question.Text.Should().Contain("Для низки закладів у Новій Зеландії");
+        question.Answer.Should().Be("Happy Meal.");
+    }
+
+    /// <summary>
+    /// Demonstrates that when question numbering jumps unexpectedly (e.g., from 1 to 25),
+    /// the parser will treat the question as preamble because it doesn't match expected numbering.
+    /// This is the root cause of the user's issue with "Запитання 25" not being parsed.
+    /// </summary>
+    [Fact]
+    public void Parse_QuestionWithUnexpectedNumber_TreatedAsPreamble()
+    {
+        // Arrange - Question 25 after Question 1 is invalid numbering
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1. Питання 1"),
+            Block("Відповідь: В1"),
+            Block("- Тур 2 - \n\nРедактор: Тестовий\n\nЗапитання 25. Це питання не буде розпізнано"),
+            Block("Відповідь: Якась відповідь")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Question 25 was not parsed because numbering is not sequential
+        // The text goes to tour preamble instead
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Questions.Should().BeEmpty();
+        result.Tours[1].Preamble.Should().Contain("Запитання 25");
+    }
+
     [Fact]
     public void Parse_MultipleTours_ParsesAll()
     {
@@ -488,6 +594,7 @@ public class PackageParserTests
     [Theory]
     [InlineData("Джерело: Вікіпедія", "Вікіпедія")]
     [InlineData("Джерела: книга, сайт", "книга, сайт")]
+    [InlineData("Джерело(а): link1, link2", "link1, link2")]
     public void Parse_SourceLabel_ExtractsSource(string line, string expected)
     {
         // Arrange

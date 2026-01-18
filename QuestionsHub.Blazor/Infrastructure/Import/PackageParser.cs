@@ -55,7 +55,7 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*Коментар\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex CommentLabel();
 
-    [GeneratedRegex(@"^\s*(?:Джерело|Джерела)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\))\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
     // Matches: "Автор:", "Автори:", "Автора:"
