@@ -10,11 +10,9 @@ This project is an online database of Ukrainian questions for the game "What? Wh
 - User authentication and role-based access control
 - Media support (images, audio, video) in questions
 - Ukrainian full-text search configuration
+- Efficient search by text over questions
 
 **Planned:**
-- Efficient search by text over questions
-- Playing questions in interactive mode with timer
-- Uploading and storing tournament results
 - Comments and ratings on questions
 
 ## Technology Stack
@@ -125,7 +123,15 @@ PostgreSQL 16 with:
 
 Database scripts are in `db/scripts/` and run automatically on container start.
 
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
 ## License
 
-This project is private and not licensed for public use.
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+See the [LICENSE](LICENSE) file for details.
+
+By contributing, you agree to the terms in [CLA.md](CLA.md).
+
 
