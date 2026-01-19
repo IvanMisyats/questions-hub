@@ -125,6 +125,17 @@
                                             <span class="answer-label">Джерело:</span> @Sanitize(result.SourceHighlighted, result.Source, _searchedQuery)
                                         </div>
                                     }
+
+                                    @if (!string.IsNullOrEmpty(result.Authors))
+                                    {
+                                        <div class="answer-field">
+                                            <span class="answer-label">Автор(и):</span>
+                                            @foreach (var (authorId, authorName, isLast) in ParseAuthors(result.Authors))
+                                            {
+                                                <text> </text><a href="/editor/@authorId">@authorName</a>@(isLast ? "" : ",")
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -202,6 +213,23 @@
         finally
         {
             _isSearching = false;
+        }
+    }
+
+    /// <summary>
+    /// Parses the authors string from search results into individual author tuples.
+    /// Format: "id:Name|id:Name"
+    /// </summary>
+    private static IEnumerable<(int AuthorId, string Name, bool IsLast)> ParseAuthors(string authors)
+    {
+        var parts = authors.Split('|', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var colonIndex = parts[i].IndexOf(':');
+            if (colonIndex > 0 && int.TryParse(parts[i][..colonIndex], out var id))
+            {
+                yield return (id, parts[i][(colonIndex + 1)..], i == parts.Length - 1);
+            }
         }
     }
 }

@@ -29,7 +29,8 @@ public record SearchResult(
     string? RejectedAnswersHighlighted,
     string? CommentHighlighted,
     string? SourceHighlighted,
-    double Rank
+    double Rank,
+    string? Authors
 );
 
 /// <summary>
@@ -115,7 +116,11 @@ public class SearchService
                     ts_headline('ukrainian', COALESCE(qu.""Source"", ''), q.tsq,
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""SourceHighlighted"",
                     (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) +
-                     COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank""
+                     COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank"",
+                    (SELECT string_agg(a.""Id""::text || ':' || a.""FirstName"" || ' ' || a.""LastName"", '|' ORDER BY a.""LastName"", a.""FirstName"")
+                     FROM ""QuestionAuthors"" qa
+                     JOIN ""Authors"" a ON qa.""AuthorsId"" = a.""Id""
+                     WHERE qa.""QuestionsId"" = qu.""Id"") AS ""Authors""
                 FROM ""Questions"" qu
                 JOIN ""Tours"" t ON qu.""TourId"" = t.""Id""
                 JOIN ""Packages"" p ON t.""PackageId"" = p.""Id""
