@@ -42,7 +42,10 @@ public static partial class ParserPatterns
     public static partial Regex QuestionStartNamedWithText();
 
     // Labels (field markers)
-    [GeneratedRegex(@"^\s*Відповідь\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Note: Using character class to match both Cyrillic 'і' (U+0456) and Latin 'i' (U+0069)
+    // This handles common typing/OCR errors where Latin 'i' is used instead of Cyrillic 'і'
+    // Also supports Russian "Ответ" as alternative to Ukrainian "Відповідь"
+    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]дь|Ответ)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AnswerLabel();
 
     // Matches: "Залік: ...", "Заліки: ...", "Залік (не оголошувати): ..."
@@ -52,10 +55,13 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Незалік|Не\s*залік|Не\s*приймається)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex RejectedLabel();
 
-    [GeneratedRegex(@"^\s*Коментар\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Коментар: ..." (Ukrainian), "Комментарий: ..." (Russian)
+    [GeneratedRegex(@"^\s*(?:Коментар|Комментарий)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex CommentLabel();
 
-    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\))\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Джерело: ...", "Джерела: ...", "Джерело(а): ..." (Ukrainian)
+    // Also: "Источник: ...", "Источники: ..." (Russian)
+    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Источник|Источники)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
     // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:"
@@ -384,6 +390,11 @@ public class PackageParser
         if (ctx.Format == QuestionFormat.Unknown)
             ctx.Format = detectedFormat;
 
+        // Flush any pending assets to the CURRENT question before saving it
+        // This ensures assets at the end of a question don't leak to the next question
+        // (In practice, assets after a question starts are directly associated, not pending)
+        FlushPendingAssetsToCurrentQuestion(ctx);
+
         SaveCurrentQuestion(ctx);
         EnsureDefaultTourExists(ctx);
 
@@ -391,7 +402,9 @@ public class PackageParser
         ctx.CurrentSection = ParserSection.QuestionText;
         ctx.QuestionCreatedInCurrentBlock = true;
 
-        ApplyPendingAssets(ctx);
+        // Apply any pending assets from before the first question
+        ApplyPendingAssetsToNewQuestion(ctx);
+
         ProcessRemainingTextAfterQuestionNumber(remainingText, ctx);
 
         _logger.LogDebug("Found question: {QuestionNumber}", questionNumber);
@@ -488,6 +501,26 @@ public class PackageParser
         if (string.IsNullOrWhiteSpace(line))
             return;
 
+        // Handle standalone '[' that starts multiline handout content
+        // This handles format like:
+        // Роздатковий матеріал:
+        // [
+        // content
+        // ]
+        if (ctx.CurrentSection == ParserSection.Handout && line == "[")
+        {
+            ctx.InsideMultilineHandoutBracket = true;
+            return;
+        }
+
+        // Handle standalone ']' that closes handout section
+        if (ctx.CurrentSection == ParserSection.Handout && line == "]")
+        {
+            ctx.InsideMultilineHandoutBracket = false;
+            ctx.CurrentSection = ParserSection.QuestionText;
+            return;
+        }
+
         // Check if there's another label inline (e.g., "answer text. Залік: accepted")
         var inlineLabelIndex = FindInlineLabelStart(line);
         if (inlineLabelIndex > 0)
@@ -517,17 +550,24 @@ public class PackageParser
 
         // Label keywords that can appear inline (without ^ anchor)
         // These are the prefixes we look for to split inline labels
+        // Note: Include both Cyrillic 'і' and Latin 'i' variants for Відповідь
+        // Also include Russian equivalents for common labels
         string[] labelKeywords =
         [
             "Відповідь:",
+            "Вiдповiдь:",  // Latin 'i' variant (common OCR/typing error)
+            "Ответ:",      // Russian for "Answer"
             "Залік:",
             "Заліки:",
             "Незалік:",
             "Не залік:",
             "Не приймається:",
             "Коментар:",
+            "Комментарий:",  // Russian for "Comment"
             "Джерело:",
             "Джерела:",
+            "Источник:",     // Russian for "Source"
+            "Источники:",    // Russian for "Sources"
             "Автор:",
             "Автори:",
             "Авторка:",
@@ -574,6 +614,17 @@ public class PackageParser
             return;
 
         var question = ctx.CurrentQuestion!;
+
+        // Try handout marker label (e.g., "1. Роздатковий матеріал:" or "1. Роздатка:")
+        var handoutMatch = ParserPatterns.HandoutMarker().Match(remainingText);
+        if (handoutMatch.Success)
+        {
+            ctx.CurrentSection = ParserSection.Handout;
+            var handoutContent = handoutMatch.Groups[1].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(handoutContent))
+                question.HandoutText = AppendText(question.HandoutText, handoutContent);
+            return;
+        }
 
         // Try single-line bracketed handout
         if (TryExtractBracketedHandout(remainingText, out var handout, out var afterHandout))
@@ -642,9 +693,29 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Applies pending assets to the current question.
+    /// Flushes pending assets to the current question before transitioning to a new question.
+    /// This ensures assets at the end of a question don't leak to the next question.
     /// </summary>
-    private static void ApplyPendingAssets(ParserContext ctx)
+    private static void FlushPendingAssetsToCurrentQuestion(ParserContext ctx)
+    {
+        if (!ctx.HasCurrentQuestion || ctx.PendingAssets.Count == 0)
+            return;
+
+        foreach (var (asset, section) in ctx.PendingAssets)
+        {
+            // For assets that were pending before we had a question,
+            // associate them based on their original section context
+            AssociateAsset(asset, section, ctx.CurrentQuestion);
+        }
+
+        ctx.PendingAssets.Clear();
+    }
+
+    /// <summary>
+    /// Applies pending assets to a newly created question.
+    /// These are typically assets that appeared in header/tour sections before any question.
+    /// </summary>
+    private static void ApplyPendingAssetsToNewQuestion(ParserContext ctx)
     {
         foreach (var (asset, section) in ctx.PendingAssets)
             AssociateAsset(asset, section, ctx.CurrentQuestion);

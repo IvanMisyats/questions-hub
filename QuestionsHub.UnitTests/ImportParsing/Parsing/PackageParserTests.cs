@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+﻿﻿using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using QuestionsHub.Blazor.Infrastructure.Import;
 using Xunit;
@@ -1620,6 +1620,465 @@ public class PackageParserTests
     }
 
     #endregion
+    #region Issue Reproduction Tests
+
+    /// <summary>
+    /// Issue 1: Image from handout goes to comment. Image from comment is lost.
+    /// When a question has an image in the handout section (inside [Роздатковий матеріал: ... ])
+    /// and another image in the comment section, the handout image is incorrectly associated
+    /// with the comment, and the actual comment image is lost.
+    ///
+    /// Real case from Запитання 1:
+    /// [Роздатковий матеріал:
+    ///  &lt;image Asset&gt;
+    /// ]
+    /// Question text...
+    /// Коментар: ...
+    ///  &lt;image Asset&gt;
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutImageAndCommentImage_ShouldAssignCorrectly()
+    {
+        // Arrange
+        var handoutAsset = new AssetReference
+        {
+            FileName = "handout_pringle.png",
+            RelativeUrl = "/media/handout_pringle.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+
+        var commentAsset = new AssetReference
+        {
+            FileName = "comment_pringles.png",
+            RelativeUrl = "/media/comment_pringles.png",
+            ContentType = "image/png",
+            SizeBytes = 2048
+        };
+
+        // Simulating the structure from the real document
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1."),
+            Block("[Роздатковий матеріал:"),
+            Block("", [handoutAsset]),  // Image inside handout brackets
+            Block("]"),
+            Block("Ця споруда отримала прізвисько через схожість з НИМИ. ЇХНЬОГО маскота порівнюють з маскотом \"Монополії\". Назвіть ЇХ."),
+            Block("Коментар: через схожість форми лондонський велодром називають The Pringle. Маскотами є чоловіки з пишними вусами."),
+            Block("Відповідь: Pringles."),
+            Block("Залік: Прінглс; інші варіанти транслітерації."),
+            Block("", [commentAsset]),  // Image in comment
+            Block("Джерело:\n1.\thttps://www.theguardian.com/sport/2011/feb/22/pass-notes-the-pringle\n2.\thttps://www.monopolyland.com/monopoly-man-vs-pringles-man"),
+            Block("Автор: Сергій Черкасов, Костянтин Ільїн (Одеса).")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+
+        // The handout image should be in HandoutAssetFileName
+        question.HandoutAssetFileName.Should().Be("handout_pringle.png");
+
+        // The comment image should be in CommentAssetFileName
+        question.CommentAssetFileName.Should().Be("comment_pringles.png");
+    }
+
+    /// <summary>
+    /// Issue 2: Answer was not parsed when using Latin "i" instead of Cyrillic "і".
+    /// "Вiдповiдь: Карлсон." uses Latin 'i' (U+0069) instead of Cyrillic 'і' (U+0456).
+    /// The answer was incorrectly appended to the comment.
+    /// </summary>
+    [Fact]
+    public void Parse_AnswerWithLatinI_ShouldParseCorrectly()
+    {
+        // Arrange - Using Latin 'i' (common OCR/typing error)
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1."),
+            Block("ІКС — це заміна. У тисяча дев'ятсот тридцятих роках відома американка змінила світ високої моди."),
+            Block("Коментар: Раніше піджаки та спідниці продавалися разом."),
+            Block("Вiдповiдь: Карлсон."),  // Latin 'i' instead of Cyrillic 'і'
+            Block("Джерело: https://example.com"),
+            Block("Автор: Тестовий автор")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+
+        // The answer should be parsed correctly despite Latin 'i'
+        question.Answer.Should().Be("Карлсон.");
+
+        // Comment should NOT contain the answer
+        question.Comment.Should().NotContain("Карлсон");
+        question.Comment.Should().Be("Раніше піджаки та спідниці продавалися разом.");
+    }
+
+    /// <summary>
+    /// Issue 3: Question inside a block that starts with tour header goes to preamble.
+    /// When a tour header and question appear in the same block (with line breaks between),
+    /// the question should still be parsed, not treated as preamble.
+    ///
+    /// Real case:
+    /// - Тур 3 -
+    ///
+    /// Редактор: Володимир Островський (Київ)
+    ///
+    /// Запитання 25. Для низки закладів у Новій Зеландії...
+    /// </summary>
+    [Fact]
+    public void Parse_TourWithQuestionInSameBlock_ShouldParseQuestion()
+    {
+        // Arrange - Previous tours establish global numbering context
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1. Перше питання"),
+            Block("Відповідь: Перша"),
+
+            // Tour 3 with embedded question in the same block (using global numbering)
+            // For simplicity, using question 2 after question 1
+            Block("- Тур 2 -\n\nРедактор: Володимир Островський (Київ)\n\nЗапитання 2. Для низки закладів у Новій Зеландії 2019 року випустили спеціальний наклад скорочених версій книг."),
+            Block("Відповідь: Happy Meal."),
+            Block("Залік: Хеппі Міл"),
+            Block("Коментар: Роальд Даль відомий своїми дитячими книжками."),
+            Block("Джерело: https://www.independent.co.uk/life-style/food-and-drink/mcdonalds-roald-dahl-free-book.html"),
+            Block("Автор: Володимир Островський (Київ)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[1].Questions[0];
+        question.Number.Should().Be("2");
+        question.Text.Should().Contain("Для низки закладів у Новій Зеландії");
+        question.Answer.Should().Be("Happy Meal.");
+    }
+
+    /// <summary>
+    /// Generic rule: Image asset appearing after "Коментар", "Вiдповiдь" or "Джерело"
+    /// should be attached to the comment, not the handout.
+    /// </summary>
+    [Fact]
+    public void Parse_ImageAfterAnswerLabel_ShouldGoToComment()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "answer_illustration.png",
+            RelativeUrl = "/media/answer_illustration.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Яке місто зображено?"),
+            Block("Відповідь: Київ"),
+            Block("", [imageAsset]),  // Image after answer
+            Block("Джерело: https://example.com"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+
+        // Image after answer section should be in comment, not handout
+        question.CommentAssetFileName.Should().Be("answer_illustration.png");
+        question.HandoutAssetFileName.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Generic rule: Image asset appearing before any of "Коментар", "Вiдповiдь" or "Джерело"
+    /// (but after question number) should belong to the question handout.
+    /// </summary>
+    [Fact]
+    public void Parse_ImageBeforeAnswerLabel_ShouldGoToHandout()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "question_illustration.png",
+            RelativeUrl = "/media/question_illustration.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Яке місто зображено?"),
+            Block("", [imageAsset]),  // Image before answer
+            Block("Відповідь: Київ"),
+            Block("Джерело: https://example.com"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+
+        // Image before answer section should be in handout
+        question.HandoutAssetFileName.Should().Be("question_illustration.png");
+        question.CommentAssetFileName.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Generic rule: No images should go to the next question.
+    /// All pending assets should be flushed to the current question before starting a new one.
+    /// </summary>
+    [Fact]
+    public void Parse_PendingAssetsBeforeNewQuestion_ShouldFlushToCurrentQuestion()
+    {
+        // Arrange
+        var question1Asset = new AssetReference
+        {
+            FileName = "q1_image.png",
+            RelativeUrl = "/media/q1_image.png",
+            ContentType = "image/png",
+            SizeBytes = 1024
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("Коментар: Коментар до першого"),
+            Block("", [question1Asset]),  // Image at end of question 1
+            Block("Запитання 2. Друге питання"),  // New question starts
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+
+        // The image should belong to question 1, not question 2
+        var question1 = result.Tours[0].Questions[0];
+        var question2 = result.Tours[0].Questions[1];
+
+        question1.CommentAssetFileName.Should().Be("q1_image.png");
+        question2.HandoutAssetFileName.Should().BeNull();
+        question2.CommentAssetFileName.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Edge case: Handout text is surrounded with standalone [] brackets on separate lines.
+    /// Format:
+    /// Роздатковий матеріал:
+    /// [
+    /// Nissan IV
+    /// ]
+    /// Question text...
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutWithStandaloneBrackets_ShouldParseCorrectly()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1."),
+            Block("Роздатковий матеріал:"),
+            Block("["),
+            Block("Nissan IV"),
+            Block("]"),
+            Block("Перед вами назва концепт-кару. Назвіть ІКС односкладовим словом."),
+            Block("Відповідь: плющ"),
+            Block("Коментар: IV - це слово ivy, тобто плющ."),
+            Block("Джерело: https://example.com"),
+            Block("Автор: Тестовий автор")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+
+        question.HandoutText.Should().Contain("Nissan IV");
+        question.Text.Should().Contain("Перед вами назва концепт-кару");
+        question.Text.Should().NotContain("[");
+        question.Text.Should().NotContain("]");
+        question.Answer.Should().Be("плющ");
+        question.Comment.Should().Contain("IV - це слово ivy");
+    }
+
+    /// <summary>
+    /// Edge case: Russian "Комментарий" used instead of Ukrainian "Коментар".
+    /// </summary>
+    [Theory]
+    [InlineData("Комментарий: Це коментар російською", "Це коментар російською")]
+    [InlineData("КОММЕНТАРИЙ: ВЕЛИКИМИ ЛІТЕРАМИ", "ВЕЛИКИМИ ЛІТЕРАМИ")]
+    public void Parse_RussianCommentLabel_ShouldParseCorrectly(string line, string expectedComment)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Тестове питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Comment.Should().Be(expectedComment);
+    }
+
+    /// <summary>
+    /// Edge case: Russian "Источник" or "Источники" used instead of Ukrainian "Джерело".
+    /// </summary>
+    [Theory]
+    [InlineData("Источник: https://example.com", "https://example.com")]
+    [InlineData("Источники: site1, site2", "site1, site2")]
+    [InlineData("ИСТОЧНИК: ВЕЛИКИМИ", "ВЕЛИКИМИ")]
+    public void Parse_RussianSourceLabel_ShouldParseCorrectly(string line, string expectedSource)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Тестове питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Source.Should().Be(expectedSource);
+    }
+
+    /// <summary>
+    /// Edge case: Russian "Ответ" used instead of Ukrainian "Відповідь".
+    /// </summary>
+    [Theory]
+    [InlineData("Ответ: Київ", "Київ")]
+    [InlineData("ОТВЕТ: ВЕЛИКИМИ", "ВЕЛИКИМИ")]
+    public void Parse_RussianAnswerLabel_ShouldParseCorrectly(string line, string expectedAnswer)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1. Тестове питання"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Answer.Should().Be(expectedAnswer);
+    }
+
+    /// <summary>
+    /// Full example with Russian labels mixed with Ukrainian content.
+    /// </summary>
+    [Fact]
+    public void Parse_MixedRussianAndUkrainianLabels_ShouldParseCorrectly()
+    {
+        // Arrange - Based on real example from ParsingIssues.txt
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1."),
+            Block("Роздатковий матеріал:"),
+            Block("["),
+            Block("Nissan IV"),
+            Block("]"),
+            Block("Перед вами назва концепт-кару, при виробництві кузову якого хотіли використовувати генномодифікований ІКС. Назвіть ІКС односкладовим словом."),
+            Block("Ответ: плющ"),  // Russian answer
+            Block("Комментарий: \"IV\" - це у даному випадку не \"4\", а слово \"ivy\", тобто плющ."),  // Russian comment
+            Block("Источник: https://www.topspeed.com/cars/nissan/2010-nissan-iv-concept-ar100423.html"),  // Russian source
+            Block("Автор: Олексій Чирков")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+
+        question.HandoutText.Should().Contain("Nissan IV");
+        question.Text.Should().Contain("концепт-кару");
+        question.Answer.Should().Be("плющ");
+        question.Comment.Should().Contain("ivy");
+        question.Source.Should().Contain("topspeed.com");
+        question.Authors.Should().Contain("Олексій Чирков");
+    }
+
+    /// <summary>
+    /// Edge case: Question number followed by handout marker on same line, then standalone brackets.
+    /// Format: "1. Роздатковий матеріал:" followed by "[", content, "]" on separate lines.
+    /// The question text should NOT include the handout marker or brackets.
+    /// </summary>
+    [Fact]
+    public void Parse_NumberedQuestionWithInlineHandoutMarkerAndBrackets_ShouldParseCorrectly()
+    {
+        // Arrange - Based on real example from user (using question 1 for simpler test)
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Роздатковий матеріал:"),
+            Block("["),
+            Block("The Land Beyond The Forest"),
+            Block("]"),
+            Block("Перед вами назва книги, яка мала великий вплив на письменника кінця дев'ятнадцятого сторіччя. Назвіть цього письменника."),
+            Block("Відповідь: Брем Стокер"),
+            Block("Залік: Стокер"),
+            Block("Коментар: земля за лісом - так буквально перекладається слово \"Трансильванія\"."),
+            Block("Джерело: https://books.google.com/books/about/The_Land_Beyond_the_Forest.html"),
+            Block("Автор: Олексій Чирков")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+
+        question.Number.Should().Be("1");
+        question.HandoutText.Should().Be("The Land Beyond The Forest");
+        question.Text.Should().Be("Перед вами назва книги, яка мала великий вплив на письменника кінця дев'ятнадцятого сторіччя. Назвіть цього письменника.");
+        question.Text.Should().NotContain("Роздатковий матеріал");
+        question.Text.Should().NotContain("[");
+        question.Text.Should().NotContain("]");
+        question.Answer.Should().Be("Брем Стокер");
+        question.AcceptedAnswers.Should().Be("Стокер");
+    }
+
+    #endregion
+
     #region Helpers
 
     private static DocBlock Block(string text, int index = 0) => new()
