@@ -59,9 +59,9 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Коментар|Комментарий)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex CommentLabel();
 
-    // Matches: "Джерело: ...", "Джерела: ...", "Джерело(а): ..." (Ukrainian)
+    // Matches: "Джерело: ...", "Джерела: ...", "Джерело(а): ...", "Джерел(а): ..." (Ukrainian)
     // Also: "Источник: ...", "Источники: ..." (Russian)
-    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Источник|Источники)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
     // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:"
@@ -73,9 +73,9 @@ public static partial class ParserPatterns
     public static partial Regex AuthorRangeLabel();
 
     // Special markers
-    // Matches: [Ведучому: ...], [Ведучому -(ій): ...], [Вказівка ведучому: ...]
+    // Matches: [Ведучому: ...], [Ведучим: ...], [Ведучому -(ій): ...], [Вказівка ведучому: ...]
     // Captures the instruction text inside brackets and any text after the closing bracket
-    [GeneratedRegex(@"^\s*\[(?:Ведучому|Вказівка\s*ведучому)[^:]*:\s*([^\]]+)\]\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[(?:Ведучому|Ведучим|Вказівка\s*ведучому)[^:]*:\s*([^\]]+)\]\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HostInstructionsBracket();
 
     [GeneratedRegex(@"^\s*(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
@@ -517,6 +517,25 @@ public class PackageParser
         if (ctx.CurrentSection == ParserSection.Handout && line == "]")
         {
             ctx.InsideMultilineHandoutBracket = false;
+            ctx.CurrentSection = ParserSection.QuestionText;
+            return;
+        }
+
+        // Handle '[ content ]' or '[ ]' on same line in handout section
+        // This handles format like:
+        // Роздатковий матеріал:
+        // [ <imageAsset> ]
+        // Question text
+        if (ctx.CurrentSection == ParserSection.Handout &&
+            line.StartsWith('[') && line.EndsWith(']'))
+        {
+            var content = line[1..^1].Trim();
+            if (!string.IsNullOrWhiteSpace(content) && ctx.HasCurrentQuestion)
+            {
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, content);
+            }
+            // Section stays as Handout - next non-bracket line will be question text
+            // The asset association happens after ProcessBlock, so assets will be associated correctly
             ctx.CurrentSection = ParserSection.QuestionText;
             return;
         }

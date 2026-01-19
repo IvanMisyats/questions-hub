@@ -640,6 +640,7 @@ public class PackageParserTests
     [InlineData("Джерело: Вікіпедія", "Вікіпедія")]
     [InlineData("Джерела: книга, сайт", "книга, сайт")]
     [InlineData("Джерело(а): link1, link2", "link1, link2")]
+    [InlineData("Джерел(а): посилання1, посилання2", "посилання1, посилання2")]
     public void Parse_SourceLabel_ExtractsSource(string line, string expected)
     {
         // Arrange
@@ -719,6 +720,7 @@ public class PackageParserTests
     [InlineData("[Ведучому: читати повільно] Текст", "читати повільно")]
     [InlineData("[Ведучому-(ій): наголос на слові] Текст", "наголос на слові")]
     [InlineData("[Вказівка ведучому: пауза 5 секунд] Текст", "пауза 5 секунд")]
+    [InlineData("[Ведучим: читати чітко] Текст", "читати чітко")]
     public void Parse_HostInstructions_ExtractsInstructions(string line, string expectedInstruction)
     {
         // Arrange
@@ -1072,6 +1074,50 @@ public class PackageParserTests
         var question = result.Tours[0].Questions[0];
         question.HandoutText.Should().Be("Zoozeum");
         question.Text.Should().Be("Яке слово утворено?");
+    }
+
+    /// <summary>
+    /// Edge case: Handout marker followed by brackets containing image asset on same line.
+    /// Format:
+    /// Запитання 18.
+    /// Роздатковий матеріал:
+    /// [ (imageAsset) ]
+    /// Question text
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutMarkerWithBracketsContainingImage_ShouldExtractImageAndQuestionText()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "image001.png",
+            RelativeUrl = "/media/image001.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1."),
+            Block("Роздатковий матеріал:"),
+            Block("[ ]", [imageAsset]),
+            Block("У 1882 році ПЕРШИЙ, подорожуючи США, відвідав ДРУГОГО. На роздатковому матеріалі – епізод п'єси про цю зустріч. Назвіть ПЕРШОГО і ДРУГОГО."),
+            Block("Відповідь: Оскар Вайлд і Волт Вітмен")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+
+        question.Number.Should().Be("1");
+        question.HandoutAssetFileName.Should().Be("image001.png");
+        question.Text.Should().Be("У 1882 році ПЕРШИЙ, подорожуючи США, відвідав ДРУГОГО. На роздатковому матеріалі - епізод п'єси про цю зустріч. Назвіть ПЕРШОГО і ДРУГОГО.");
+        question.Text.Should().NotContain("[");
+        question.Text.Should().NotContain("]");
+        question.Answer.Should().Be("Оскар Вайлд і Волт Вітмен");
     }
 
     #endregion
