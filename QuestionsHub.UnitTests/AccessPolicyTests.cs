@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Infrastructure;
 using Xunit;
 
 namespace QuestionsHub.UnitTests;
@@ -575,6 +576,128 @@ public class AccessPolicyTests
             tour.Questions.Add(question);
         }
         return questions;
+    }
+
+    #endregion
+
+    #region Package Access Level Tests
+
+    [Fact]
+    public void PackageAccessLevel_All_ShouldBeAccessibleByAnyone()
+    {
+        // Arrange
+        var package = CreatePackageWithAccessLevel(PackageAccessLevel.All, ownerId: "owner123");
+
+        // Act & Assert
+        CreateAccessContext(userId: null, isAdmin: false, isEditor: false, hasVerifiedEmail: false)
+            .CanViewPackage(package)
+            .Should().BeTrue("Packages with AccessLevel.All should be visible to anonymous users");
+        CreateAccessContext(userId: "random-user", isAdmin: false, isEditor: false, hasVerifiedEmail: false)
+            .CanViewPackage(package)
+            .Should().BeTrue("Packages with AccessLevel.All should be visible to unverified users");
+    }
+
+    [Fact]
+    public void PackageAccessLevel_RegisteredOnly_ShouldRequireVerifiedEmail()
+    {
+        // Arrange
+        var package = CreatePackageWithAccessLevel(PackageAccessLevel.RegisteredOnly, ownerId: "owner123");
+
+        // Act & Assert
+        CreateAccessContext(userId: null, isAdmin: false, isEditor: false, hasVerifiedEmail: false)
+            .CanViewPackage(package)
+            .Should().BeFalse("Packages with AccessLevel.RegisteredOnly should not be visible to anonymous users");
+        CreateAccessContext(userId: "random-user", isAdmin: false, isEditor: false, hasVerifiedEmail: false)
+            .CanViewPackage(package)
+            .Should().BeFalse("Packages with AccessLevel.RegisteredOnly should not be visible to unverified users");
+        CreateAccessContext(userId: "verified-user", isAdmin: false, isEditor: false, hasVerifiedEmail: true)
+            .CanViewPackage(package)
+            .Should().BeTrue("Packages with AccessLevel.RegisteredOnly should be visible to verified users");
+    }
+
+    [Fact]
+    public void PackageAccessLevel_EditorsOnly_ShouldRequireEditorRole()
+    {
+        // Arrange
+        var package = CreatePackageWithAccessLevel(PackageAccessLevel.EditorsOnly, ownerId: "owner123");
+
+        // Act & Assert
+        CreateAccessContext(userId: null, isAdmin: false, isEditor: false, hasVerifiedEmail: false)
+            .CanViewPackage(package)
+            .Should().BeFalse("Packages with AccessLevel.EditorsOnly should not be visible to anonymous users");
+        CreateAccessContext(userId: "verified-user", isAdmin: false, isEditor: false, hasVerifiedEmail: true)
+            .CanViewPackage(package)
+            .Should().BeFalse("Packages with AccessLevel.EditorsOnly should not be visible to non-editors");
+        CreateAccessContext(userId: "editor-user", isAdmin: false, isEditor: true, hasVerifiedEmail: true)
+            .CanViewPackage(package)
+            .Should().BeTrue("Packages with AccessLevel.EditorsOnly should be visible to editors");
+    }
+
+    [Fact]
+    public void PackageAccessLevel_Admin_ShouldAlwaysHaveAccess()
+    {
+        // Arrange
+        var allPackage = CreatePackageWithAccessLevel(PackageAccessLevel.All, ownerId: "owner123");
+        var registeredOnlyPackage = CreatePackageWithAccessLevel(PackageAccessLevel.RegisteredOnly, ownerId: "owner123");
+        var editorsOnlyPackage = CreatePackageWithAccessLevel(PackageAccessLevel.EditorsOnly, ownerId: "owner123");
+        var adminContext = CreateAccessContext(userId: "admin", isAdmin: true, isEditor: false, hasVerifiedEmail: false);
+
+        // Act & Assert
+        adminContext.CanViewPackage(allPackage)
+            .Should().BeTrue("Admin should always have access to All packages");
+        adminContext.CanViewPackage(registeredOnlyPackage)
+            .Should().BeTrue("Admin should always have access to RegisteredOnly packages");
+        adminContext.CanViewPackage(editorsOnlyPackage)
+            .Should().BeTrue("Admin should always have access to EditorsOnly packages");
+    }
+
+    [Fact]
+    public void PackageAccessLevel_Owner_ShouldAlwaysHaveAccessToOwnPackages()
+    {
+        // Arrange
+        var registeredOnlyPackage = CreatePackageWithAccessLevel(PackageAccessLevel.RegisteredOnly, ownerId: "owner123");
+        var editorsOnlyPackage = CreatePackageWithAccessLevel(PackageAccessLevel.EditorsOnly, ownerId: "owner123");
+        var ownerContext = CreateAccessContext(userId: "owner123", isAdmin: false, isEditor: false, hasVerifiedEmail: false);
+
+        // Act & Assert - Owner should access their own packages regardless of access level
+        ownerContext.CanViewPackage(registeredOnlyPackage)
+            .Should().BeTrue("Owner should always have access to their own RegisteredOnly packages");
+        ownerContext.CanViewPackage(editorsOnlyPackage)
+            .Should().BeTrue("Owner should always have access to their own EditorsOnly packages");
+    }
+
+    /// <summary>
+    /// Creates a PackageAccessContext for testing.
+    /// </summary>
+    private static PackageAccessContext CreateAccessContext(
+        string? userId,
+        bool isAdmin,
+        bool isEditor,
+        bool hasVerifiedEmail)
+    {
+        return new PackageAccessContext(
+            IsAdmin: isAdmin,
+            IsEditor: isEditor,
+            HasVerifiedEmail: hasVerifiedEmail,
+            UserId: userId
+        );
+    }
+
+    /// <summary>
+    /// Creates a published package with the specified access level.
+    /// </summary>
+    private static Package CreatePackageWithAccessLevel(PackageAccessLevel accessLevel, string? ownerId = null)
+    {
+        var package = new Package
+        {
+            Id = Random.Shared.Next(1, 10000),
+            Title = $"Test Package ({accessLevel})",
+            Status = PackageStatus.Published,
+            AccessLevel = accessLevel,
+            OwnerId = ownerId,
+            Tours = []
+        };
+        return package;
     }
 
     #endregion

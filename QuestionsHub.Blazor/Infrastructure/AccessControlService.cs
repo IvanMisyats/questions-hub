@@ -1,26 +1,32 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Identity;
 using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Infrastructure;
 
 /// <summary>
-/// Centralized service for all access control decisions.
-/// Use this service to check permissions instead of duplicating logic in pages.
+/// Centralized service for access control decisions.
+/// Provides access to authentication state and creates PackageAccessContext for package visibility checks.
+/// For package visibility, use GetPackageAccessContext() and call methods on the returned context.
 /// </summary>
 public class AccessControlService
 {
     private readonly AuthenticationStateProvider _authenticationStateProvider;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public AccessControlService(AuthenticationStateProvider authenticationStateProvider)
+    public AccessControlService(
+        AuthenticationStateProvider authenticationStateProvider,
+        UserManager<ApplicationUser> userManager)
     {
         _authenticationStateProvider = authenticationStateProvider;
+        _userManager = userManager;
     }
 
     /// <summary>
     /// Gets the current authentication state.
     /// </summary>
-    public async Task<AuthenticationState> GetAuthenticationState()
+    private async Task<AuthenticationState> GetAuthenticationState()
     {
         return await _authenticationStateProvider.GetAuthenticationStateAsync();
     }
@@ -35,15 +41,6 @@ public class AccessControlService
     }
 
     /// <summary>
-    /// Checks if the current user is authenticated.
-    /// </summary>
-    public async Task<bool> IsAuthenticated()
-    {
-        var authState = await GetAuthenticationState();
-        return authState.User.Identity?.IsAuthenticated ?? false;
-    }
-
-    /// <summary>
     /// Checks if the current user has the Admin role.
     /// </summary>
     public async Task<bool> IsAdmin()
@@ -52,41 +49,42 @@ public class AccessControlService
         return authState.User.IsInRole("Admin");
     }
 
+
     /// <summary>
-    /// Checks if the current user has the Editor role.
+    /// Gets the package access context for the current user.
+    /// Use this to check package visibility: context.CanViewPackage(package)
     /// </summary>
-    public async Task<bool> IsEditor()
+    public async Task<PackageAccessContext> GetPackageAccessContext()
     {
         var authState = await GetAuthenticationState();
-        return authState.User.IsInRole("Editor");
+        var user = authState.User;
+        var isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        // Get verified email status only if authenticated
+        var hasVerifiedEmail = false;
+        if (isAuthenticated && !string.IsNullOrEmpty(userId))
+        {
+            var appUser = await _userManager.FindByIdAsync(userId);
+            hasVerifiedEmail = appUser?.EmailConfirmed ?? false;
+        }
+
+        return new PackageAccessContext(
+            IsAdmin: user.IsInRole("Admin"),
+            IsEditor: user.IsInRole("Editor"),
+            HasVerifiedEmail: hasVerifiedEmail,
+            UserId: userId
+        );
     }
 
     /// <summary>
     /// Checks if the current user can view the specified package.
-    /// Published and Archived packages are visible to everyone.
-    /// Draft packages are only visible to the owner or Admin.
+    /// Convenience method - for batch operations, use GetPackageAccessContext() instead.
     /// </summary>
     public async Task<bool> CanViewPackage(Package package)
     {
-        // Published packages are visible to everyone
-        if (package.Status == PackageStatus.Published)
-            return true;
-
-        // Archived packages are accessible via direct link
-        if (package.Status == PackageStatus.Archived)
-            return true;
-
-        // Draft packages require authentication
-        if (!await IsAuthenticated())
-            return false;
-
-        // Admins can see all packages
-        if (await IsAdmin())
-            return true;
-
-        // Owners can see their own draft packages
-        var userId = await GetCurrentUserId();
-        return package.OwnerId == userId;
+        var context = await GetPackageAccessContext();
+        return context.CanViewPackage(package);
     }
 
     /// <summary>
@@ -96,29 +94,26 @@ public class AccessControlService
     /// </summary>
     public async Task<bool> CanEditPackage(Package package)
     {
+        var context = await GetPackageAccessContext();
+
         // Only authenticated users can edit
-        if (!await IsAuthenticated())
-            return false;
-
-        var authState = await GetAuthenticationState();
-        var user = authState.User;
-
-        // User must be in Editor or Admin role
-        if (!user.IsInRole("Editor") && !user.IsInRole("Admin"))
+        if (string.IsNullOrEmpty(context.UserId))
             return false;
 
         // Admins can edit all packages
-        if (user.IsInRole("Admin"))
+        if (context.IsAdmin)
             return true;
 
         // Editors can only edit their own packages
-        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return package.OwnerId == userId;
+        if (context.IsEditor && package.OwnerId == context.UserId)
+            return true;
+
+        return false;
     }
 
     /// <summary>
     /// Checks if the current user can delete the specified package.
-    /// Same rules as editing: Admin or package owner.
+    /// Same rules as editing: Admin or package owner with Editor role.
     /// </summary>
     public async Task<bool> CanDeletePackage(Package package)
     {

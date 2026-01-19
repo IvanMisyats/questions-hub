@@ -94,6 +94,15 @@
                         </select>
                     </div>
                     <div class="col-md-4">
+                        <label for="packageAccessLevel" class="form-label">Доступ</label>
+                        <select class="form-select" id="packageAccessLevel"
+                                @bind="_package.AccessLevel" @onblur="SavePackageAsync">
+                            <option value="@PackageAccessLevel.All">Всі</option>
+                            <option value="@PackageAccessLevel.RegisteredOnly">Зареєстровані користувачі</option>
+                            <option value="@PackageAccessLevel.EditorsOnly">Лише редактори</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label for="packageNumberingMode" class="form-label">Нумерація питань</label>
                         <select class="form-select" id="packageNumberingMode"
                                 value="@_package.NumberingMode"
@@ -1442,6 +1451,7 @@
                 dbPackage.Preamble = _package.Preamble;
                 dbPackage.PlayedAt = _package.PlayedAt;
                 dbPackage.Status = _package.Status;
+                dbPackage.AccessLevel = _package.AccessLevel;
                 await context.SaveChangesAsync();
             }
             _saveStatus = "Збережено";

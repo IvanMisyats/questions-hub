@@ -1,4 +1,4 @@
-﻿@page "/editor/{Id:int}"
+@page "/editor/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Domain
@@ -313,19 +313,25 @@
 
         if (_author != null)
         {
-            // Only count/show packages with Published status
-            // (Draft and Archived packages are private to owner/admin)
+            // Get current user's access context
+            var accessContext = await AccessControl.GetPackageAccessContext();
+
+            // Filter tours and blocks based on package status and access level
             var publishedToursFromTours = _author.Tours
-                .Where(t => t.Package.Status == PackageStatus.Published);
+                .Where(t => t.Package.Status == PackageStatus.Published)
+                .Where(t => accessContext.CanAccessPackage(t.Package));
             var publishedToursFromBlocks = _author.Blocks
-                .Where(b => b.Tour.Package.Status == PackageStatus.Published);
+                .Where(b => b.Tour.Package.Status == PackageStatus.Published)
+                .Where(b => accessContext.CanAccessPackage(b.Tour.Package));
 
             var packageIdsFromTours = publishedToursFromTours.Select(t => t.PackageId);
             var packageIdsFromBlocks = publishedToursFromBlocks.Select(b => b.Tour.PackageId);
             _packagesCount = packageIdsFromTours.Union(packageIdsFromBlocks).Distinct().Count();
 
-            // Only count questions from published packages
-            _questionsCount = _author.Questions.Count(q => q.Tour.Package.Status == PackageStatus.Published);
+            // Only count questions from packages the user can access
+            _questionsCount = _author.Questions.Count(q =>
+                q.Tour.Package.Status == PackageStatus.Published
+                && accessContext.CanAccessPackage(q.Tour.Package));
 
             // Build packages list grouped by package, including both tours and blocks
             // Only include published packages
@@ -455,36 +461,39 @@
         try
         {
             await using var context = await DbContextFactory.CreateDbContextAsync();
+            var accessContext = await AccessControl.GetPackageAccessContext();
 
             var skip = _displayedQuestionsCount;
             var take = QuestionsPerPage;
 
-            // Base query for author's questions - only from published packages
-            var baseQuery = context.Questions
+            // Load questions from published packages, then filter by access level in memory
+            var questions = await context.Questions
                 .Where(q => q.Authors.Any(a => a.Id == _author.Id)
-                         && q.Tour.Package.Status == PackageStatus.Published);
-
-            // Only get total count on first load
-            if (_displayedQuestionsCount == 0)
-            {
-                _questionsCount = await baseQuery.CountAsync();
-            }
-
-            var questions = await baseQuery
+                         && q.Tour.Package.Status == PackageStatus.Published)
                 .Include(q => q.Authors)
                 .Include(q => q.Tour)
                     .ThenInclude(t => t.Package)
                 .OrderByDescending(q => q.Tour.PackageId)
                 .ThenBy(q => q.Tour.Number)
                 .ThenBy(q => q.OrderIndex)
-                .Skip(skip)
-                .Take(take)
                 .ToListAsync();
 
-            _hasMoreQuestions = (skip + questions.Count) < _questionsCount;
+            // Apply access level filter in memory
+            var accessibleQuestions = questions
+                .Where(q => accessContext.CanAccessPackage(q.Tour.Package))
+                .ToList();
 
-            _questionsList.AddRange(questions);
-            _displayedQuestionsCount += questions.Count;
+            // Only get total count on first load
+            if (_displayedQuestionsCount == 0)
+            {
+                _questionsCount = accessibleQuestions.Count;
+            }
+
+            var pagedQuestions = accessibleQuestions.Skip(skip).Take(take).ToList();
+            _hasMoreQuestions = (skip + pagedQuestions.Count) < _questionsCount;
+
+            _questionsList.AddRange(pagedQuestions);
+            _displayedQuestionsCount += pagedQuestions.Count;
         }
         finally
         {

@@ -37,6 +37,7 @@
 - **Package (Пакет запитань)** - A collection of questions prepared for a tournament
   - Has owner (User who created it)
   - Has status: Draft, Published, or Archived
+  - Has AccessLevel: All (default), RegisteredOnly, or EditorsOnly - controls who can view the package
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
   - Has NumberingMode: Global (sequential across package), PerTour (restart at 1 each tour), or Manual (user-controlled)
   - Editors are computed from all tour editors/blocks (not stored directly)
@@ -220,8 +221,15 @@ Single-page editor for complete package management:
 
 **Package Status**:
 - **Draft** - Only visible to owner and admins
-- **Published** - Visible to all users
+- **Published** - Visible based on access level settings
 - **Archived** - Hidden from main list, accessible via direct link
+
+**Package Access Level**:
+- **Всі (All)** - Everyone can access (default)
+- **Зареєстровані користувачі (RegisteredOnly)** - Only registered users with verified email
+- **Лише редактори (EditorsOnly)** - Only users with Editor role
+
+*Note: Admins and package owners always have access regardless of access level.*
 
 ### 10. Search (Пошук)
 **Route**: `/search` or `/search/{query}`

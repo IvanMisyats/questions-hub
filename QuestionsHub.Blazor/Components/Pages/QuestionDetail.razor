@@ -77,9 +77,9 @@ else
             return;
         }
 
-        // Check visibility based on package status
-        var canView = await AccessControl.CanViewPackage(_question.Tour.Package);
-        if (!canView)
+        // Check visibility based on package status and access level
+        var accessContext = await AccessControl.GetPackageAccessContext();
+        if (!accessContext.CanViewPackage(_question.Tour.Package))
         {
             _question = null;
             _notFound = true;

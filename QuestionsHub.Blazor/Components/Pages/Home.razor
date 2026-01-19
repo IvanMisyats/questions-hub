@@ -1,8 +1,10 @@
-﻿@page "/"
+@page "/"
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
 @inject QuestionsHubDbContext DbContext
+@inject AccessControlService AccessControl
 <PageTitle>База українських запитань Що?Де?Коли?</PageTitle>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -65,7 +67,11 @@
     private List<Package>? _packages;
     protected override async Task OnInitializedAsync()
     {
-        _packages = await DbContext.Packages
+        // Get access context for filtering
+        var accessContext = await AccessControl.GetPackageAccessContext();
+
+        // Load all published packages
+        var allPackages = await DbContext.Packages
             .Where(p => p.Status == PackageStatus.Published)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
@@ -76,6 +82,11 @@
                 .ThenInclude(t => t.Questions)
             .OrderByDescending(p => p.Id)
             .ToListAsync();
+
+        // Filter by access level using PackageAccessContext
+        _packages = allPackages
+            .Where(p => accessContext.CanAccessPackage(p))
+            .ToList();
     }
     private int GetQuestionsCount(Package package)
     {

@@ -1,8 +1,9 @@
-﻿@page "/search"
+@page "/search"
 @page "/search/{Query}"
 @using QuestionsHub.Blazor.Infrastructure
 @using static QuestionsHub.Blazor.Infrastructure.HighlightSanitizer
 @inject SearchService SearchService
+@inject AccessControlService AccessControl
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
@@ -184,7 +185,8 @@
 
         try
         {
-            _results = await SearchService.Search(SearchQuery.Trim());
+            var accessContext = await AccessControl.GetPackageAccessContext();
+            _results = await SearchService.Search(SearchQuery.Trim(), accessContext);
             _searchedQuery = SearchQuery.Trim();
             _hasSearched = true;
 

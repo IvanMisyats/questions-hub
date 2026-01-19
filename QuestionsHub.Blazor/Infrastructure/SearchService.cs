@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Data;
+using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Infrastructure;
 
@@ -52,11 +53,13 @@ public class SearchService
     /// Supports web-style query syntax: AND (default), OR, "phrase", -exclude.
     /// </summary>
     /// <param name="query">Search query string</param>
+    /// <param name="accessContext">User access context for filtering by access level</param>
     /// <param name="limit">Maximum number of results (default 50, max 100)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of search results ordered by relevance</returns>
     public async Task<List<SearchResult>> Search(
         string query,
+        PackageAccessContext accessContext,
         int limit = 50,
         CancellationToken cancellationToken = default)
     {
@@ -69,6 +72,12 @@ public class SearchService
         limit = Math.Clamp(limit, 1, 100);
 
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        // Access level values: 0 = All, 1 = RegisteredOnly, 2 = EditorsOnly
+        var isAdmin = accessContext.IsAdmin;
+        var isEditor = accessContext.IsEditor;
+        var hasVerifiedEmail = accessContext.HasVerifiedEmail;
+        var userId = accessContext.UserId ?? "";
 
         var results = await context.Database
             .SqlQuery<SearchResult>($@"
@@ -115,6 +124,13 @@ public class SearchService
                   AND (
                        qu.""SearchVector"" @@ q.tsq
                        OR qu.""SearchTextNorm"" % q.qnorm
+                  )
+                  AND (
+                       {isAdmin} = true
+                       OR p.""OwnerId"" = {userId}
+                       OR p.""AccessLevel"" = 0
+                       OR (p.""AccessLevel"" = 1 AND {hasVerifiedEmail} = true)
+                       OR (p.""AccessLevel"" = 2 AND {isEditor} = true)
                   )
                 ORDER BY ""Rank"" DESC
                 LIMIT {limit}

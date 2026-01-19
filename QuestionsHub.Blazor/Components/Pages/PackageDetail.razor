@@ -218,9 +218,9 @@ else
             return;
         }
 
-        // Check visibility based on package status
-        var canView = await AccessControl.CanViewPackage(_package);
-        if (!canView)
+        // Check visibility based on package status and access level
+        var accessContext = await AccessControl.GetPackageAccessContext();
+        if (!accessContext.CanViewPackage(_package))
         {
             _package = null;
             _notFound = true;

@@ -1,9 +1,10 @@
-﻿@page "/editors"
+@page "/editors"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Infrastructure
 
 @inject AuthorService AuthorService
+@inject AccessControlService AccessControl
 
 <PageTitle>Автори - QuestionsHub</PageTitle>
 
@@ -133,7 +134,8 @@
 
     private async Task LoadAuthorsAsync()
     {
-        _authors = await AuthorService.GetAllAuthorsWithCounts();
+        var accessContext = await AccessControl.GetPackageAccessContext();
+        _authors = await AuthorService.GetAllAuthorsWithCounts(accessContext);
     }
 }
 

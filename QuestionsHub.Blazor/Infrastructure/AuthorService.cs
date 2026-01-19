@@ -132,40 +132,58 @@ public class AuthorService
 
     /// <summary>
     /// Gets all authors with their question and package counts.
-    /// Only counts questions and packages from published packages.
-    /// Authors with no published content are excluded from the list.
+    /// Only counts questions and packages from published packages that the user can access.
+    /// Authors with no accessible content are excluded from the list.
     /// </summary>
+    /// <param name="accessContext">User access context for filtering by access level.</param>
     /// <returns>List of author view models with counts.</returns>
-    public async Task<List<AuthorListItem>> GetAllAuthorsWithCounts()
+    public async Task<List<AuthorListItem>> GetAllAuthorsWithCounts(PackageAccessContext accessContext)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
-        // Only count questions and packages from published packages
-        return await context.Authors
+        // Load all authors with their relationships
+        var authors = await context.Authors
+            .Include(a => a.Questions)
+                .ThenInclude(q => q.Tour)
+                    .ThenInclude(t => t.Package)
+            .Include(a => a.Tours)
+                .ThenInclude(t => t.Package)
+            .Include(a => a.Blocks)
+                .ThenInclude(b => b.Tour)
+                    .ThenInclude(t => t.Package)
+            .ToListAsync();
+
+        // Filter and count in memory based on access context
+        var result = authors
             .Select(a => new AuthorListItem
             {
                 Id = a.Id,
                 FirstName = a.FirstName,
                 LastName = a.LastName,
-                // Only count questions from published packages
-                QuestionCount = a.Questions.Count(q => q.Tour.Package.Status == PackageStatus.Published),
-                // Count packages from both tours (as tour editor) and blocks (as block editor)
-                // Only count published packages
+                // Only count questions from accessible packages
+                QuestionCount = a.Questions.Count(q =>
+                    q.Tour.Package.Status == PackageStatus.Published
+                    && accessContext.CanAccessPackage(q.Tour.Package)),
+                // Count packages from both tours and blocks, only accessible ones
                 PackageCount = a.Tours
-                    .Where(t => t.Package.Status == PackageStatus.Published)
+                    .Where(t => t.Package.Status == PackageStatus.Published
+                             && accessContext.CanAccessPackage(t.Package))
                     .Select(t => t.PackageId)
                     .Union(a.Blocks
-                        .Where(b => b.Tour.Package.Status == PackageStatus.Published)
+                        .Where(b => b.Tour.Package.Status == PackageStatus.Published
+                                 && accessContext.CanAccessPackage(b.Tour.Package))
                         .Select(b => b.Tour.PackageId))
                     .Distinct()
                     .Count()
             })
-            // Exclude authors with no published content
+            // Exclude authors with no accessible content
             .Where(a => a.QuestionCount > 0 || a.PackageCount > 0)
             .OrderByDescending(a => a.QuestionCount)
             .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
-            .ToListAsync();
+            .ToList();
+
+        return result;
     }
 
     /// <summary>

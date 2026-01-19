@@ -159,6 +159,9 @@ public class Package
     /// <summary>Package visibility status.</summary>
     public PackageStatus Status { get; set; } = PackageStatus.Draft;
 
+    /// <summary>Access control level - determines who can view the package.</summary>
+    public PackageAccessLevel AccessLevel { get; set; } = PackageAccessLevel.All;
+
     /// <summary>How question numbers are assigned in this package.</summary>
     public QuestionNumberingMode NumberingMode { get; set; } = QuestionNumberingMode.Global;
 

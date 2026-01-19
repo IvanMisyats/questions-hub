@@ -202,6 +202,20 @@ Packages have three visibility statuses:
 | **Published** | Everyone | Visible | Visible | Counted |
 | **Archived** | Direct link only | Hidden | Hidden | Not counted |
 
+### Access Levels
+
+In addition to status, published and archived packages have an **Access Level** that controls who can view them:
+
+| Access Level | Ukrainian | Who Can Access |
+|--------------|-----------|----------------|
+| **All** | Всі | Everyone (including anonymous users) |
+| **RegisteredOnly** | Зареєстровані користувачі | Authenticated users with verified email |
+| **EditorsOnly** | Лише редактори | Users with Editor role |
+
+**Special Rules:**
+- **Admins** always have access to all packages regardless of access level
+- **Package Owners** always have access to their own packages regardless of access level
+
 ### Detailed Rules
 
 #### Draft Packages
@@ -213,14 +227,14 @@ Packages have three visibility statuses:
 - **Author Visibility**: If an author only has content in draft packages, they will not appear on the public authors list
 
 #### Published Packages
-- **Package Detail Page**: Visible to everyone (including anonymous users)
-- **Main Package List**: Displayed
-- **Search Results**: Questions are searchable
-- **Author Pages (/editor/{id})**: Questions and packages are displayed
-- **Editors Page (/editors)**: Questions and packages are counted in statistics
+- **Package Detail Page**: Visible based on access level
+- **Main Package List**: Displayed (filtered by access level)
+- **Search Results**: Questions are searchable (filtered by access level)
+- **Author Pages (/editor/{id})**: Questions and packages are displayed (filtered by access level)
+- **Editors Page (/editors)**: Questions and packages are counted in statistics (filtered by access level)
 
 #### Archived Packages
-- **Package Detail Page**: Accessible via direct link only
+- **Package Detail Page**: Accessible via direct link only (subject to access level)
 - **Main Package List**: Not displayed
 - **Search Results**: Questions are excluded from search
 - **Author Pages (/editor/{id})**: Questions and packages are not displayed
@@ -234,26 +248,47 @@ Content from Draft and Archived packages is **never exposed** on public pages. T
 - The `/editor/{id}` page only displays questions and packages from published packages
 - Search only returns results from published packages
 
+For published packages, access level provides additional control:
+- Packages with `RegisteredOnly` access require users to have a verified email
+- Packages with `EditorsOnly` access require users to have the Editor role
+- Admins and package owners can always access their packages
+
 This ensures that unpublished content remains private to the package owner and administrators.
 
-### Planned Access Levels (Future)
-Editors will be able to set package visibility when creating/editing packages:
+### Access Control Architecture
 
-1. **Private (Приватний)**
-   - Only the package creator can view
-   - Hidden from search and listings
+The access control system uses two main components:
 
-2. **Editors Only (Тільки редактори)**
-   - Only users with Editor role can view
-   
-3. **Registered Users (Зареєстровані користувачі)**
-   - Requires login
-   - Available to User, Editor, and Admin roles
+#### PackageAccessContext (Domain Layer)
+Location: `Domain/PackageAccessContext.cs`
 
-4. **Everyone/Public (Усі)**
-   - Public access
-   - Anonymous users can view
+A pure record containing user access permissions and business logic:
+- `CanAccessPackage(Package)` - checks if user can access based on access level
+- `CanViewPackage(Package)` - checks if user can view based on status AND access level
 
+This is the **single source of truth** for package visibility rules.
+
+#### AccessControlService (Infrastructure Layer)
+Location: `Infrastructure/AccessControlService.cs`
+
+A scoped service that:
+- Accesses authentication state from Blazor
+- Creates `PackageAccessContext` instances via `GetPackageAccessContext()`
+- Provides convenience methods like `CanEditPackage()` and `CanDeletePackage()`
+
+#### Usage Pattern
+
+```csharp
+// For single package check (convenience)
+if (await AccessControl.CanViewPackage(package)) { ... }
+
+// For batch operations (more efficient)
+var context = await AccessControl.GetPackageAccessContext();
+var visiblePackages = packages.Where(p => context.CanViewPackage(p));
+```
+
+#### API Controllers
+Controllers use `ClaimsPrincipalExtensions` which internally creates a `PackageAccessContext` for consistent behavior.
 
 ---
 
