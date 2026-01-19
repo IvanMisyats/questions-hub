@@ -22,6 +22,8 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
 
         var package = await context.Packages
             .Include(p => p.Tours)
+                .ThenInclude(t => t.Blocks)
+            .Include(p => p.Tours)
                 .ThenInclude(t => t.Questions)
             .FirstOrDefaultAsync(p => p.Id == packageId);
 
@@ -100,6 +102,8 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
 
     /// <summary>
     /// Renumbers questions within the package based on the numbering mode.
+    /// When a tour has blocks, questions are ordered by block OrderIndex first,
+    /// then by question OrderIndex within each block.
     /// </summary>
     private static void RenumberQuestions(Package package)
     {
@@ -115,8 +119,8 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
 
         foreach (var tour in orderedTours)
         {
-            // Sort questions by OrderIndex within the tour
-            var orderedQuestions = tour.Questions.OrderBy(q => q.OrderIndex).ToList();
+            // Sort questions: if tour has blocks, sort by block order first, then by question order
+            var orderedQuestions = GetOrderedQuestions(tour);
 
             // Normalize OrderIndex to be sequential (0, 1, 2...)
             for (int i = 0; i < orderedQuestions.Count; i++)
@@ -157,13 +161,37 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
     }
 
     /// <summary>
+    /// Gets questions for a tour ordered correctly.
+    /// If the tour has blocks, orders by block OrderIndex first, then by question OrderIndex within each block.
+    /// Questions without a block (orphans) come after all block questions.
+    /// </summary>
+    private static List<Question> GetOrderedQuestions(Tour tour)
+    {
+        if (tour.Blocks.Count == 0)
+        {
+            // No blocks - simple ordering by OrderIndex
+            return tour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        }
+
+        // Build a dictionary of block OrderIndex for quick lookup
+        var blockOrderDict = tour.Blocks.ToDictionary(b => b.Id, b => b.OrderIndex);
+
+        // Sort questions: first by block order (nulls last), then by question order within block
+        return tour.Questions
+            .OrderBy(q => q.BlockId.HasValue ? blockOrderDict.GetValueOrDefault(q.BlockId.Value, int.MaxValue) : int.MaxValue)
+            .ThenBy(q => q.OrderIndex)
+            .ToList();
+    }
+
+    /// <summary>
     /// Normalizes OrderIndex values for all questions in the package to be sequential within each tour.
+    /// Respects block ordering when blocks are present.
     /// </summary>
     private static void NormalizeQuestionOrderIndices(Package package)
     {
         foreach (var tour in package.Tours)
         {
-            var orderedQuestions = tour.Questions.OrderBy(q => q.OrderIndex).ToList();
+            var orderedQuestions = GetOrderedQuestions(tour);
             for (int i = 0; i < orderedQuestions.Count; i++)
             {
                 orderedQuestions[i].OrderIndex = i;

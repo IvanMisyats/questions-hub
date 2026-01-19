@@ -209,7 +209,7 @@
                                         @if (tour.HasBlocks)
                                         {
                                             <!-- Blocks Section -->
-                                            <div class="blocks-section mb-3" id="blocks-tour-@tour.Id" data-tour-id="@tour.Id">
+                                            <div class="blocks-section mb-3">
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                                     <h6 class="mb-0">Блоки <span class="badge bg-secondary">@tour.Blocks.Count</span></h6>
                                                     @if (tour.Blocks.Count < 6)
@@ -220,6 +220,8 @@
                                                     }
                                                 </div>
 
+                                                <!-- Blocks container for drag-and-drop -->
+                                                <div class="blocks-container" id="blocks-tour-@tour.Id" data-tour-id="@tour.Id">
                                                 @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
                                                 {
                                                     var blockNumber = tour.Blocks.OrderBy(b => b.OrderIndex).ToList().IndexOf(block) + 1;
@@ -311,6 +313,7 @@
                                                         }
                                                     </div>
                                                 }
+                                                </div>
                                             </div>
 
                                             @* Orphan questions section - questions not assigned to any block *@
@@ -928,11 +931,8 @@
 
             await context.SaveChangesAsync();
 
-            // Renumber using the service
-            await RenumberingService.RenumberPackage(_package.Id);
-
-            // Reload to get updated numbers
-            await ReloadPackageData();
+            // Renumber, reload and reinitialize sortables
+            await RenumberAndReload();
 
             _saveStatus = "Порядок турів змінено";
         }
@@ -977,7 +977,143 @@
 
             await context.SaveChangesAsync();
 
+            // Renumber, reload and reinitialize sortables
+            await RenumberAndReload();
+
             _saveStatus = "Порядок блоків змінено";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnBlockMovedBetweenTours(int blockId, int fromTourId, int toTourId, int newIndex)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            _saveStatus = "Переміщення блоку...";
+            StateHasChanged();
+
+            var sourceTour = _package.Tours.FirstOrDefault(t => t.Id == fromTourId);
+            var targetTour = _package.Tours.FirstOrDefault(t => t.Id == toTourId);
+            var block = sourceTour?.Blocks.FirstOrDefault(b => b.Id == blockId);
+
+            if (sourceTour == null || targetTour == null || block == null)
+            {
+                _saveStatus = "Помилка: блок або тур не знайдено";
+                StateHasChanged();
+                return;
+            }
+
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            // 1. Get the block from DB with its questions
+            var dbBlock = await context.Blocks
+                .Include(b => b.Editors)
+                .FirstOrDefaultAsync(b => b.Id == blockId);
+            if (dbBlock == null)
+            {
+                _saveStatus = "Помилка: блок не знайдено в базі";
+                StateHasChanged();
+                return;
+            }
+
+            // 2. Get questions that belong to this block
+            var questionsToMove = sourceTour.Questions.Where(q => q.BlockId == blockId).ToList();
+            var dbQuestionsToMove = await context.Questions.Where(q => q.BlockId == blockId).ToListAsync();
+
+            // 3. Remove block from source tour
+            sourceTour.Blocks.Remove(block);
+            dbBlock.TourId = toTourId;
+            block.TourId = toTourId;
+
+            // 4. Move questions to target tour
+            foreach (var question in questionsToMove)
+            {
+                sourceTour.Questions.Remove(question);
+                question.TourId = toTourId;
+                targetTour.Questions.Add(question);
+            }
+            foreach (var dbQuestion in dbQuestionsToMove)
+            {
+                dbQuestion.TourId = toTourId;
+            }
+
+            // 5. Add block to target tour
+            targetTour.Blocks.Add(block);
+
+            // 6. Reindex source tour blocks
+            var sourceBlocks = sourceTour.Blocks.OrderBy(b => b.OrderIndex).ToList();
+            for (int i = 0; i < sourceBlocks.Count; i++)
+            {
+                sourceBlocks[i].OrderIndex = i;
+                var dbB = await context.Blocks.FindAsync(sourceBlocks[i].Id);
+                if (dbB != null)
+                {
+                    dbB.OrderIndex = i;
+                }
+            }
+
+            // 7. Reindex target tour blocks, inserting the moved block at the new position
+            var targetBlocks = targetTour.Blocks.Where(b => b.Id != blockId).OrderBy(b => b.OrderIndex).ToList();
+            if (newIndex > targetBlocks.Count) newIndex = targetBlocks.Count;
+            targetBlocks.Insert(newIndex, block);
+
+            for (int i = 0; i < targetBlocks.Count; i++)
+            {
+                targetBlocks[i].OrderIndex = i;
+                var dbB = await context.Blocks.FindAsync(targetBlocks[i].Id);
+                if (dbB != null)
+                {
+                    dbB.OrderIndex = i;
+                }
+            }
+
+            // 8. Reindex questions in target tour for the block
+            var targetBlockQuestions = targetTour.Questions
+                .Where(q => q.BlockId == blockId)
+                .OrderBy(q => q.OrderIndex).ToList();
+
+            // Find the last question index in the target tour before our block
+            var existingMaxIndex = targetTour.Questions
+                .Where(q => q.BlockId != blockId)
+                .Select(q => (int?)q.OrderIndex)
+                .Max() ?? -1;
+
+            for (int i = 0; i < targetBlockQuestions.Count; i++)
+            {
+                targetBlockQuestions[i].OrderIndex = existingMaxIndex + 1 + i;
+                var dbQ = await context.Questions.FindAsync(targetBlockQuestions[i].Id);
+                if (dbQ != null)
+                {
+                    dbQ.OrderIndex = existingMaxIndex + 1 + i;
+                }
+            }
+
+            // 9. Reindex remaining questions in source tour
+            var sourceQuestions = sourceTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+            for (int i = 0; i < sourceQuestions.Count; i++)
+            {
+                sourceQuestions[i].OrderIndex = i;
+                var dbQ = await context.Questions.FindAsync(sourceQuestions[i].Id);
+                if (dbQ != null)
+                {
+                    dbQ.OrderIndex = i;
+                }
+            }
+
+            await context.SaveChangesAsync();
+
+            // Renumber, reload and reinitialize sortables
+            await RenumberAndReload();
+
+            _saveStatus = "Блок переміщено";
         }
         catch (Exception ex)
         {
@@ -1019,11 +1155,8 @@
 
             await context.SaveChangesAsync();
 
-            // Renumber using the service
-            await RenumberingService.RenumberPackage(_package.Id);
-
-            // Reload to get updated numbers
-            await ReloadPackageData();
+            // Renumber, reload and reinitialize sortables
+            await RenumberAndReload();
 
             _saveStatus = "Порядок питань оновлено";
         }
@@ -1194,11 +1327,8 @@
 
             await context.SaveChangesAsync();
 
-            // Renumber using the service
-            await RenumberingService.RenumberPackage(_package.Id);
-
-            // Reload to get updated numbers
-            await ReloadPackageData();
+            // Renumber, reload and reinitialize sortables
+            await RenumberAndReload();
 
             _saveStatus = "Питання переміщено";
         }
@@ -2254,6 +2384,19 @@
         {
             _package = reloadedPackage;
         }
+    }
+
+    /// <summary>
+    /// Unified method to renumber the package, reload data, and reinitialize sortables.
+    /// Call this after any reordering operation (tours, blocks, questions).
+    /// </summary>
+    private async Task RenumberAndReload()
+    {
+        if (_package == null) return;
+
+        await RenumberingService.RenumberPackage(_package.Id);
+        await ReloadPackageData();
+        _needsSortableInit = true;
     }
 
     // Block management methods

@@ -64,7 +64,13 @@ window.sortableInterop = {
             draggable: '.accordion-item',
             forceFallback: true,  // Use JS-based drag instead of native HTML5
             onEnd: function (evt) {
-                const tourIds = Array.from(element.querySelectorAll('[data-tour-id]'))
+                // Skip if no actual movement happened
+                if (evt.oldIndex === evt.newIndex) {
+                    return;
+                }
+
+                // Only select direct children accordion items with data-tour-id
+                const tourIds = Array.from(element.querySelectorAll(':scope > .accordion-item[data-tour-id]'))
                     .map(el => parseInt(el.dataset.tourId));
                 dotNetRef.invokeMethodAsync('OnToursReordered', tourIds);
             }
@@ -73,7 +79,7 @@ window.sortableInterop = {
         console.log('Tours sortable initialized for:', elementId);
     },
 
-    // Initialize sortable for blocks in a tour
+    // Initialize sortable for blocks in a tour (supports dragging between tours)
     initBlocksSortable: function (elementId, tourId, dotNetRef) {
         const element = document.getElementById(elementId);
         if (!element) {
@@ -95,17 +101,52 @@ window.sortableInterop = {
         }
 
         this.instances[instanceKey] = new Sortable(element, {
+            group: 'blocks', // Allow dragging between tours
             animation: 150,
             handle: '.block-drag-handle',
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
             draggable: '.block-item',
+            emptyInsertThreshold: 20,
             forceFallback: true,
             onEnd: function (evt) {
-                const blockIds = Array.from(element.querySelectorAll('[data-block-id]'))
+                // Skip if no actual movement happened
+                if (evt.from === evt.to && evt.oldIndex === evt.newIndex) {
+                    return;
+                }
+
+                const blockId = parseInt(evt.item.dataset.blockId);
+                const fromTourId = parseInt(evt.from.dataset.tourId);
+                const toTourId = parseInt(evt.to.dataset.tourId);
+                const newIndex = evt.newIndex;
+
+                // Collect block order for target tour - only direct children with .block-item class
+                const toTourBlockIds = Array.from(evt.to.querySelectorAll(':scope > .block-item[data-block-id]'))
                     .map(el => parseInt(el.dataset.blockId));
-                dotNetRef.invokeMethodAsync('OnBlocksReordered', tourId, blockIds);
+
+                // Revert the DOM change - Blazor will re-render the correct state
+                if (evt.from !== evt.to) {
+                    if (evt.oldIndex < evt.from.children.length) {
+                        evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]);
+                    } else {
+                        evt.from.appendChild(evt.item);
+                    }
+                } else if (evt.oldIndex !== evt.newIndex) {
+                    if (evt.oldIndex < evt.from.children.length) {
+                        evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]);
+                    } else {
+                        evt.from.appendChild(evt.item);
+                    }
+                }
+
+                if (fromTourId !== toTourId) {
+                    // Block moved between tours
+                    dotNetRef.invokeMethodAsync('OnBlockMovedBetweenTours', blockId, fromTourId, toTourId, newIndex);
+                } else {
+                    // Reordering within same tour
+                    dotNetRef.invokeMethodAsync('OnBlocksReordered', tourId, toTourBlockIds);
+                }
             }
         });
 

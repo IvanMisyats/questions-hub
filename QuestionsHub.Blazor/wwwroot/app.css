@@ -146,4 +146,9 @@ h1:focus {
     align-self: stretch;
 }
 
+/* Blocks container for drag-and-drop between tours */
+.blocks-container {
+    min-height: 20px;
+}
+
 
