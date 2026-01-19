@@ -43,10 +43,10 @@
     {
         <div class="card">
             <div class="card-header">
-                <Icon Name="group" Class="me-2" />Список авторів (@FilteredAuthors.Count@(string.IsNullOrEmpty(_searchQuery) ? "" : $" з {_authors.Count}"))
+                <Icon Name="group" Class="me-2" />Список авторів (@_authors.Count@(_hasNextPage ? "+" : ""))
             </div>
             <div class="card-body p-0">
-                @if (FilteredAuthors.Count == 0)
+                @if (_authors.Count == 0)
                 {
                     <p class="text-muted p-3 mb-0">Авторів не знайдено.</p>
                 }
@@ -62,7 +62,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var author in FilteredAuthors)
+                                @foreach (var author in _authors)
                                 {
                                     <tr>
                                         <td>
@@ -78,21 +78,29 @@
                 }
             </div>
         </div>
+
+        <Pagination CurrentPage="_currentPage"
+                    HasNextPage="_hasNextPage"
+                    OnPageChanged="OnPageChanged" />
     }
 </div>
 
 @code {
-    private List<AuthorListItem> _authors = [];
-    private List<AuthorListItem> _filteredAuthors = [];
-    private bool _isLoading = true;
-    private string _searchQuery = string.Empty;
-    private CancellationTokenSource? _searchCts;
+    private const int PageSize = 25;
+    private const int SearchDebounceMs = 400;
 
-    private List<AuthorListItem> FilteredAuthors =>
-        string.IsNullOrWhiteSpace(_searchQuery) ? _authors : _filteredAuthors;
+    private List<AuthorListItem> _authors = [];
+    private bool _isLoading = true;
+    private bool _hasNextPage;
+    private int _currentPage = 1;
+    private string _searchQuery = string.Empty;
+    private string _appliedSearchQuery = string.Empty;
+    private CancellationTokenSource? _searchCts;
+    private PackageAccessContext? _accessContext;
 
     protected override async Task OnInitializedAsync()
     {
+        _accessContext = await AccessControl.GetPackageAccessContext();
         await LoadAuthorsAsync();
         _isLoading = false;
     }
@@ -104,21 +112,13 @@
 
         try
         {
-            await Task.Delay(200, _searchCts.Token);
+            await Task.Delay(SearchDebounceMs, _searchCts.Token);
 
-            var query = _searchQuery.Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                _filteredAuthors = [];
-            }
-            else
-            {
-                _filteredAuthors = _authors
-                    .Where(a => a.FirstName.ToLowerInvariant().StartsWith(query) ||
-                                a.LastName.ToLowerInvariant().StartsWith(query) ||
-                                a.FullName.ToLowerInvariant().Contains(query))
-                    .ToList();
-            }
+            // Reset to first page when search query changes
+            _currentPage = 1;
+            _appliedSearchQuery = _searchQuery;
+            await LoadAuthorsAsync();
+            StateHasChanged();
         }
         catch (TaskCanceledException)
         {
@@ -126,16 +126,33 @@
         }
     }
 
-    private void ClearSearch()
+    private async Task ClearSearch()
     {
         _searchQuery = string.Empty;
-        _filteredAuthors = [];
+        _appliedSearchQuery = string.Empty;
+        _currentPage = 1;
+        await LoadAuthorsAsync();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadAuthorsAsync();
     }
 
     private async Task LoadAuthorsAsync()
     {
-        var accessContext = await AccessControl.GetPackageAccessContext();
-        _authors = await AuthorService.GetAllAuthorsWithCounts(accessContext);
+        if (_accessContext == null)
+            return;
+
+        var result = await AuthorService.GetAuthorsWithCountsPaginated(
+            _accessContext,
+            _currentPage,
+            PageSize,
+            string.IsNullOrWhiteSpace(_appliedSearchQuery) ? null : _appliedSearchQuery);
+
+        _authors = result.Items;
+        _hasNextPage = result.HasNextPage;
     }
 }
 

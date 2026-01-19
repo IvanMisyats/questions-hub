@@ -187,6 +187,117 @@ public class AuthorService
     }
 
     /// <summary>
+    /// Gets a paginated list of authors with their question and package counts.
+    /// Uses optimized database queries for better performance.
+    /// Sorted by package count descending, then by question count descending.
+    /// </summary>
+    /// <param name="accessContext">User access context for filtering by access level.</param>
+    /// <param name="page">Page number (1-based).</param>
+    /// <param name="pageSize">Number of items per page.</param>
+    /// <param name="searchQuery">Optional search query to filter by name.</param>
+    /// <returns>Paginated result with author list items.</returns>
+    public async Task<AuthorListResult> GetAuthorsWithCountsPaginated(
+        PackageAccessContext accessContext,
+        int page = 1,
+        int pageSize = 25,
+        string? searchQuery = null)
+    {
+        await using var context = await _dbContextFactory.CreateDbContextAsync();
+
+        // Build the base query for accessible packages based on access context
+        var accessiblePackageIds = GetAccessiblePackageIdsQuery(context, accessContext);
+
+        // Build the query for authors with counts
+        var query = context.Authors
+            .Select(a => new
+            {
+                a.Id,
+                a.FirstName,
+                a.LastName,
+                // Count questions from accessible published packages
+                QuestionCount = a.Questions.Count(q =>
+                    q.Tour.Package.Status == PackageStatus.Published &&
+                    accessiblePackageIds.Contains(q.Tour.PackageId)),
+                // Count unique packages from tours and blocks
+                PackageCount = a.Tours
+                    .Where(t => t.Package.Status == PackageStatus.Published &&
+                               accessiblePackageIds.Contains(t.PackageId))
+                    .Select(t => t.PackageId)
+                    .Union(a.Blocks
+                        .Where(b => b.Tour.Package.Status == PackageStatus.Published &&
+                                   accessiblePackageIds.Contains(b.Tour.PackageId))
+                        .Select(b => b.Tour.PackageId))
+                    .Distinct()
+                    .Count()
+            });
+
+        // Apply search filter if provided
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var trimmedQuery = searchQuery.Trim();
+            query = query.Where(a =>
+                EF.Functions.ILike(a.FirstName, trimmedQuery + "%") ||
+                EF.Functions.ILike(a.LastName, trimmedQuery + "%") ||
+                EF.Functions.ILike(a.FirstName + " " + a.LastName, "%" + trimmedQuery + "%"));
+        }
+
+        // Filter to only authors with accessible content
+        query = query.Where(a => a.QuestionCount > 0 || a.PackageCount > 0);
+
+        // Sort by package count first, then by question count (both descending)
+        var orderedQuery = query
+            .OrderByDescending(a => a.PackageCount)
+            .ThenByDescending(a => a.QuestionCount)
+            .ThenBy(a => a.LastName)
+            .ThenBy(a => a.FirstName);
+
+        // Apply pagination - fetch one extra item to detect if there's a next page
+        var items = await orderedQuery
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize + 1)
+            .ToListAsync();
+
+        var hasNextPage = items.Count > pageSize;
+        var resultItems = items
+            .Take(pageSize)
+            .Select(a => new AuthorListItem
+            {
+                Id = a.Id,
+                FirstName = a.FirstName,
+                LastName = a.LastName,
+                QuestionCount = a.QuestionCount,
+                PackageCount = a.PackageCount
+            })
+            .ToList();
+
+        return new AuthorListResult(resultItems, hasNextPage);
+    }
+
+    /// <summary>
+    /// Builds a queryable of package IDs that are accessible to the user.
+    /// </summary>
+    private static IQueryable<int> GetAccessiblePackageIdsQuery(
+        QuestionsHubDbContext context,
+        PackageAccessContext accessContext)
+    {
+        // Admin can access all packages
+        if (accessContext.IsAdmin)
+        {
+            return context.Packages.Select(p => p.Id);
+        }
+
+        return context.Packages
+            .Where(p =>
+                // Owner always has access
+                (accessContext.UserId != null && p.OwnerId == accessContext.UserId) ||
+                // Access level checks
+                p.AccessLevel == PackageAccessLevel.All ||
+                (p.AccessLevel == PackageAccessLevel.RegisteredOnly && accessContext.HasVerifiedEmail) ||
+                (p.AccessLevel == PackageAccessLevel.EditorsOnly && accessContext.IsEditor))
+            .Select(p => p.Id);
+    }
+
+    /// <summary>
     /// Attempts to delete an author if they are orphaned (no questions, no tours, and not linked to a user).
     /// </summary>
     /// <param name="authorId">The author ID to check and potentially delete.</param>
@@ -391,4 +502,19 @@ public class UserForLinking
     public required string Email { get; set; }
     public required string FullName { get; set; }
     public string? City { get; set; }
+}
+
+/// <summary>
+/// Result of author list pagination.
+/// </summary>
+public class AuthorListResult
+{
+    public List<AuthorListItem> Items { get; }
+    public bool HasNextPage { get; }
+
+    public AuthorListResult(List<AuthorListItem> items, bool hasNextPage)
+    {
+        Items = items;
+        HasNextPage = hasNextPage;
+    }
 }
