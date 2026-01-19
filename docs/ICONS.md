@@ -26,6 +26,10 @@ The following icons are available in the sprite file:
 | `i-shield-exclamation` | shield-exclamation, shield | Shield with warning |
 | `i-person-plus` | person-plus, user-plus | Person with plus sign |
 | `i-person-minus` | person-minus, user-minus | Person with minus sign |
+| `i-chevron-left` | chevron-left, arrow-left | Left arrow for pagination |
+| `i-chevron-right` | chevron-right, arrow-right | Right arrow for pagination |
+| `i-chevron-double-left` | chevron-double-left, chevrons-left | Double left arrow for first page |
+| `i-chevron-double-right` | chevron-double-right, chevrons-right | Double right arrow for last page |
 
 ## Usage
 

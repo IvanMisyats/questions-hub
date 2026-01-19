@@ -97,6 +97,8 @@
                 </tbody>
             </table>
         </div>
+
+        <Pagination CurrentPage="_currentPage" HasNextPage="_hasNextPage" OnPageChanged="HandlePageChanged" />
     }
 </div>
 
@@ -148,6 +150,11 @@
     private string? _userId;
     private string? _errorMessage;
 
+    // Pagination
+    private const int PageSize = 10;
+    private int _currentPage = 1;
+    private bool _hasNextPage;
+
     // Delete modal state
     private bool _showDeleteModal;
     private PackageListItem? _packageToDelete;
@@ -187,9 +194,11 @@
                 query = query.Where(p => p.OwnerId == _userId);
             }
 
-            _packages = await query
-                .OrderByDescending(p => p.PlayedAt)
-                .ThenBy(p => p.Title)
+            // Fetch one extra to check if there's a next page
+            var items = await query
+                .OrderByDescending(p => p.Id)
+                .Skip((_currentPage - 1) * PageSize)
+                .Take(PageSize + 1)
                 .Select(p => new PackageListItem(
                     p.Id,
                     p.Title,
@@ -200,6 +209,9 @@
                     p.Owner != null ? p.Owner.FirstName + " " + p.Owner.LastName : null
                 ))
                 .ToListAsync();
+
+            _hasNextPage = items.Count > PageSize;
+            _packages = items.Take(PageSize).ToList();
         }
         catch (Exception ex)
         {
@@ -302,5 +314,11 @@
         PackageStatus.Archived => "Архів",
         _ => "Невідомо"
     };
+
+    private async Task HandlePageChanged(int newPage)
+    {
+        _currentPage = newPage;
+        await LoadPackages();
+    }
 }
 

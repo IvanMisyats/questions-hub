@@ -1,0 +1,117 @@
+﻿@*
+    Reusable pagination component with icon-based navigation.
+    Usage: <Pagination CurrentPage="1" HasNextPage="true" OnPageChanged="HandlePageChange" />
+*@
+
+@if (CurrentPage > 1 || HasNextPage)
+{
+    <nav aria-label="Навігація по сторінках" class="pagination-nav mt-3">
+        <div class="pagination-container">
+            @* First page *@
+            <button class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
+                    @onclick="GoToFirstPage"
+                    disabled="@(CurrentPage <= 1)"
+                    title="Перша сторінка">
+                <Icon Name="chevron-double-left" Size="16" />
+            </button>
+
+            @* Previous page *@
+            <button class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
+                    @onclick="GoToPreviousPage"
+                    disabled="@(CurrentPage <= 1)"
+                    title="Попередня сторінка">
+                <Icon Name="chevron-left" Size="16" />
+            </button>
+
+            @* Page numbers *@
+            <div class="pagination-numbers">
+                @foreach (var pageNumber in GetVisiblePages())
+                {
+                    <button class="pagination-btn pagination-number @(pageNumber == CurrentPage ? "active" : "")"
+                            @onclick="() => GoToPage(pageNumber)"
+                            disabled="@(pageNumber == CurrentPage)">
+                        @pageNumber
+                    </button>
+                }
+            </div>
+
+            @* Next page *@
+            <button class="pagination-btn @(!HasNextPage ? "disabled" : "")"
+                    @onclick="GoToNextPage"
+                    disabled="@(!HasNextPage)"
+                    title="Наступна сторінка">
+                <Icon Name="chevron-right" Size="16" />
+            </button>
+
+            @* Last page - always shown but disabled since we don't know total pages *@
+            <button class="pagination-btn disabled" disabled title="Остання сторінка">
+                <Icon Name="chevron-double-right" Size="16" />
+            </button>
+        </div>
+    </nav>
+}
+
+@code {
+    /// <summary>
+    /// Current page number (1-based).
+    /// </summary>
+    [Parameter, EditorRequired]
+    public int CurrentPage { get; set; } = 1;
+
+    /// <summary>
+    /// Whether there are more pages after the current one.
+    /// </summary>
+    [Parameter]
+    public bool HasNextPage { get; set; }
+
+    /// <summary>
+    /// Callback when page changes. Receives the new page number.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public EventCallback<int> OnPageChanged { get; set; }
+
+    private IEnumerable<int> GetVisiblePages()
+    {
+        // Only show pages we know exist:
+        // - All pages from 1 to CurrentPage (we've visited them)
+        // - CurrentPage + 1 only if HasNextPage is true
+        var lastKnownPage = HasNextPage ? CurrentPage + 1 : CurrentPage;
+
+        for (var i = 1; i <= lastKnownPage; i++)
+        {
+            yield return i;
+        }
+    }
+
+    private async Task GoToFirstPage()
+    {
+        if (CurrentPage > 1)
+        {
+            await OnPageChanged.InvokeAsync(1);
+        }
+    }
+
+    private async Task GoToPreviousPage()
+    {
+        if (CurrentPage > 1)
+        {
+            await OnPageChanged.InvokeAsync(CurrentPage - 1);
+        }
+    }
+
+    private async Task GoToNextPage()
+    {
+        if (HasNextPage)
+        {
+            await OnPageChanged.InvokeAsync(CurrentPage + 1);
+        }
+    }
+
+    private async Task GoToPage(int pageNum)
+    {
+        if (pageNum != CurrentPage)
+        {
+            await OnPageChanged.InvokeAsync(pageNum);
+        }
+    }
+}
