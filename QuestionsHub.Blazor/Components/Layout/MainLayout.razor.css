@@ -163,21 +163,27 @@ main {
     left: 0;
     right: 0;
     width: 100%;
+    height: 3rem;
     background-color: #f7f7f7;
     border-top: 1px solid #d6d5d5;
     padding: 0.75rem 1rem;
     z-index: 1000;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .footer-content {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
     font-size: 0.875rem;
     color: #6c757d;
     text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .footer-content a {
@@ -191,7 +197,7 @@ main {
 
 @media (max-width: 640.98px) {
     .footer-content {
-        flex-direction: column;
+        justify-content: flex-start;
     }
 }
 
