@@ -127,6 +127,14 @@
                                         </div>
                                     }
 
+                                    @if (!string.IsNullOrEmpty(result.CommentUrl))
+                                    {
+                                        <div class="comment-handout mb-3">
+                                            <strong>Коментар (роздатковий матеріал):</strong>
+                                            <MediaDisplay Url="@result.CommentUrl" Alt="Comment Handout" />
+                                        </div>
+                                    }
+
                                     @if (!string.IsNullOrEmpty(result.Source))
                                     {
                                         <div class="answer-field source-field">
@@ -241,4 +249,3 @@
         }
     }
 }
-
