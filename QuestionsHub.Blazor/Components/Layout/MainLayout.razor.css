@@ -159,10 +159,6 @@ main {
         top: 0.5rem;
     }
 
-.content {
-    flex: 1 0 auto;
-}
-
 .site-footer {
     height: 3rem;
     background-color: #f7f7f7;
