@@ -10,7 +10,7 @@
 @inject AuthorService AuthorService
 @inject AccessControlService AccessControl
 
-<PageTitle>@(_author?.FullName ?? "Редактор")</PageTitle>
+<PageTitle>@(_author?.FullName ?? "Редактора не знайдено")</PageTitle>
 
 <div class="container py-4">
     @if (_isLoading)
