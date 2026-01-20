@@ -13,6 +13,10 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+(\d+)[\.:]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStart();
 
+    // Matches: "Тур: 1", "ТУР: 2" (colon before number)
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s*:\s*(\d+)\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourStartWithColon();
+
     [GeneratedRegex(@"^\s*[-–—]\s*(?:ТУР|Тур)\s+(\d+)[\.:]?\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStartDashed();
 
@@ -901,7 +905,7 @@ public class PackageParser
     {
         tourNumber = "";
 
-        if (!TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartDashed()))
+        if (!TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartWithColon(), ParserPatterns.TourStartDashed()))
             return false;
 
         tourNumber = match.Groups[1].Value;

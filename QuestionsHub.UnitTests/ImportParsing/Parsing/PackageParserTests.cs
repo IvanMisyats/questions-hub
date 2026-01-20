@@ -1,4 +1,4 @@
-﻿﻿using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using QuestionsHub.Blazor.Infrastructure.Import;
 using Xunit;
@@ -29,6 +29,10 @@ public class PackageParserTests
     [InlineData("Тур 3.", "3")]
     [InlineData("Тур 1:", "1")]
     [InlineData("ТУР 4:", "4")]
+    [InlineData("Тур: 1", "1")]
+    [InlineData("ТУР: 2", "2")]
+    [InlineData("Tour: 3", "3")]
+    [InlineData("  Тур: 1  ", "1")]
     public void Parse_TourStart_DetectsTour(string tourLine, string expectedNumber)
     {
         // Arrange

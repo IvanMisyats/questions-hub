@@ -133,6 +133,7 @@ Tour preamble (optional)
 
 Tours are detected by patterns like:
 - `Тур 1`
+- `Тур: 1`
 - `- Тур 1 -`
 - `ТУР 1`
 
