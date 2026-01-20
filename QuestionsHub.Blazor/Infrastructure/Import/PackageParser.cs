@@ -30,6 +30,11 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+0\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourZeroStart();
 
+    // Warmup question label (requires bold formatting): "Розминочне питання", "Розминкове питання", "Розминка"
+    // This creates an implicit warmup tour when appearing before any tours
+    [GeneratedRegex(@"^\s*(?:Розминочне\s+питання|Розминкове\s+питання|Розминка)\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex WarmupQuestionLabel();
+
     // Question detection
     [GeneratedRegex(@"^\s*(\d+)\.\s+(.*)$")]
     public static partial Regex QuestionStartWithText();
@@ -300,6 +305,7 @@ public class PackageParser
 
     /// <summary>
     /// Attempts to parse and handle a tour start line (including warmup tours).
+    /// Also handles bold warmup question labels (e.g., "Розминочне питання") that create implicit warmup tours.
     /// </summary>
     private bool TryProcessTourStart(string line, ParserContext ctx)
     {
@@ -308,6 +314,12 @@ public class PackageParser
 
         // Check for warmup tour first
         if (TryParseWarmupTourStart(line))
+        {
+            isWarmup = true;
+            tourNumber = "0";
+        }
+        // Check for bold warmup question label (only before any tours exist)
+        else if (TryParseWarmupQuestionLabel(line, ctx))
         {
             isWarmup = true;
             tourNumber = "0";
@@ -458,18 +470,14 @@ public class PackageParser
         // Try single-line bracket first (has closing bracket on same line)
         if (TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
         {
-            ctx.CurrentSection = ParserSection.Handout;
-
             if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(handoutText))
                 ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, handoutText);
 
-            if (!string.IsNullOrWhiteSpace(afterHandout))
-            {
-                if (ctx.HasCurrentQuestion)
-                    ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterHandout);
+            if (!string.IsNullOrWhiteSpace(afterHandout) && ctx.HasCurrentQuestion)
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterHandout);
 
-                ctx.CurrentSection = ParserSection.QuestionText;
-            }
+            // Single-line bracketed handout is complete, subsequent lines are question text
+            ctx.CurrentSection = ParserSection.QuestionText;
 
             return true;
         }
@@ -917,6 +925,23 @@ public class PackageParser
         return ParserPatterns.WarmupTourStart().IsMatch(text) ||
                ParserPatterns.WarmupTourStartDashed().IsMatch(text) ||
                ParserPatterns.TourZeroStart().IsMatch(text);
+    }
+
+    /// <summary>
+    /// Checks if the line is a bold warmup question label that creates an implicit warmup tour.
+    /// Only matches when: text matches warmup label pattern, block is bold, and no tours exist yet.
+    /// </summary>
+    private static bool TryParseWarmupQuestionLabel(string text, ParserContext ctx)
+    {
+        // Only valid before any tours exist
+        if (ctx.Result.Tours.Count > 0)
+            return false;
+
+        // Must be bold
+        if (ctx.CurrentBlock is not { IsBold: true })
+            return false;
+
+        return ParserPatterns.WarmupQuestionLabel().IsMatch(text);
     }
 
     private static bool TryParseQuestionStart(string text, out string questionNumber, out string remainingText, out QuestionFormat format)

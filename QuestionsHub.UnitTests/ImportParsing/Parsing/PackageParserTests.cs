@@ -881,6 +881,31 @@ public class PackageParserTests
     }
 
     [Fact]
+    public void Parse_BracketedHandoutOnSeparateLine_QuestionTextOnNextLine()
+    {
+        // Arrange - Bug reproduction: handout is on its own line, question text on next line
+        // The handout section should be closed after the closing bracket,
+        // so the following text goes into questionText, not handoutText
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1."),
+            Block("[Роздатковий матеріал: ass murderer]"),
+            Block("Герої фільму «Іштар» ховаються від зловмисників у типовій для регіону крамниці. Що ми замінили словами «ass murderer»?"),
+            Block("Відповідь: Rug Dealer")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("ass murderer");
+        question.Text.Should().Be("Герої фільму «Іштар» ховаються від зловмисників у типовій для регіону крамниці. Що ми замінили словами «ass murderer»?");
+        question.Answer.Should().Be("Rug Dealer");
+    }
+
+    [Fact]
     public void Parse_MultilineBracketedHandoutSimple_ExtractsQuestionText()
     {
         // Arrange - Simplest multiline case: opening and closing in separate blocks
@@ -2129,6 +2154,131 @@ public class PackageParserTests
 
     #endregion
 
+    #region Warmup Question Label (Bold)
+
+    /// <summary>
+    /// When a bold "Розминочне питання" label appears before any tours,
+    /// it should create an implicit warmup tour.
+    /// </summary>
+    [Fact]
+    public void Parse_BoldWarmupQuestionLabel_CreatesWarmupTour()
+    {
+        // Arrange - Package with bold warmup question label before tours
+        var blocks = new List<DocBlock>
+        {
+            Block("Кубок «Післязавтра»"),
+            Block("Редакторська група: Микола Гнідь"),
+            BoldBlock("Розминочне питання"),
+            Block("0. При формуванні цього пакету розділи документу називалися коло перше?"),
+            Block("Відповідь: Чемпіони"),
+            Block("Тур 1"),
+            Block("1. Звичайне питання першого туру"),
+            Block("Відповідь: Відповідь 1")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+
+        // First tour should be warmup
+        var warmupTour = result.Tours[0];
+        warmupTour.IsWarmup.Should().BeTrue();
+        warmupTour.Number.Should().Be("0");
+        warmupTour.Questions.Should().HaveCount(1);
+        warmupTour.Questions[0].Number.Should().Be("0");
+        warmupTour.Questions[0].Text.Should().Contain("При формуванні цього пакету");
+
+        // Second tour should be regular
+        var tour1 = result.Tours[1];
+        tour1.IsWarmup.Should().BeFalse();
+        tour1.Number.Should().Be("1");
+        tour1.Questions.Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("Розминочне питання")]
+    [InlineData("Розминкове питання")]
+    [InlineData("Розминка")]
+    [InlineData("  Розминочне питання  ")]
+    [InlineData("РОЗМИНОЧНЕ ПИТАННЯ")]
+    public void Parse_BoldWarmupQuestionLabelVariants_CreatesWarmupTour(string labelText)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Package Title"),
+            BoldBlock(labelText),
+            Block("0. Warmup question text"),
+            Block("Відповідь: Answer"),
+            Block("Тур 1"),
+            Block("1. Regular question"),
+            Block("Відповідь: Answer 1")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+        result.Tours[0].IsWarmup.Should().BeTrue();
+        result.Tours[0].Questions.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Parse_NonBoldWarmupQuestionLabel_DoesNotCreateWarmupTour()
+    {
+        // Arrange - Same text but NOT bold - should not be treated as warmup tour marker
+        // When not bold, "Розминочне питання" is just regular text in the header,
+        // and the parser will create a default non-warmup tour for the "0." question
+        var blocks = new List<DocBlock>
+        {
+            Block("Package Title"),
+            Block("Розминочне питання"),  // Not bold - just header text!
+            Block("Тур 1"),
+            Block("1. Regular question"),
+            Block("Відповідь: Answer 1")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Only one tour (Тур 1), no implicit warmup because label wasn't bold
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].IsWarmup.Should().BeFalse();
+        result.Tours[0].Number.Should().Be("1");
+        result.Tours[0].Questions.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Parse_BoldWarmupQuestionLabelAfterTour_DoesNotCreateWarmupTour()
+    {
+        // Arrange - Bold label but AFTER a tour already exists
+        var blocks = new List<DocBlock>
+        {
+            Block("Package Title"),
+            Block("Тур 1"),
+            Block("1. First question"),
+            Block("Відповідь: Answer 1"),
+            BoldBlock("Розминочне питання"),  // Bold but after tour - should be ignored
+            Block("Some text"),
+            Block("Тур 2"),
+            Block("2. Second question"),
+            Block("Відповідь: Answer 2")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Two regular tours, no warmup
+        result.Tours.Should().HaveCount(2);
+        result.Tours[0].IsWarmup.Should().BeFalse();
+        result.Tours[1].IsWarmup.Should().BeFalse();
+    }
+
+    #endregion
+
     #region Helpers
 
     private static DocBlock Block(string text, int index = 0) => new()
@@ -2142,6 +2292,16 @@ public class PackageParserTests
         Index = 0,
         Text = text,
         Assets = assets
+    };
+
+    /// <summary>
+    /// Creates a bold DocBlock.
+    /// </summary>
+    private static DocBlock BoldBlock(string text, int index = 0) => new()
+    {
+        Index = index,
+        Text = text,
+        IsBold = true
     };
 
     /// <summary>
