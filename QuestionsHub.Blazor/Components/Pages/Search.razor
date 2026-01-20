@@ -87,6 +87,14 @@
                                     </div>
                                 }
 
+                                @if (!string.IsNullOrEmpty(result.HandoutUrl))
+                                {
+                                    <div class="handout mb-3">
+                                        <strong>Роздатковий матеріал:</strong>
+                                        <MediaDisplay Url="@result.HandoutUrl" Alt="Handout" />
+                                    </div>
+                                }
+
                                 @* Full question text *@
                                 <div class="question-text mb-3">
                                     @Sanitize(result.TextHighlighted, result.Text, _searchedQuery)
