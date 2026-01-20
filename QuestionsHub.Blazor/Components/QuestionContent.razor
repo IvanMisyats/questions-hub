@@ -74,11 +74,7 @@
     @if (ShowAuthors && Question.Authors.Any())
     {
         <div class="answer-field">
-            <span class="answer-label">Автор(и):</span>
-            @foreach (var (author, index) in Question.Authors.Select((a, i) => (a, i)))
-            {
-                <text> </text><a href="/editor/@author.Id">@author.FullName</a>@(index < Question.Authors.Count - 1 ? "," : "")
-            }
+            <span class="answer-label">Автор(и):</span> <span class="authors-list">@foreach (var (author, index) in Question.Authors.Select((a, i) => (a, i))){<a href="/editor/@author.Id">@author.FullName</a>@(index < Question.Authors.Count - 1 ? ", " : "")}</span>
         </div>
     }
 </div>

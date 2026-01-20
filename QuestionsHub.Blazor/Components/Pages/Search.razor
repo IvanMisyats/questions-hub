@@ -145,11 +145,7 @@
                                     @if (!string.IsNullOrEmpty(result.Authors))
                                     {
                                         <div class="answer-field">
-                                            <span class="answer-label">Автор(и):</span>
-                                            @foreach (var (authorId, authorName, isLast) in ParseAuthors(result.Authors))
-                                            {
-                                                <text> </text><a href="/editor/@authorId">@authorName</a>@(isLast ? "" : ",")
-                                            }
+                                            <span class="answer-label">Автор(и):</span> <span class="authors-list">@foreach (var (authorId, authorName, isLast) in ParseAuthors(result.Authors)){<a href="/editor/@authorId">@authorName</a>@(isLast ? "" : ", ")}</span>
                                         </div>
                                     }
                                 </div>
