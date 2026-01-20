@@ -127,6 +127,14 @@
                                         </div>
                                     }
 
+                                    @if (!string.IsNullOrEmpty(result.CommentAttachmentUrl))
+                                    {
+                                        <div class="answer-field">
+                                            <span class="answer-label">Матеріал до коментаря:</span>
+                                            <MediaDisplay Url="@result.CommentAttachmentUrl" Alt="Comment attachment" />
+                                        </div>
+                                    }
+
                                     @if (!string.IsNullOrEmpty(result.Source))
                                     {
                                         <div class="answer-field source-field">
