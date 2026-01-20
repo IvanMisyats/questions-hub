@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 
@@ -22,6 +22,7 @@ public record SearchResult(
     string? AcceptedAnswers,
     string? RejectedAnswers,
     string? Comment,
+    string? CommentUrl,
     string? Source,
     string TextHighlighted,
     string AnswerHighlighted,
@@ -89,57 +90,58 @@ public class SearchService
                         public.qh_normalize({query}) AS qnorm
                 )
                 SELECT
-                    qu.""Id"" AS ""QuestionId"",
-                    qu.""TourId"",
-                    t.""PackageId"",
-                    p.""Title"" AS ""PackageTitle"",
-                    t.""Number"" AS ""TourNumber"",
-                    qu.""Number"" AS ""QuestionNumber"",
-                    qu.""Text"",
-                    qu.""Answer"",
-                    qu.""HandoutText"",
-                    qu.""HandoutUrl"",
-                    qu.""AcceptedAnswers"",
-                    qu.""RejectedAnswers"",
-                    qu.""Comment"",
-                    qu.""Source"",
-                    ts_headline('ukrainian', COALESCE(qu.""Text"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""TextHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""Answer"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""AnswerHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""HandoutText"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""HandoutTextHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""AcceptedAnswers"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""AcceptedAnswersHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""RejectedAnswers"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""RejectedAnswersHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""Comment"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""CommentHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""Source"", ''), q.tsq,
-                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""SourceHighlighted"",
-                    (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) +
-                     COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank"",
-                    (SELECT string_agg(a.""Id""::text || ':' || a.""FirstName"" || ' ' || a.""LastName"", '|' ORDER BY a.""LastName"", a.""FirstName"")
-                     FROM ""QuestionAuthors"" qa
-                     JOIN ""Authors"" a ON qa.""AuthorsId"" = a.""Id""
-                     WHERE qa.""QuestionsId"" = qu.""Id"") AS ""Authors""
-                FROM ""Questions"" qu
-                JOIN ""Tours"" t ON qu.""TourId"" = t.""Id""
-                JOIN ""Packages"" p ON t.""PackageId"" = p.""Id""
+                    qu."Id" AS "QuestionId",
+                    qu."TourId",
+                    t."PackageId",
+                    p."Title" AS "PackageTitle",
+                    t."Number" AS "TourNumber",
+                    qu."Number" AS "QuestionNumber",
+                    qu."Text",
+                    qu."Answer",
+                    qu."HandoutText",
+                    qu."HandoutUrl",
+                    qu."AcceptedAnswers",
+                    qu."RejectedAnswers",
+                    qu."Comment",
+                    qu."CommentUrl",
+                    qu."Source",
+                    ts_headline('ukrainian', COALESCE(qu."Text", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "TextHighlighted",
+                    ts_headline('ukrainian', COALESCE(qu."Answer", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "AnswerHighlighted",
+                    ts_headline('ukrainian', COALESCE(qu."HandoutText", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "HandoutTextHighlighted",
+                    ts_headline('ukrainian', COALESCE(qu."AcceptedAnswers", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "AcceptedAnswersHighlighted",
+                    ts_headline('ukrainian', COALESCE(qu."RejectedAnswers", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "RejectedAnswersHighlighted",
+                    ts_headline('ukrainian', COALESCE(qu."Comment", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "CommentHighlighted",
+                    ts_headline('ukrainian', COALESCE(qu."Source", ''), q.tsq,
+                        'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS "SourceHighlighted",
+                    (COALESCE(ts_rank_cd(qu."SearchVector", q.tsq), 0) +
+                     COALESCE(similarity(qu."SearchTextNorm", q.qnorm), 0))::float8 AS "Rank",
+                    (SELECT string_agg(a."Id"::text || ':' || a."FirstName" || ' ' || a."LastName", '|' ORDER BY a."LastName", a."FirstName")
+                     FROM "QuestionAuthors" qa
+                     JOIN "Authors" a ON qa."AuthorsId" = a."Id"
+                     WHERE qa."QuestionsId" = qu."Id") AS "Authors"
+                FROM "Questions" qu
+                JOIN "Tours" t ON qu."TourId" = t."Id"
+                JOIN "Packages" p ON t."PackageId" = p."Id"
                 CROSS JOIN q
-                WHERE p.""Status"" = 1
+                WHERE p."Status" = 1
                   AND (
-                       qu.""SearchVector"" @@ q.tsq
-                       OR qu.""SearchTextNorm"" % q.qnorm
+                       qu."SearchVector" @@ q.tsq
+                       OR qu."SearchTextNorm" % q.qnorm
                   )
                   AND (
                        {isAdmin} = true
-                       OR p.""OwnerId"" = {userId}
-                       OR p.""AccessLevel"" = 0
-                       OR (p.""AccessLevel"" = 1 AND {hasVerifiedEmail} = true)
-                       OR (p.""AccessLevel"" = 2 AND {isEditor} = true)
+                       OR p."OwnerId" = {userId}
+                       OR p."AccessLevel" = 0
+                       OR (p."AccessLevel" = 1 AND {hasVerifiedEmail} = true)
+                       OR (p."AccessLevel" = 2 AND {isEditor} = true)
                   )
-                ORDER BY ""Rank"" DESC
+                ORDER BY "Rank" DESC
                 LIMIT {limit}
             ")
             .ToListAsync(cancellationToken);
@@ -149,4 +151,3 @@ public class SearchService
         return results;
     }
 }
-
