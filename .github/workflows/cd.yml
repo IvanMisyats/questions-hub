@@ -88,17 +88,17 @@ jobs:
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
             # Create required directories
-            mkdir -p ~/questions-hub/data/postgres
-            mkdir -p ~/questions-hub/uploads/handouts
-            mkdir -p ~/questions-hub/uploads/packages
-            mkdir -p ~/questions-hub/keys
+            mkdir -p "$POSTGRES_DATA_PATH" \
+                     "$UPLOADS_PATH/handouts" \
+                     "$UPLOADS_PATH/packages" \
+                     "$UPLOADS_PATH/jobs" \
+                     "$KEYS_PATH"
 
-            # Set permissions for uploads directory (must be writable by container)
-            # Container runs as root, so just ensure directories are accessible
-            chmod -R 755 ~/questions-hub/uploads
+            # Set directory permissions only (don't recurse into files to avoid errors on root-owned files)
+            chmod 755 "$UPLOADS_PATH" "$UPLOADS_PATH/handouts" "$UPLOADS_PATH/packages" "$UPLOADS_PATH/jobs"
 
             # Set secure permissions for keys directory (readable/writable only by owner)
-            chmod 700 ~/questions-hub/keys
+            chmod 700 "$KEYS_PATH"
 
             # Stop existing containers (if any)
             docker compose --profile production down 2>/dev/null || true
