@@ -5,6 +5,7 @@
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
+@using QuestionsHub.Blazor.Utils
 @attribute [Authorize(Roles = "Editor,Admin")]
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
@@ -74,7 +75,7 @@
                                     @package.Title
                                 </a>
                             </td>
-                            <td>@(package.PlayedAt?.ToString("dd.MM.yyyy") ?? "—")</td>
+                            <td>@(PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo) is var period && !string.IsNullOrEmpty(period) ? period : "—")</td>
                             <td>@package.TourCount</td>
                             <td>@package.QuestionCount</td>
                             <td>
@@ -137,7 +138,8 @@
     private record PackageListItem(
         int Id,
         string Title,
-        DateOnly? PlayedAt,
+        DateOnly? PlayedFrom,
+        DateOnly? PlayedTo,
         int TourCount,
         int QuestionCount,
         PackageStatus Status,
@@ -202,7 +204,8 @@
                 .Select(p => new PackageListItem(
                     p.Id,
                     p.Title,
-                    p.PlayedAt,
+                    p.PlayedFrom,
+                    p.PlayedTo,
                     p.Tours.Count,
                     p.TotalQuestions,
                     p.Status,
@@ -233,7 +236,8 @@
             {
                 Title = "Новий пакет",
                 Description = null,
-                PlayedAt = null,
+                PlayedFrom = null,
+                PlayedTo = null,
                 Status = PackageStatus.Draft,
                 OwnerId = _userId,
                 TotalQuestions = 0

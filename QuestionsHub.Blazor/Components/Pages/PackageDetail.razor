@@ -1,9 +1,10 @@
-﻿@page "/package/{Id:int}"
+@page "/package/{Id:int}"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
+@using QuestionsHub.Blazor.Utils
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
 
@@ -72,10 +73,11 @@ else
                         </p>
                     }
 
-                    @if (_package.PlayedAt.HasValue)
+                    @{ var playedPeriod = PlayedPeriodFormatter.Format(_package.PlayedFrom, _package.PlayedTo); }
+                    @if (!string.IsNullOrEmpty(playedPeriod))
                     {
                         <p>
-                            <strong>Зіграно:</strong> @_package.PlayedAt.Value.ToString("MMMM yyyy")
+                            <strong>Зіграно:</strong> @playedPeriod
                         </p>
                     }
                 </div>

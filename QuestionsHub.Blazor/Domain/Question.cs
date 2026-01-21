@@ -144,8 +144,11 @@ public class Package
     /// <summary>Package title.</summary>
     public required string Title { get; set; }
 
-    /// <summary>Date when the package was played.</summary>
-    public DateOnly? PlayedAt { get; set; }
+    /// <summary>Start date when the package was played (or single date for one-day events).</summary>
+    public DateOnly? PlayedFrom { get; set; }
+
+    /// <summary>End date when the package was played (null for single-day events).</summary>
+    public DateOnly? PlayedTo { get; set; }
 
     /// <summary>Package description or notes.</summary>
     public string? Description { get; set; }

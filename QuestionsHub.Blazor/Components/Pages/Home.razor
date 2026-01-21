@@ -4,6 +4,7 @@
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
+@using QuestionsHub.Blazor.Utils
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
 <PageTitle>База українських запитань Що?Де?Коли?</PageTitle>
@@ -32,9 +33,10 @@
                                 <p class="card-text text-muted mb-2">
                                     <small>
                                         <strong>@GetQuestionsCount(package)</strong> запитань
-                                        @if (package.PlayedAt.HasValue)
+                                        @{ var playedPeriod = PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo); }
+                                        @if (!string.IsNullOrEmpty(playedPeriod))
                                         {
-                                            <span> · @package.PlayedAt.Value.ToString("MMMM yyyy")</span>
+                                            <span> · @playedPeriod</span>
                                         }
                                     </small>
                                 </p>

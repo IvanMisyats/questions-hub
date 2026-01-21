@@ -67,11 +67,17 @@
                         <input type="text" class="form-control" id="packageTitle"
                                @bind="_package.Title" @onblur="SavePackageAsync" />
                     </div>
-                    <div class="col-md-4">
-                        <label for="packagePlayedAt" class="form-label">Дата проведення</label>
-                        <input type="date" class="form-control" id="packagePlayedAt" lang="uk"
-                               value="@(_package.PlayedAt?.ToString("yyyy-MM-dd"))"
-                               @onchange="OnPlayedAtChanged" @onblur="SavePackageAsync" />
+                    <div class="col-md-2">
+                        <label for="packagePlayedFrom" class="form-label">Початок</label>
+                        <input type="date" class="form-control" id="packagePlayedFrom" lang="uk"
+                               value="@(_package.PlayedFrom?.ToString("yyyy-MM-dd"))"
+                               @onchange="OnPlayedFromChanged" @onblur="SavePackageAsync" />
+                    </div>
+                    <div class="col-md-2">
+                        <label for="packagePlayedTo" class="form-label">Завершення</label>
+                        <input type="date" class="form-control" id="packagePlayedTo" lang="uk"
+                               value="@(_package.PlayedTo?.ToString("yyyy-MM-dd"))"
+                               @onchange="OnPlayedToChanged" @onblur="SavePackageAsync" />
                     </div>
                     <div class="col-12">
                         <label for="packageDescription" class="form-label">Опис</label>
@@ -1369,7 +1375,8 @@
                 {
                     Title = "Новий пакет",
                     Description = null,
-                    PlayedAt = null,
+                    PlayedFrom = null,
+                    PlayedTo = null,
                     Status = PackageStatus.Draft,
                     OwnerId = _userId,
                     TotalQuestions = 0,
@@ -1449,7 +1456,8 @@
                 dbPackage.Title = _package.Title;
                 dbPackage.Description = _package.Description;
                 dbPackage.Preamble = _package.Preamble;
-                dbPackage.PlayedAt = _package.PlayedAt;
+                dbPackage.PlayedFrom = _package.PlayedFrom;
+                dbPackage.PlayedTo = _package.PlayedTo;
                 dbPackage.Status = _package.Status;
                 dbPackage.AccessLevel = _package.AccessLevel;
                 await context.SaveChangesAsync();
@@ -1467,15 +1475,27 @@
         }
     }
 
-    private void OnPlayedAtChanged(ChangeEventArgs e)
+    private void OnPlayedFromChanged(ChangeEventArgs e)
     {
         if (DateOnly.TryParse(e.Value?.ToString(), out var date))
         {
-            _package!.PlayedAt = date;
+            _package!.PlayedFrom = date;
         }
         else
         {
-            _package!.PlayedAt = null;
+            _package!.PlayedFrom = null;
+        }
+    }
+
+    private void OnPlayedToChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var date))
+        {
+            _package!.PlayedTo = date;
+        }
+        else
+        {
+            _package!.PlayedTo = null;
         }
     }
 
