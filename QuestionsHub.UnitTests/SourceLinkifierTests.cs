@@ -112,34 +112,6 @@ public class SourceLinkifierTests
     }
 
     [Fact]
-    public void Linkify_TextWithMarkTags_PreservesHighlights()
-    {
-        // Arrange - mark tags within the URL text (not breaking the URL structure)
-        var text = "Source: example.com/<mark>page</mark>";
-
-        // Act
-        var result = SourceLinkifier.Linkify(text);
-
-        // Assert
-        result.Value.Should().Contain("<mark>page</mark>");
-        result.Value.Should().Contain("<a href=");
-    }
-
-    [Fact]
-    public void Linkify_MarkTagsBreakingUrl_DoesNotLinkify()
-    {
-        // Arrange - mark tags break the URL structure
-        var text = "Source: <mark>example</mark>.com/page";
-
-        // Act
-        var result = SourceLinkifier.Linkify(text);
-
-        // Assert - URL is broken by mark tags, so it shouldn't be linkified
-        result.Value.Should().Contain("<mark>example</mark>");
-        result.Value.Should().NotContain("<a href=");
-    }
-
-    [Fact]
     public void Linkify_MaliciousHtml_EscapesHtml()
     {
         // Arrange
@@ -235,5 +207,83 @@ public class SourceLinkifierTests
         // Assert - localhost URLs without TLD are not linkified
         result.Value.Should().NotContain("<a href=");
         result.Value.Should().Be("http://localhost:8080/api/test");
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_PreservesEncodedCharacters()
+    {
+        // Arrange - simulate sanitized HTML from HighlightSanitizer with Ukrainian quotation marks
+        var inputHtml = "1. Гейлі А. &#171;Готель&#187;, Харків, &#171;Клуб Сімейного Дозвілля&#187;, 2017<br/>2. https://ru.wikipedia.org/wiki/Матч_с_гробом";
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(inputHtml);
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert - encoded characters should NOT be double-encoded
+        result.Value.Should().Contain("&#171;Готель&#187;");
+        result.Value.Should().NotContain("&amp;#171;");
+        
+        // Assert - URL should be linkified
+        var expectedLink = "<a href=\"https://ru.wikipedia.org/wiki/Матч_с_гробом\" target=\"_blank\" rel=\"noopener noreferrer\">https://ru.wikipedia.org/wiki/Матч_с_гробом</a>";
+        result.Value.Should().Contain(expectedLink);
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_PreservesMarkTags()
+    {
+        // Arrange - sanitized HTML with search highlights
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
+            "Source with <mark>highlighted</mark> text and https://example.com link");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert - mark tags should be preserved
+        result.Value.Should().Contain("<mark>highlighted</mark>");
+        result.Value.Should().Contain("<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">https://example.com</a>");
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_PreservesLineBreaks()
+    {
+        // Arrange - sanitized HTML with line breaks (both <br/> and <br>)
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
+            "First line<br/>Second line with https://example.com<br>Third line");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert - line breaks should be preserved
+        result.Value.Should().Contain("<br/>");
+        result.Value.Should().Contain("First line<br/>Second line");
+        result.Value.Should().Contain("Third line");
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_EmptyString_ReturnsEmpty()
+    {
+        // Arrange
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString("");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert
+        result.Value.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_WithMultipleUrls_LinkifiesAll()
+    {
+        // Arrange - sanitized HTML with multiple URLs
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
+            "Visit https://example.com and https://test.org for more info");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert - both URLs should be linkified
+        result.Value.Should().Contain("<a href=\"https://example.com\"");
+        result.Value.Should().Contain("<a href=\"https://test.org\"");
     }
 }
