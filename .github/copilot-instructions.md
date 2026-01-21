@@ -43,6 +43,12 @@ Refer to README.md for the complete technology stack. The project uses:
 - Follow Blazor component best practices
 - Keep components modular and reusable
 - Use proper lifecycle methods and state management
+- **Prefer client-side JavaScript over Blazor server roundtrips** for:
+  - UI-only interactions (focus, scroll, clipboard, DOM manipulation)
+  - Form field pre-filling and validation feedback
+  - Any logic that doesn't require server data
+- Extract reusable JS functions to `/wwwroot/*.js` files instead of inline scripts
+- Use `@onchange` with server roundtrip only when data must be persisted or validated server-side
 
 ### Database
 
