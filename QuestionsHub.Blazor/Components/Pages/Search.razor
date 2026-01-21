@@ -139,7 +139,7 @@
                                     @if (!string.IsNullOrEmpty(result.Source))
                                     {
                                         <div class="answer-field source-field">
-                                            <span class="answer-label">Джерело:</span> @Linkify(Sanitize(result.SourceHighlighted, result.Source, _searchedQuery).Value)
+                                            <span class="answer-label">Джерело:</span> @Linkify(Sanitize(result.SourceHighlighted, result.Source, _searchedQuery))
                                         </div>
                                     }
 
