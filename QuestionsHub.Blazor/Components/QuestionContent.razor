@@ -67,7 +67,7 @@
     @if (!string.IsNullOrEmpty(Question.Source))
     {
         <div class="answer-field source-field">
-            <span class="answer-label">Джерело:</span> @Question.Source
+            <span class="answer-label">Джерело:</span> @SourceLinkifier.Linkify(Question.Source)
         </div>
     }
 

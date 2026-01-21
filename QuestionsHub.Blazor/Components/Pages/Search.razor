@@ -2,6 +2,7 @@
 @page "/search/{Query}"
 @using QuestionsHub.Blazor.Infrastructure
 @using static QuestionsHub.Blazor.Infrastructure.HighlightSanitizer
+@using static QuestionsHub.Blazor.Infrastructure.SourceLinkifier
 @inject SearchService SearchService
 @inject AccessControlService AccessControl
 @inject NavigationManager Navigation
@@ -138,7 +139,7 @@
                                     @if (!string.IsNullOrEmpty(result.Source))
                                     {
                                         <div class="answer-field source-field">
-                                            <span class="answer-label">Джерело:</span> @Sanitize(result.SourceHighlighted, result.Source, _searchedQuery)
+                                            <span class="answer-label">Джерело:</span> @Linkify(Sanitize(result.SourceHighlighted, result.Source, _searchedQuery).Value)
                                         </div>
                                     }
 
