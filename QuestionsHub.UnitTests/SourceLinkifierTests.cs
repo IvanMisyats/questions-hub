@@ -240,9 +240,9 @@ public class SourceLinkifierTests
     [Fact]
     public void Linkify_MarkupString_PreservesEncodedCharacters()
     {
-        // Arrange - simulate sanitized HTML from HighlightSanitizer
-        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
-            "1. Гейлі А. &#171;Готель&#187;, Харків, &#171;Клуб Сімейного Дозвілля&#187;, 2017<br/>2. https://ru.wikipedia.org/wiki/Матч_с_гробом");
+        // Arrange - simulate sanitized HTML from HighlightSanitizer with Ukrainian quotation marks
+        var inputHtml = "1. Гейлі А. &#171;Готель&#187;, Харків, &#171;Клуб Сімейного Дозвілля&#187;, 2017<br/>2. https://ru.wikipedia.org/wiki/Матч_с_гробом";
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(inputHtml);
 
         // Act
         var result = SourceLinkifier.Linkify(sanitizedHtml);
@@ -250,7 +250,10 @@ public class SourceLinkifierTests
         // Assert - encoded characters should NOT be double-encoded
         result.Value.Should().Contain("&#171;Готель&#187;");
         result.Value.Should().NotContain("&amp;#171;");
-        result.Value.Should().Contain("<a href=\"https://ru.wikipedia.org/wiki/Матч_с_гробом\" target=\"_blank\" rel=\"noopener noreferrer\">https://ru.wikipedia.org/wiki/Матч_с_гробом</a>");
+        
+        // Assert - URL should be linkified
+        var expectedLink = "<a href=\"https://ru.wikipedia.org/wiki/Матч_с_гробом\" target=\"_blank\" rel=\"noopener noreferrer\">https://ru.wikipedia.org/wiki/Матч_с_гробом</a>";
+        result.Value.Should().Contain(expectedLink);
     }
 
     [Fact]
@@ -271,9 +274,9 @@ public class SourceLinkifierTests
     [Fact]
     public void Linkify_MarkupString_PreservesLineBreaks()
     {
-        // Arrange - sanitized HTML with line breaks
+        // Arrange - sanitized HTML with line breaks (both <br/> and <br>)
         var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
-            "First line<br/>Second line with https://example.com");
+            "First line<br/>Second line with https://example.com<br>Third line");
 
         // Act
         var result = SourceLinkifier.Linkify(sanitizedHtml);
@@ -281,6 +284,7 @@ public class SourceLinkifierTests
         // Assert - line breaks should be preserved
         result.Value.Should().Contain("<br/>");
         result.Value.Should().Contain("First line<br/>Second line");
+        result.Value.Should().Contain("Third line");
     }
 
     [Fact]

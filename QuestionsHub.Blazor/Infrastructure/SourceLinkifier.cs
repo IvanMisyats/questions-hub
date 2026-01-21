@@ -83,8 +83,8 @@ public static partial class SourceLinkifier
             .Replace("<mark>", MarkOpenPlaceholder)
             .Replace("</mark>", MarkClosePlaceholder);
 
-        // Step 2: Replace <br/> tags with placeholders to preserve them
-        result = result.Replace("<br/>", "\n");
+        // Step 2: Replace <br/> and <br> tags with newlines to preserve them
+        result = result.Replace("<br/>", "\n").Replace("<br>", "\n");
 
         // Step 3: Detect and wrap URLs with placeholders
         // Note: URLs in already-encoded HTML will have HTML entities, so we need to handle that
