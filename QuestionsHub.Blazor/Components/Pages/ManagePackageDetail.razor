@@ -76,7 +76,9 @@
                     <div class="col-md-2">
                         <label for="packagePlayedTo" class="form-label">Завершення</label>
                         <input type="date" class="form-control" id="packagePlayedTo" lang="uk"
+                               min="@(_package.PlayedFrom?.ToString("yyyy-MM-dd"))"
                                value="@(_package.PlayedTo?.ToString("yyyy-MM-dd"))"
+                               onfocus="prefillDateFrom('packagePlayedTo','packagePlayedFrom')"
                                @onchange="OnPlayedToChanged" @onblur="SavePackageAsync" />
                     </div>
                     <div class="col-12">

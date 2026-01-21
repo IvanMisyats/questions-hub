@@ -1,14 +1,14 @@
-﻿// Handle smooth scrolling for anchor links in Blazor interactive mode
+// Handle smooth scrolling for anchor links in Blazor interactive mode
 window.scrollToElement = function(elementId) {
     console.log('scrollToElement called with:', elementId);
     const element = document.getElementById(elementId);
     if (element) {
         console.log('Element found:', element);
-        
+
         // Get element position and add offset for fixed header/better spacing
         const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
         const offsetPosition = elementPosition - 100; // 100px offset for navbar and better spacing
-        
+
         window.scrollTo({
             top: offsetPosition,
             behavior: 'smooth'
@@ -31,7 +31,7 @@ window.copyToClipboard = async function(text) {
             console.error('Clipboard API failed:', err);
         }
     }
-    
+
     // Fallback for older browsers or non-HTTPS contexts
     const textArea = document.createElement('textarea');
     textArea.value = text;
@@ -41,7 +41,7 @@ window.copyToClipboard = async function(text) {
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    
+
     try {
         document.execCommand('copy');
         textArea.remove();
@@ -53,3 +53,11 @@ window.copyToClipboard = async function(text) {
     }
 };
 
+// Pre-fill a date input with value from another date input when empty
+window.prefillDateFrom = function(targetId, sourceId) {
+    const target = document.getElementById(targetId);
+    const source = document.getElementById(sourceId);
+    if (target && source && !target.value && source.value) {
+        target.value = source.value;
+    }
+};
