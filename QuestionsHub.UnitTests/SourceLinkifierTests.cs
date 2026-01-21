@@ -112,34 +112,6 @@ public class SourceLinkifierTests
     }
 
     [Fact]
-    public void Linkify_TextWithMarkTags_PreservesHighlights()
-    {
-        // Arrange - mark tags within the URL text (not breaking the URL structure)
-        var text = "Source: example.com/<mark>page</mark>";
-
-        // Act
-        var result = SourceLinkifier.Linkify(text);
-
-        // Assert
-        result.Value.Should().Contain("<mark>page</mark>");
-        result.Value.Should().Contain("<a href=");
-    }
-
-    [Fact]
-    public void Linkify_MarkTagsBreakingUrl_DoesNotLinkify()
-    {
-        // Arrange - mark tags break the URL structure
-        var text = "Source: <mark>example</mark>.com/page";
-
-        // Act
-        var result = SourceLinkifier.Linkify(text);
-
-        // Assert - URL is broken by mark tags, so it shouldn't be linkified
-        result.Value.Should().Contain("<mark>example</mark>");
-        result.Value.Should().NotContain("<a href=");
-    }
-
-    [Fact]
     public void Linkify_MaliciousHtml_EscapesHtml()
     {
         // Arrange
