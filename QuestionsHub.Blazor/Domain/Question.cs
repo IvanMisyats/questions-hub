@@ -171,6 +171,9 @@ public class Package
     /// <summary>When true, all tours share the same editors defined at package level.</summary>
     public bool SharedEditors { get; set; }
 
+    /// <summary>Date and time when the package was published (UTC).</summary>
+    public DateTime? PublicationDate { get; set; }
+
     /// <summary>The ID of the user who owns this package.</summary>
     public string? OwnerId { get; set; }
 

@@ -95,11 +95,31 @@
                     <div class="col-md-4">
                         <label for="packageStatus" class="form-label">Статус</label>
                         <select class="form-select" id="packageStatus"
-                                @bind="_package.Status" @onblur="SavePackageAsync">
+                                value="@_package.Status"
+                                @onchange="OnStatusChanged">
                             <option value="@PackageStatus.Draft">Чернетка</option>
                             <option value="@PackageStatus.Published">Опубліковано</option>
                             <option value="@PackageStatus.Archived">Архів</option>
                         </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="packagePublicationDate" class="form-label">Дата публікації</label>
+                        @if (_package.Status == PackageStatus.Published)
+                        {
+                            <input type="datetime-local" class="form-control" id="packagePublicationDate"
+                                   value="@(_package.PublicationDate?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm"))"
+                                   @onchange="OnPublicationDateChanged" />
+                        }
+                        else if (_package.PublicationDate.HasValue)
+                        {
+                            <input type="text" class="form-control" id="packagePublicationDate" readonly
+                                   value="@_package.PublicationDate.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")" />
+                        }
+                        else
+                        {
+                            <input type="text" class="form-control" id="packagePublicationDate" readonly
+                                   value="" placeholder="—" />
+                        }
                     </div>
                     <div class="col-md-4">
                         <label for="packageAccessLevel" class="form-label">Доступ</label>
@@ -1634,6 +1654,72 @@
         else
         {
             _package!.PlayedTo = null;
+        }
+    }
+
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        if (_package == null) return;
+
+        if (Enum.TryParse<PackageStatus>(e.Value?.ToString(), out var newStatus))
+        {
+            var wasPublished = _package.Status == PackageStatus.Published;
+            _package.Status = newStatus;
+
+            // Auto-set publication date when publishing for the first time
+            if (newStatus == PackageStatus.Published && !_package.PublicationDate.HasValue)
+            {
+                _package.PublicationDate = DateTime.UtcNow;
+            }
+
+            await SavePackageWithPublicationDateAsync();
+        }
+    }
+
+    private async Task OnPublicationDateChanged(ChangeEventArgs e)
+    {
+        if (_package == null) return;
+
+        if (DateTime.TryParse(e.Value?.ToString(), out var localDate))
+        {
+            _package.PublicationDate = localDate.ToUniversalTime();
+        }
+        else
+        {
+            _package.PublicationDate = null;
+        }
+
+        await SavePackageWithPublicationDateAsync();
+    }
+
+    private async Task SavePackageWithPublicationDateAsync()
+    {
+        if (_package == null) return;
+
+        _isSaving = true;
+        _saveStatus = "Збереження...";
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbPackage = await context.Packages.FindAsync(_package.Id);
+            if (dbPackage != null)
+            {
+                dbPackage.Status = _package.Status;
+                dbPackage.PublicationDate = _package.PublicationDate;
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
         }
     }
 

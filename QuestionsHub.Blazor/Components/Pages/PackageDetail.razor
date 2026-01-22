@@ -80,6 +80,13 @@ else
                             <strong>Зіграно:</strong> @playedPeriod
                         </p>
                     }
+
+                    @if (_package.PublicationDate.HasValue)
+                    {
+                        <p>
+                            <strong>Дата публікації:</strong> <span data-utc="@_package.PublicationDate.Value.ToString("o")"></span>
+                        </p>
+                    }
                 </div>
 
                 <hr class="my-4" />

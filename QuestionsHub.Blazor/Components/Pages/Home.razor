@@ -40,6 +40,14 @@
                                         }
                                     </small>
                                 </p>
+                                @if (package.PublicationDate.HasValue)
+                                {
+                                    <p class="card-text text-muted mb-2">
+                                        <small>
+                                            <strong>Опубліковано:</strong> <span data-utc="@package.PublicationDate.Value.ToString("o")"></span>
+                                        </small>
+                                    </p>
+                                }
                                 @if (!string.IsNullOrEmpty(package.Description))
                                 {
                                     <p class="card-text small">@package.Description</p>
