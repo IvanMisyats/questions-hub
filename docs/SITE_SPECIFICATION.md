@@ -14,7 +14,7 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: January 17, 2026
+**Last Updated**: January 22, 2026
 
 ---
 
@@ -40,7 +40,9 @@
   - Has AccessLevel: All (default), RegisteredOnly, or EditorsOnly - controls who can view the package
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
   - Has NumberingMode: Global (sequential across package), PerTour (restart at 1 each tour), or Manual (user-controlled)
-  - Editors are computed from all tour editors/blocks (not stored directly)
+  - Has SharedEditors flag: when true, editors are defined at package level; when false, computed from tour/block editors
+  - Has optional PackageEditors (many-to-many with Authors) - used when SharedEditors is true
+  - Editors property returns PackageEditors when SharedEditors is true, otherwise computed from all tour/block editors
 - **Tour (Тур)** - A round within a package, typically prepared by a specific editor
   - Has OrderIndex for ordering within package (0-based, source of truth for order)
   - Has Number for display (e.g., "1", "2", "0" for warmup)
@@ -186,13 +188,17 @@ Single-page editor for complete package management:
   - **Global (Наскрізна)** - Questions numbered sequentially across all main tours (1, 2, 3...)
   - **PerTour (Потурова)** - Questions numbered starting from 1 in each tour
   - **Manual (Ручна)** - Question numbers are not auto-assigned; user can edit them directly
-- Editors list displayed as read-only (computed from all tour editors)
+- **Shared Editors** - "Спільні редактори для всіх турів" checkbox:
+  - **Disabled (default)** - Each tour/block has its own editors; package editors are computed from all tour/block editors and displayed as read-only
+  - **Enabled** - All tours share the same editors; editable AuthorSelector at package level; tour-level editor selectors are hidden
+  - When switching to enabled mode, existing tour/block editors are automatically copied to package editors
 - Auto-save on field blur
 
 **Tours Management**:
 - Collapsible accordion showing all tours, ordered by OrderIndex
 - **Warmup checkbox** - Mark a tour as warmup (at most one per package, auto-moved to first position)
-- Inline editing of tour editors (via AuthorSelector component)
+- Inline editing of tour editors (via AuthorSelector component) - hidden when SharedEditors is enabled
+- When SharedEditors is enabled, tours display "(спільні для пакету)" instead of individual editors
 - Tour numbers are auto-assigned: warmup gets "0", main tours get 1, 2, 3...
 - Add/delete tours with confirmation
 - Drag & drop reordering of tours (updates OrderIndex, triggers renumbering)
@@ -278,6 +284,11 @@ Displays all Authors in the system, ranked by number of questions (descending).
 **Authorization**: Public (no authentication required)
 
 Displays detailed information about an author including their packages and questions.
+
+**Package List Display**:
+- Shows packages where the author is an editor
+- For packages with **SharedEditors enabled** (global editors): shows only the package name
+- For packages with **SharedEditors disabled** (per-tour editors): shows "Package Name → Тур 1 | Тур 2..." with links to specific tours/blocks where the author is editor
 
 **Content Visibility**: Only packages and questions from **published packages** are displayed. Content from Draft and Archived packages is hidden to protect unpublished work. See [AUTHENTICATION.md](AUTHENTICATION.md#package-access-control) for details.
 
