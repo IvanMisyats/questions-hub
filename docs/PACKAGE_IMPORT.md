@@ -153,6 +153,18 @@ Questions are detected by patterns like:
 - `Питання 1.`
 - `Запитання 1.`
 
+### Text Normalization
+
+During parsing, certain text normalization is applied:
+
+| Character | Replacement | Applies To |
+|-----------|-------------|------------|
+| Non-breaking space (U+00A0) | Regular space | All text |
+| En dash (–), Em dash (—) | Hyphen (-) | All text |
+| Combining acute accent (U+0301) | Removed | **Author and Editor names only** |
+
+**Important:** Acute accent marks (stress marks) are **preserved** in question text, answers, comments, and all other fields. They are only stripped from author and editor names to ensure consistent matching in the database.
+
 ### Numbering Mode Detection
 
 The parser automatically detects the question numbering mode based on the question numbers in the document:

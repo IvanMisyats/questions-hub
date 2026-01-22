@@ -905,7 +905,6 @@ public class PackageParser
     {
         text = text.Replace('\u00A0', ' ');
         text = text.Replace('–', '-').Replace('—', '-');
-        text = text.Replace("\u0301", "");
         return text.Trim();
     }
 
@@ -1389,9 +1388,18 @@ public class PackageParser
         return text
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)
             .SelectMany(s => s.Split([" та ", " і ", " and "], StringSplitOptions.RemoveEmptyEntries))
-            .Select(s => s.Trim().TrimEnd('.', ',', ';'))
+            .Select(s => StripAccents(s.Trim().TrimEnd('.', ',', ';')))
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .ToList();
+    }
+
+    /// <summary>
+    /// Removes combining acute accent marks from text.
+    /// Used for author and editor names to ensure consistent matching.
+    /// </summary>
+    private static string StripAccents(string text)
+    {
+        return text.Replace("\u0301", "");
     }
 
     private static string AppendText(string? existing, string newText)

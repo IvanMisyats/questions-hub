@@ -2279,6 +2279,122 @@ public class PackageParserTests
 
     #endregion
 
+    #region Accent Handling
+
+    /// <summary>
+    /// Tests that combining acute accents (U+0301) are stripped from author names.
+    /// This ensures consistent author matching regardless of accent usage in source documents.
+    /// </summary>
+    [Fact]
+    public void Parse_AuthorWithAccent_StripsAccentFromName()
+    {
+        // Arrange - "Іва́н" has combining acute accent on 'а' (U+0301)
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Іва\u0301н Петре\u0301нко (Ки\u0301їв)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - accents should be stripped from author name
+        result.Tours[0].Questions[0].Authors.Should().Contain("Іван Петренко (Київ)");
+    }
+
+    /// <summary>
+    /// Tests that combining acute accents (U+0301) are stripped from editor names.
+    /// </summary>
+    [Fact]
+    public void Parse_EditorWithAccent_StripsAccentFromName()
+    {
+        // Arrange - Editor name with accent marks
+        var blocks = new List<DocBlock>
+        {
+            Block("Назва пакету"),
+            Block("Редактор: Марі\u0301я Ковале\u0301нко"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - accents should be stripped from editor name
+        result.Editors.Should().Contain("Марія Коваленко");
+    }
+
+    /// <summary>
+    /// Tests that combining acute accents (U+0301) are preserved in question text.
+    /// Accents in question text are intentional and should not be removed.
+    /// </summary>
+    [Fact]
+    public void Parse_QuestionTextWithAccent_PreservesAccent()
+    {
+        // Arrange - Question text with accent on stressed syllable
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. У сло\u0301ві 'за\u0301мок' наголос на першому складі."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - accents should be preserved in question text
+        result.Tours[0].Questions[0].Text.Should().Contain("сло\u0301ві");
+        result.Tours[0].Questions[0].Text.Should().Contain("за\u0301мок");
+    }
+
+    /// <summary>
+    /// Tests that combining acute accents are preserved in answer text.
+    /// </summary>
+    [Fact]
+    public void Parse_AnswerWithAccent_PreservesAccent()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: За\u0301мок")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - accent should be preserved in answer
+        result.Tours[0].Questions[0].Answer.Should().Be("За\u0301мок");
+    }
+
+    /// <summary>
+    /// Tests that combining acute accents are preserved in comments.
+    /// </summary>
+    [Fact]
+    public void Parse_CommentWithAccent_PreservesAccent()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Коментар: Наголос на сло\u0301ві важливий.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - accent should be preserved in comment
+        result.Tours[0].Questions[0].Comment.Should().Contain("сло\u0301ві");
+    }
+
+    #endregion
+
     #region Helpers
 
     private static DocBlock Block(string text, int index = 0) => new()
