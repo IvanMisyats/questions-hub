@@ -72,8 +72,8 @@ public class ParseResult
     /// <summary>Detected numbering mode for the package.</summary>
     public QuestionNumberingMode NumberingMode { get; set; } = QuestionNumberingMode.Global;
 
-    /// <summary>Total number of questions across all tours.</summary>
-    public int TotalQuestions => Tours.Sum(t => t.Questions.Count);
+    /// <summary>Total number of questions across all tours (including questions in blocks).</summary>
+    public int TotalQuestions => Tours.Sum(t => t.TotalQuestions);
 }
 
 /// <summary>
@@ -88,6 +88,28 @@ public class TourDto
 
     /// <summary>Whether this tour is a warmup tour.</summary>
     public bool IsWarmup { get; set; }
+
+    public List<string> Editors { get; set; } = [];
+    public string? Preamble { get; set; }
+    public List<QuestionDto> Questions { get; set; } = [];
+
+    /// <summary>Blocks within this tour (optional structure).</summary>
+    public List<BlockDto> Blocks { get; set; } = [];
+
+    /// <summary>Total questions in this tour (including questions in blocks).</summary>
+    public int TotalQuestions => Questions.Count + Blocks.Sum(b => b.Questions.Count);
+}
+
+/// <summary>
+/// Parsed block data. Blocks are optional subdivisions within a tour.
+/// </summary>
+public class BlockDto
+{
+    /// <summary>Block name (e.g., "1" for "Блок 1", or empty for just "Блок").</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Order index within the tour (0-based).</summary>
+    public int OrderIndex { get; set; }
 
     public List<string> Editors { get; set; } = [];
     public string? Preamble { get; set; }

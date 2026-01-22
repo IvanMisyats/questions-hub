@@ -208,6 +208,228 @@ public class PackageParserTests
 
     #endregion
 
+    #region Block Detection
+
+    [Theory]
+    [InlineData("Блок 1", "1")]
+    [InlineData("Блок 2", "2")]
+    [InlineData("  Блок 3  ", "3")]
+    [InlineData("Блок 1.", "1")]
+    [InlineData("Блок 2:", "2")]
+    public void Parse_BlockStart_DetectsBlock(string blockLine, string expectedName)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block(blockLine),
+            Block("Редактор - Тест Тестович"),
+            Block("Запитання 1. Питання тесту"),
+            Block("Відповідь: Відповідь тесту")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Name.Should().Be(expectedName);
+    }
+
+    [Fact]
+    public void Parse_BlockWithoutNumber_DetectsUnnamedBlock()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок"),
+            Block("Редактор: Тест Тестович"),
+            Block("Запитання 1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Name.Should().BeNull();
+    }
+
+    [Fact]
+    public void Parse_MultipleBlocks_ParsesAll()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок 1"),
+            Block("Редактор - Анатолій Матвєєвський"),
+            Block("Запитання 1. Питання 1"),
+            Block("Відповідь: Відповідь 1"),
+            Block("Блок 2"),
+            Block("Редакторка - Ірина Кречетова"),
+            Block("Запитання 2. Питання 2"),
+            Block("Відповідь: Відповідь 2")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().HaveCount(2);
+        result.Tours[0].Blocks[0].Name.Should().Be("1");
+        result.Tours[0].Blocks[0].Editors.Should().Contain("Анатолій Матвєєвський");
+        result.Tours[0].Blocks[1].Name.Should().Be("2");
+        result.Tours[0].Blocks[1].Editors.Should().Contain("Ірина Кречетова");
+    }
+
+    [Fact]
+    public void Parse_BlockWithQuestions_QuestionsGoToBlock()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок 1"),
+            Block("Запитання 1. Питання блоку"),
+            Block("Відповідь: Відповідь 1")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().BeEmpty(); // Questions should be in block, not directly in tour
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Questions.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Questions[0].Text.Should().Contain("Питання блоку");
+    }
+
+    [Theory]
+    [InlineData("Редактор - Анатолій Матвєєвський", "Анатолій Матвєєвський")]
+    [InlineData("Редакторка - Ірина Кречетова", "Ірина Кречетова")]
+    [InlineData("Редактор блоку: Тест Тестович", "Тест Тестович")]
+    [InlineData("Редакторка блоку: Галина Синєока", "Галина Синєока")]
+    [InlineData("Редактори блоку: Іван, Марія", "Іван")]
+    public void Parse_BlockEditorLabels_ExtractsEditors(string editorLine, string expectedEditor)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок 1"),
+            Block(editorLine),
+            Block("Запитання 1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Blocks[0].Editors.Should().Contain(expectedEditor);
+    }
+
+    [Fact]
+    public void Parse_RealWorldBlockExample_ParsesCorrectly()
+    {
+        // Based on scratch_6.txt sample, adjusted for sequential numbering
+        var blocks = new List<DocBlock>
+        {
+            Block("Асинхронний турнір \"Забобони бонобо\""),
+            Block("2024-10-30"),
+            Block("Тур 1"),
+            Block("Блок 1"),
+            Block("Редактор - Анатолій Матвєєвський"),
+            Block("Запитання 1."),
+            Block("[Роздатковий матеріал: ]"),
+            Block("[Ведучому: виділити голосом авТОР, ісТОРІя, повТОРюється, ТОРованим]"),
+            Block("Розминкове запитання, відповідь на яке не треба здавати."),
+            Block("Відповідь: консервація"),
+            Block("Залік: банки з консервацією, закрутки, синонімічні"),
+            Block("Блок 2"),
+            Block("Редакторка - Ірина Кречетова"),
+            Block("Запитання 2."),
+            Block("В одному селищі у Мексиці існує щорічний ритуал."),
+            Block("Відповідь: перемивають кістки")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Title.Should().Contain("Забобони бонобо");
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().HaveCount(2);
+
+        var block1 = result.Tours[0].Blocks[0];
+        block1.Name.Should().Be("1");
+        block1.Editors.Should().Contain("Анатолій Матвєєвський");
+        block1.Questions.Should().HaveCount(1);
+        block1.Questions[0].Number.Should().Be("1");
+
+        var block2 = result.Tours[0].Blocks[1];
+        block2.Name.Should().Be("2");
+        block2.Editors.Should().Contain("Ірина Кречетова");
+        block2.Questions.Should().HaveCount(1);
+        block2.Questions[0].Number.Should().Be("2");
+        block2.Questions[0].Answer.Should().Be("перемивають кістки");
+    }
+
+    [Fact]
+    public void Parse_NewTourResetsBlock()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок 1"),
+            Block("Запитання 1. Питання туру 1"),
+            Block("Відповідь: Відповідь 1"),
+            Block("Тур 2"),
+            Block("Запитання 1. Питання туру 2 без блоку"),
+            Block("Відповідь: Відповідь 2")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Blocks.Should().BeEmpty();
+        result.Tours[1].Questions.Should().HaveCount(1); // Question goes directly to tour, not a block
+    }
+
+    [Fact]
+    public void Parse_BlockOutsideTour_IsIgnored()
+    {
+        // Arrange - Block before any tour should not create a block
+        var blocks = new List<DocBlock>
+        {
+            Block("Заголовок пакету"),
+            Block("Блок 1"), // This should be treated as header text, not a block
+            Block("Тур 1"),
+            Block("Запитання 1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().BeEmpty();
+        result.Preamble.Should().Contain("Блок 1");
+    }
+
+    #endregion
+
     #region Question Detection
 
     [Theory]

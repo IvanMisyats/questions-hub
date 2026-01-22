@@ -98,8 +98,9 @@ Editors: Name1, Name2
 Preamble/Description
 
 Тур 1
-Editors of tour (optional)
-Tour preamble (optional)
+
+Блок 1
+Редактор - Block Editor Name
 
 1. Question text
    Відповідь: Answer
@@ -109,10 +110,18 @@ Tour preamble (optional)
    Джерело: Sources
    Автор: Author name
 
+Блок 2
+Редакторка - Another Editor
+
 2. Next question...
 
 Тур 2
-...
+Editors of tour (optional)
+Tour preamble (optional)
+
+1. Question text
+   Відповідь: Answer
+   ...
 ```
 
 ### Recognized Labels
@@ -145,6 +154,21 @@ The parser also detects warmup tours using patterns like:
 - `Розминковий тур`
 
 When a warmup tour is detected, it is automatically placed first in the tour order (OrderIndex = 0) and marked with `IsWarmup = true`.
+
+### Block Detection
+
+Tours can optionally contain blocks - subdivisions within a tour with their own editors. Blocks are detected by patterns like:
+- `Блок 1`
+- `Блок 2.`
+- `Блок`
+
+Block editors are recognized by patterns like:
+- `Редактор - Name`
+- `Редакторка - Name`
+- `Редактор блоку: Name`
+- `Редакторка блоку: Name`
+
+When blocks are present, questions are associated with the block rather than directly with the tour.
 
 ### Question Detection
 

@@ -108,6 +108,15 @@ public static partial class ParserPatterns
     // Editors in header: "Редактор:", "Редактори:", "Редактор туру:", "Редакторка:", "Редакторки:"
     [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*туру)?)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex EditorsLabel();
+
+    // Block detection: "Блок 1", "Блок", "Блок 2:", etc.
+    [GeneratedRegex(@"^\s*Блок(?:\s+(\d+))?[\.:]?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex BlockStart();
+
+    // Block editors: "Редактор блоку:", "Редакторка блоку:", "Редактори блоку:", "Редакторки блоку:"
+    // Also matches: "Редактор - Name", "Редакторка - Name" (with dash instead of colon)
+    [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*блоку)?)\s*[-–—:]\s*(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex BlockEditorsLabel();
 }
 
 /// <summary>
@@ -117,6 +126,7 @@ public enum ParserSection
 {
     PackageHeader,
     TourHeader,
+    BlockHeader,
     QuestionText,
     HostInstructions,
     Handout,
@@ -159,6 +169,7 @@ public class PackageParser
         public ParseResult Result { get; } = new();
         public ParserSection CurrentSection { get; set; } = ParserSection.PackageHeader;
         public TourDto? CurrentTour { get; set; }
+        public BlockDto? CurrentBlockDto { get; set; }
         public QuestionDto? CurrentQuestion { get; set; }
         public List<DocBlock> HeaderBlocks { get; } = [];
         public List<(AssetReference Asset, ParserSection Section)> PendingAssets { get; } = [];
@@ -177,6 +188,7 @@ public class PackageParser
 
         public bool HasCurrentQuestion => CurrentQuestion != null;
         public bool HasCurrentTour => CurrentTour != null;
+        public bool HasCurrentBlock => CurrentBlockDto != null;
     }
 
     public PackageParser(ILogger<PackageParser> logger)
@@ -240,6 +252,7 @@ public class PackageParser
         }
 
         if (TryProcessTourStart(line, ctx)) return;
+        if (TryProcessBlockStart(line, ctx)) return;
         if (TryProcessAuthorRange(line, ctx)) return;
         if (TryProcessQuestionStart(line, ctx)) return;
         if (TryCollectHeaderLine(line, ctx)) return;
@@ -330,6 +343,7 @@ public class PackageParser
         }
 
         SaveCurrentQuestion(ctx);
+        SaveCurrentBlock(ctx);
         EnsurePackageHeaderParsed(ctx);
 
         var orderIndex = ctx.Result.Tours.Count;
@@ -340,12 +354,55 @@ public class PackageParser
             IsWarmup = isWarmup
         };
         ctx.Result.Tours.Add(ctx.CurrentTour);
+        ctx.CurrentBlockDto = null;
         ctx.CurrentQuestion = null;
         ctx.CurrentSection = ParserSection.TourHeader;
         ctx.ExpectedNextQuestionInTour = null;
 
         _logger.LogDebug("Found tour: {TourNumber}, IsWarmup: {IsWarmup}", tourNumber, isWarmup);
         return true;
+    }
+
+    /// <summary>
+    /// Attempts to parse and handle a block start line (e.g., "Блок 1", "Блок").
+    /// Blocks are optional subdivisions within a tour.
+    /// </summary>
+    private bool TryProcessBlockStart(string line, ParserContext ctx)
+    {
+        var match = ParserPatterns.BlockStart().Match(line);
+        if (!match.Success)
+            return false;
+
+        // Blocks only make sense within a tour
+        if (!ctx.HasCurrentTour)
+            return false;
+
+        SaveCurrentQuestion(ctx);
+        SaveCurrentBlock(ctx);
+
+        var blockName = match.Groups[1].Success ? match.Groups[1].Value : null;
+        var orderIndex = ctx.CurrentTour!.Blocks.Count;
+
+        ctx.CurrentBlockDto = new BlockDto
+        {
+            Name = blockName,
+            OrderIndex = orderIndex
+        };
+        ctx.CurrentTour.Blocks.Add(ctx.CurrentBlockDto);
+        ctx.CurrentQuestion = null;
+        ctx.CurrentSection = ParserSection.BlockHeader;
+
+        _logger.LogDebug("Found block: {BlockName} in tour {TourNumber}", blockName ?? "(unnamed)", ctx.CurrentTour.Number);
+        return true;
+    }
+
+    /// <summary>
+    /// Saves the current block to the current tour if it exists and has questions.
+    /// </summary>
+    private static void SaveCurrentBlock(ParserContext ctx)
+    {
+        // Block is already added to the tour when created, so nothing to do here
+        // This method exists for symmetry and potential future cleanup
     }
 
     /// <summary>
@@ -559,7 +616,7 @@ public class PackageParser
             // Process the text before the inline label
             var beforeLabel = line[..inlineLabelIndex].Trim();
             if (!string.IsNullOrWhiteSpace(beforeLabel))
-                AppendToSection(ctx.CurrentSection, beforeLabel, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+                AppendToSection(ctx.CurrentSection, beforeLabel, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.CurrentBlockDto, ctx.Result);
 
             // Recursively process the inline label and its content
             var labelAndAfter = line[inlineLabelIndex..];
@@ -567,7 +624,7 @@ public class PackageParser
         }
         else
         {
-            AppendToSection(ctx.CurrentSection, line, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.Result);
+            AppendToSection(ctx.CurrentSection, line, ctx.CurrentQuestion, ctx.CurrentTour!, ctx.CurrentBlockDto, ctx.Result);
         }
     }
 
@@ -755,13 +812,22 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Saves the current question to the current tour if both exist.
+    /// Saves the current question to the current block (if any) or tour.
     /// </summary>
     private void SaveCurrentQuestion(ParserContext ctx)
     {
-        if (ctx.CurrentQuestion != null && ctx.CurrentTour != null)
+        if (ctx.CurrentQuestion == null || ctx.CurrentTour == null)
+            return;
+
+        FinalizeQuestion(ctx.CurrentQuestion, ctx.AuthorRanges, ctx.Result);
+
+        // If we have a current block, add question to the block; otherwise add directly to tour
+        if (ctx.HasCurrentBlock)
         {
-            FinalizeQuestion(ctx.CurrentQuestion, ctx.AuthorRanges, ctx.Result);
+            ctx.CurrentBlockDto!.Questions.Add(ctx.CurrentQuestion);
+        }
+        else
+        {
             ctx.CurrentTour.Questions.Add(ctx.CurrentQuestion);
         }
     }
@@ -1180,6 +1246,7 @@ public class PackageParser
         string text,
         QuestionDto? question,
         TourDto tour,
+        BlockDto? block,
         ParseResult result)
     {
         if (question == null)
@@ -1195,6 +1262,30 @@ public class PackageParser
                 else
                 {
                     tour.Preamble = AppendText(tour.Preamble, text);
+                }
+            }
+            else if (section == ParserSection.BlockHeader && block != null)
+            {
+                // Try block editors first (with "блоку" in the label or dash separator)
+                var blockEditorsMatch = ParserPatterns.BlockEditorsLabel().Match(text);
+                if (blockEditorsMatch.Success)
+                {
+                    var editors = ParseAuthorList(blockEditorsMatch.Groups[1].Value);
+                    block.Editors.AddRange(editors);
+                }
+                // Also try regular editors label for backwards compatibility
+                else
+                {
+                    var editorsMatch = ParserPatterns.EditorsLabel().Match(text);
+                    if (editorsMatch.Success)
+                    {
+                        var editors = ParseAuthorList(editorsMatch.Groups[1].Value);
+                        block.Editors.AddRange(editors);
+                    }
+                    else
+                    {
+                        block.Preamble = AppendText(block.Preamble, text);
+                    }
                 }
             }
             return;

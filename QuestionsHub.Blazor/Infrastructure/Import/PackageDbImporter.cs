@@ -80,32 +80,48 @@ public partial class PackageDbImporter
                 _db.Tours.Add(tour);
                 await _db.SaveChangesAsync(ct);
 
-                // Create questions
-                var orderIndex = 0;
-                foreach (var questionDto in tourDto.Questions)
+                // If tour has blocks, import blocks with their questions
+                if (tourDto.Blocks.Count > 0)
                 {
-                    var question = new Question
+                    foreach (var blockDto in tourDto.Blocks)
                     {
-                        OrderIndex = orderIndex++,
-                        Number = questionDto.Number,
-                        HostInstructions = TruncateIfNeeded(questionDto.HostInstructions, 1000),
-                        Text = questionDto.Text,
-                        HandoutText = questionDto.HandoutText,
-                        HandoutUrl = await ResolveAssetUrl(questionDto.HandoutAssetFileName, jobAssetsPath, ct),
-                        Answer = TruncateIfNeeded(questionDto.Answer, 1000) ?? "",
-                        AcceptedAnswers = TruncateIfNeeded(questionDto.AcceptedAnswers, 1000),
-                        RejectedAnswers = TruncateIfNeeded(questionDto.RejectedAnswers, 1000),
-                        Comment = questionDto.Comment,
-                        CommentAttachmentUrl = await ResolveAssetUrl(questionDto.CommentAssetFileName, jobAssetsPath, ct),
-                        Source = questionDto.Source,
-                        TourId = tour.Id,
-                        Authors = await ResolveAuthors(questionDto.Authors, ct)
-                    };
+                        var block = new Block
+                        {
+                            Name = blockDto.Name,
+                            OrderIndex = blockDto.OrderIndex,
+                            Preamble = blockDto.Preamble,
+                            TourId = tour.Id,
+                            Editors = await ResolveAuthors(blockDto.Editors, ct)
+                        };
 
-                    _db.Questions.Add(question);
+                        _db.Blocks.Add(block);
+                        await _db.SaveChangesAsync(ct);
+
+                        // Create questions for this block
+                        var blockQuestionOrderIndex = 0;
+                        foreach (var questionDto in blockDto.Questions)
+                        {
+                            var question = await CreateQuestion(
+                                questionDto, blockQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, ct);
+                            _db.Questions.Add(question);
+                        }
+
+                        await _db.SaveChangesAsync(ct);
+                    }
                 }
+                else
+                {
+                    // No blocks - import questions directly to tour
+                    var orderIndex = 0;
+                    foreach (var questionDto in tourDto.Questions)
+                    {
+                        var question = await CreateQuestion(
+                            questionDto, orderIndex++, tour.Id, null, jobAssetsPath, ct);
+                        _db.Questions.Add(question);
+                    }
 
-                await _db.SaveChangesAsync(ct);
+                    await _db.SaveChangesAsync(ct);
+                }
             }
 
             await transaction.CommitAsync(ct);
@@ -122,6 +138,34 @@ public partial class PackageDbImporter
             _logger.LogError(ex, "Failed to import package");
             throw new DatabaseImportException("Не вдалося зберегти пакет в базу даних", ex);
         }
+    }
+
+    private async Task<Question> CreateQuestion(
+        QuestionDto questionDto,
+        int orderIndex,
+        int tourId,
+        int? blockId,
+        string jobAssetsPath,
+        CancellationToken ct)
+    {
+        return new Question
+        {
+            OrderIndex = orderIndex,
+            Number = questionDto.Number,
+            HostInstructions = TruncateIfNeeded(questionDto.HostInstructions, 1000),
+            Text = questionDto.Text,
+            HandoutText = questionDto.HandoutText,
+            HandoutUrl = await ResolveAssetUrl(questionDto.HandoutAssetFileName, jobAssetsPath, ct),
+            Answer = TruncateIfNeeded(questionDto.Answer, 1000) ?? "",
+            AcceptedAnswers = TruncateIfNeeded(questionDto.AcceptedAnswers, 1000),
+            RejectedAnswers = TruncateIfNeeded(questionDto.RejectedAnswers, 1000),
+            Comment = questionDto.Comment,
+            CommentAttachmentUrl = await ResolveAssetUrl(questionDto.CommentAssetFileName, jobAssetsPath, ct),
+            Source = questionDto.Source,
+            TourId = tourId,
+            BlockId = blockId,
+            Authors = await ResolveAuthors(questionDto.Authors, ct)
+        };
     }
 
     private async Task<List<Author>> ResolveAuthors(List<string> authorNames, CancellationToken ct)
