@@ -31,5 +31,6 @@ public class Author
     public List<Question> Questions { get; set; } = [];
     public List<Tour> Tours { get; set; } = [];
     public List<Block> Blocks { get; set; } = [];
+    public List<Package> Packages { get; set; } = [];
 }
 

@@ -124,12 +124,42 @@
                     {
                         <div class="col-12">
                             <label class="form-label">Редактори пакету</label>
-                            <div class="text-muted small">
-                                @string.Join(", ", _package.Editors.Select(e => e.FullName))
-                                <span class="text-muted ms-2">(визначаються з турів)</span>
-                            </div>
+                            @if (_package.SharedEditors)
+                            {
+                                <AuthorSelector SelectedAuthors="_package.PackageEditors"
+                                                OnSelectionChanged="SavePackageEditorsAsync"
+                                                OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
+                                                Placeholder="Введіть прізвище редактора..." />
+                            }
+                            else
+                            {
+                                <div class="text-muted small">
+                                    @string.Join(", ", _package.Editors.Select(e => e.FullName))
+                                    <span class="text-muted ms-2">(визначаються з турів)</span>
+                                </div>
+                            }
                         </div>
                     }
+                    else if (_package.SharedEditors)
+                    {
+                        <div class="col-12">
+                            <label class="form-label">Редактори пакету</label>
+                            <AuthorSelector SelectedAuthors="_package.PackageEditors"
+                                            OnSelectionChanged="SavePackageEditorsAsync"
+                                            OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
+                                            Placeholder="Введіть прізвище редактора..." />
+                        </div>
+                    }
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="sharedEditors"
+                                   checked="@_package.SharedEditors"
+                                   @onchange="OnSharedEditorsChanged" />
+                            <label class="form-check-label" for="sharedEditors">
+                                Спільні редактори для всіх турів
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -189,7 +219,17 @@
                                                     <label class="form-check-label small" for="warmup-@tour.Id">Розминка</label>
                                                 </div>
                                             </div>
-                                            @if (!tour.HasBlocks)
+                                            @if (_package!.SharedEditors)
+                                            {
+                                                <div class="col-md-8">
+                                                    <label class="form-label small text-muted">Редактори туру</label>
+                                                    <div class="text-muted small">
+                                                        @string.Join(", ", _package.PackageEditors.Select(e => e.FullName))
+                                                        <span class="text-muted ms-2">(спільні для пакету)</span>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (!tour.HasBlocks)
                                             {
                                                 <div class="col-md-8">
                                                     <label class="form-label small">Редактори туру</label>
@@ -1395,6 +1435,7 @@
             {
                 await using var context = await DbContextFactory.CreateDbContextAsync();
                 _package = await context.Packages
+                    .Include(p => p.PackageEditors)
                     .Include(p => p.Tours)
                         .ThenInclude(t => t.Editors)
                     .Include(p => p.Tours)
@@ -1475,6 +1516,101 @@
             _isSaving = false;
             StateHasChanged();
         }
+    }
+
+    private async Task OnSharedEditorsChanged(ChangeEventArgs e)
+    {
+        if (_package == null) return;
+
+        var newValue = (bool)(e.Value ?? false);
+        _package.SharedEditors = newValue;
+
+        _saveStatus = "Збереження...";
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbPackage = await context.Packages
+                .Include(p => p.PackageEditors)
+                .Include(p => p.Tours)
+                    .ThenInclude(t => t.Editors)
+                .Include(p => p.Tours)
+                    .ThenInclude(t => t.Blocks)
+                        .ThenInclude(b => b.Editors)
+                .FirstOrDefaultAsync(p => p.Id == _package.Id);
+
+            if (dbPackage != null)
+            {
+                dbPackage.SharedEditors = newValue;
+
+                // When switching to shared mode, copy current tour editors to package editors
+                if (newValue && dbPackage.PackageEditors.Count == 0)
+                {
+                    var allEditors = dbPackage.Tours
+                        .SelectMany(t => t.Blocks.Count > 0
+                            ? t.Blocks.SelectMany(b => b.Editors)
+                            : t.Editors)
+                        .DistinctBy(a => a.Id)
+                        .ToList();
+
+                    foreach (var editor in allEditors)
+                    {
+                        dbPackage.PackageEditors.Add(editor);
+                    }
+
+                    // Update local model
+                    _package.PackageEditors.Clear();
+                    _package.PackageEditors.AddRange(allEditors);
+                }
+
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
+    }
+
+    private async Task SavePackageEditorsAsync()
+    {
+        if (_package == null) return;
+
+        _saveStatus = "Збереження редакторів...";
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbPackage = await context.Packages
+                .Include(p => p.PackageEditors)
+                .FirstOrDefaultAsync(p => p.Id == _package.Id);
+
+            if (dbPackage != null)
+            {
+                // Update package editors (many-to-many)
+                dbPackage.PackageEditors.Clear();
+                foreach (var editor in _package.PackageEditors)
+                {
+                    var dbAuthor = await context.Authors.FindAsync(editor.Id);
+                    if (dbAuthor != null)
+                    {
+                        dbPackage.PackageEditors.Add(dbAuthor);
+                    }
+                }
+
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
     }
 
     private void OnPlayedFromChanged(ChangeEventArgs e)

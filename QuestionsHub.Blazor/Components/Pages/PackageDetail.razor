@@ -204,6 +204,7 @@ else
     {
         _package = await DbContext.Packages
             .AsNoTracking()
+            .Include(p => p.PackageEditors)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)

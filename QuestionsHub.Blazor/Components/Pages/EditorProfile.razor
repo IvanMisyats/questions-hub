@@ -131,7 +131,7 @@
                         {
                             <li class="mb-2">
                                 <a href="/package/@packageItem.PackageId">@packageItem.PackageTitle</a>
-                                @if (packageItem.Tours.Any())
+                                @if (!packageItem.IsGlobalEditor && packageItem.Tours.Any())
                                 {
                                     @TourSeparator
                                     @foreach (var (entry, isLast) in GetPackageEntries(packageItem))
@@ -270,6 +270,7 @@
     {
         public int PackageId { get; set; }
         public required string PackageTitle { get; set; }
+        public bool IsGlobalEditor { get; set; }
         public List<TourListItem> Tours { get; set; } = [];
     }
 
@@ -301,6 +302,7 @@
 
         _author = await context.Authors
             .Include(a => a.User)
+            .Include(a => a.Packages)
             .Include(a => a.Tours)
                 .ThenInclude(t => t.Package)
             .Include(a => a.Blocks)
@@ -319,14 +321,23 @@
             // Filter tours and blocks based on package status and access level
             var publishedToursFromTours = _author.Tours
                 .Where(t => t.Package.Status == PackageStatus.Published)
-                .Where(t => accessContext.CanAccessPackage(t.Package));
+                .Where(t => accessContext.CanAccessPackage(t.Package))
+                .ToList();
             var publishedToursFromBlocks = _author.Blocks
                 .Where(b => b.Tour.Package.Status == PackageStatus.Published)
-                .Where(b => accessContext.CanAccessPackage(b.Tour.Package));
+                .Where(b => accessContext.CanAccessPackage(b.Tour.Package))
+                .ToList();
+
+            // Filter packages where author is a global editor (SharedEditors = true)
+            var publishedPackagesAsGlobalEditor = _author.Packages
+                .Where(p => p.Status == PackageStatus.Published && p.SharedEditors)
+                .Where(p => accessContext.CanAccessPackage(p))
+                .ToList();
 
             var packageIdsFromTours = publishedToursFromTours.Select(t => t.PackageId);
             var packageIdsFromBlocks = publishedToursFromBlocks.Select(b => b.Tour.PackageId);
-            _packagesCount = packageIdsFromTours.Union(packageIdsFromBlocks).Distinct().Count();
+            var packageIdsAsGlobalEditor = publishedPackagesAsGlobalEditor.Select(p => p.Id);
+            _packagesCount = packageIdsFromTours.Union(packageIdsFromBlocks).Union(packageIdsAsGlobalEditor).Distinct().Count();
 
             // Only count questions from packages the user can access
             _questionsCount = _author.Questions.Count(q =>
@@ -341,9 +352,10 @@
                     t.PackageId,
                     PackageTitle = t.Package.Title,
                     TourId = t.Id,
-                    TourNumber = t.Number,
+                    TourNumber = (string?)t.Number,
                     BlockId = (int?)null,
-                    BlockOrderIndex = (int?)null
+                    BlockOrderIndex = (int?)null,
+                    IsGlobalEditor = false
                 });
 
             var blockItems = publishedToursFromBlocks
@@ -352,23 +364,45 @@
                     b.Tour.PackageId,
                     PackageTitle = b.Tour.Package.Title,
                     TourId = b.Tour.Id,
-                    TourNumber = b.Tour.Number,
+                    TourNumber = (string?)b.Tour.Number,
                     BlockId = (int?)b.Id,
-                    BlockOrderIndex = (int?)b.OrderIndex
+                    BlockOrderIndex = (int?)b.OrderIndex,
+                    IsGlobalEditor = false
                 });
 
-            _packagesList = tourItems.Union(blockItems)
+            // Add packages where author is a global editor (these won't have tour/block items)
+            var globalEditorPackageItems = publishedPackagesAsGlobalEditor
+                .Select(p => new
+                {
+                    PackageId = p.Id,
+                    PackageTitle = p.Title,
+                    TourId = 0,
+                    TourNumber = (string?)null,
+                    BlockId = (int?)null,
+                    BlockOrderIndex = (int?)null,
+                    IsGlobalEditor = true
+                });
+
+            // Combine all items, but for global editor packages, don't include tour-level items
+            var globalEditorPackageIds = publishedPackagesAsGlobalEditor.Select(p => p.Id).ToHashSet();
+
+            _packagesList = tourItems
+                .Where(t => !globalEditorPackageIds.Contains(t.PackageId)) // Exclude tour items for global editor packages
+                .Union(blockItems.Where(b => !globalEditorPackageIds.Contains(b.PackageId))) // Exclude block items for global editor packages
+                .Union(globalEditorPackageItems)
                 .GroupBy(x => new { x.PackageId, x.PackageTitle })
                 .Select(g => new PackageListItem
                 {
                     PackageId = g.Key.PackageId,
                     PackageTitle = g.Key.PackageTitle,
+                    IsGlobalEditor = g.Any(x => x.IsGlobalEditor),
                     Tours = g
+                        .Where(x => !x.IsGlobalEditor && x.TourNumber != null)
                         .GroupBy(x => new { x.TourId, x.TourNumber })
                         .Select(tg => new TourListItem
                         {
                             TourId = tg.Key.TourId,
-                            TourNumber = tg.Key.TourNumber,
+                            TourNumber = tg.Key.TourNumber!,
                             Blocks = tg
                                 .Where(x => x.BlockId.HasValue)
                                 .OrderBy(x => x.BlockOrderIndex)

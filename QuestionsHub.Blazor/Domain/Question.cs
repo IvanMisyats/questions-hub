@@ -168,6 +168,9 @@ public class Package
     /// <summary>How question numbers are assigned in this package.</summary>
     public QuestionNumberingMode NumberingMode { get; set; } = QuestionNumberingMode.Global;
 
+    /// <summary>When true, all tours share the same editors defined at package level.</summary>
+    public bool SharedEditors { get; set; }
+
     /// <summary>The ID of the user who owns this package.</summary>
     public string? OwnerId { get; set; }
 
@@ -177,9 +180,16 @@ public class Package
     // Navigation properties
     public List<Tour> Tours { get; set; } = [];
 
-    /// <summary>Gets all unique editors from all tours (computed, not stored in DB).</summary>
+    /// <summary>Editors assigned directly to the package (used when SharedEditors is true).</summary>
+    public List<Author> PackageEditors { get; set; } = [];
+
+    /// <summary>
+    /// Gets the effective editors for the package.
+    /// When SharedEditors is true, returns PackageEditors.
+    /// Otherwise, returns all unique editors from all tours (computed, not stored in DB).
+    /// </summary>
     [NotMapped]
-    public IEnumerable<Author> Editors => Tours
-        .SelectMany(t => t.AllEditors)
-        .DistinctBy(a => a.Id);
+    public IEnumerable<Author> Editors => SharedEditors
+        ? PackageEditors
+        : Tours.SelectMany(t => t.AllEditors).DistinctBy(a => a.Id);
 }

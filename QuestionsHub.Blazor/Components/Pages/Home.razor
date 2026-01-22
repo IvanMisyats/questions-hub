@@ -93,6 +93,7 @@
         // Load all published packages
         var allPackages = await DbContext.Packages
             .Where(p => p.Status == PackageStatus.Published)
+            .Include(p => p.PackageEditors)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)

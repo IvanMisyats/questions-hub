@@ -42,6 +42,10 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasMany(a => a.Blocks)
                 .WithMany(b => b.Editors)
                 .UsingEntity("BlockEditors");
+
+            entity.HasMany(a => a.Packages)
+                .WithMany(p => p.PackageEditors)
+                .UsingEntity("PackageEditors");
         });
 
         builder.Entity<Package>(entity =>
@@ -51,6 +55,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(p => p.Description).HasMaxLength(2000);
             entity.Property(p => p.Status).HasDefaultValue(PackageStatus.Draft);
             entity.Property(p => p.NumberingMode).HasDefaultValue(QuestionNumberingMode.Global);
+            entity.Property(p => p.SharedEditors).HasDefaultValue(false);
 
             entity.HasOne(p => p.Owner)
                 .WithMany()

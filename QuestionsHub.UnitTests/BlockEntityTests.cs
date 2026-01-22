@@ -390,4 +390,68 @@ public class BlockEntityTests
         // Assert
         packageEditors.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Package_Editors_ReturnsPackageEditors_WhenSharedEditorsIsTrue()
+    {
+        // Arrange
+        var packageEditor = new Author { Id = 1, FirstName = "Пакет", LastName = "Редактор" };
+        var tourEditor = new Author { Id = 2, FirstName = "Тур", LastName = "Редактор" };
+
+        var package = new Package
+        {
+            Title = "Тестовий пакет",
+            SharedEditors = true,
+            PackageEditors = [packageEditor],
+            Tours =
+            [
+                new Tour
+                {
+                    Number = "1",
+                    Editors = [tourEditor],
+                    Blocks = []
+                }
+            ]
+        };
+
+        // Act
+        var editors = package.Editors.ToList();
+
+        // Assert - should return package editors, not tour editors
+        editors.Should().HaveCount(1);
+        editors.Should().Contain(packageEditor);
+        editors.Should().NotContain(tourEditor);
+    }
+
+    [Fact]
+    public void Package_Editors_ReturnsTourEditors_WhenSharedEditorsIsFalse()
+    {
+        // Arrange
+        var packageEditor = new Author { Id = 1, FirstName = "Пакет", LastName = "Редактор" };
+        var tourEditor = new Author { Id = 2, FirstName = "Тур", LastName = "Редактор" };
+
+        var package = new Package
+        {
+            Title = "Тестовий пакет",
+            SharedEditors = false,
+            PackageEditors = [packageEditor],
+            Tours =
+            [
+                new Tour
+                {
+                    Number = "1",
+                    Editors = [tourEditor],
+                    Blocks = []
+                }
+            ]
+        };
+
+        // Act
+        var editors = package.Editors.ToList();
+
+        // Assert - should return tour editors, not package editors
+        editors.Should().HaveCount(1);
+        editors.Should().Contain(tourEditor);
+        editors.Should().NotContain(packageEditor);
+    }
 }
