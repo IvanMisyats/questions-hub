@@ -1,4 +1,5 @@
-﻿@page "/manage/packages"
+@page "/manage/packages"
+@page "/manage/packages/{Page:int}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
@@ -99,7 +100,7 @@
             </table>
         </div>
 
-        <Pagination CurrentPage="_currentPage" HasNextPage="_hasNextPage" OnPageChanged="HandlePageChanged" />
+        <Pagination CurrentPage="CurrentPage" TotalPages="_totalPages" BaseUrl="/manage/packages" />
     }
 </div>
 
@@ -146,6 +147,11 @@
         string? OwnerName
     );
 
+    private const int PageSize = 10;
+
+    [Parameter]
+    public int Page { get; set; } = 1;
+
     private List<PackageListItem>? _packages;
     private bool _isLoading = true;
     private bool _isAdmin;
@@ -153,9 +159,10 @@
     private string? _errorMessage;
 
     // Pagination
-    private const int PageSize = 10;
-    private int _currentPage = 1;
-    private bool _hasNextPage;
+    private int _totalCount;
+    private int _totalPages;
+
+    private int CurrentPage => Page < 1 ? 1 : Page;
 
     // Delete modal state
     private bool _showDeleteModal;
@@ -168,6 +175,11 @@
     protected override async Task OnInitializedAsync()
     {
         await CheckUser();
+        await LoadPackages();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
         await LoadPackages();
     }
 
@@ -196,11 +208,15 @@
                 query = query.Where(p => p.OwnerId == _userId);
             }
 
-            // Fetch one extra to check if there's a next page
+            // Get total count for pagination
+            _totalCount = await query.CountAsync();
+            _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
+
+            // Fetch current page
             var items = await query
                 .OrderByDescending(p => p.Id)
-                .Skip((_currentPage - 1) * PageSize)
-                .Take(PageSize + 1)
+                .Skip((CurrentPage - 1) * PageSize)
+                .Take(PageSize)
                 .Select(p => new PackageListItem(
                     p.Id,
                     p.Title,
@@ -213,8 +229,7 @@
                 ))
                 .ToListAsync();
 
-            _hasNextPage = items.Count > PageSize;
-            _packages = items.Take(PageSize).ToList();
+            _packages = items;
         }
         catch (Exception ex)
         {
@@ -318,11 +333,5 @@
         PackageStatus.Archived => "Архів",
         _ => "Невідомо"
     };
-
-    private async Task HandlePageChanged(int newPage)
-    {
-        _currentPage = newPage;
-        await LoadPackages();
-    }
 }
 
