@@ -30,11 +30,11 @@
 .block-section {
     margin-bottom: 2rem;
     padding-left: 1rem;
-    border-left: 3px solid #dee2e6;
+    border-left: 3px solid var(--app-border);
 }
 
 .block-header {
-    color: #495057;
+    color: var(--app-text-secondary);
     margin-bottom: 0.5rem;
 }
 

@@ -1,23 +1,23 @@
 ﻿/* Search result highlighting */
 ::deep mark {
-    background-color: #fff3cd;
+    background-color: var(--app-handout-bg);
     padding: 0.1em 0.2em;
     border-radius: 0.2em;
 }
 
 /* Make the search input more prominent */
 .form-control-lg::placeholder {
-    color: #999;
+    color: var(--app-text-muted);
 }
 
 /* Search result card styling */
 .search-result-card {
-    border-left: 4px solid #1b6ec2;
+    border-left: 4px solid var(--app-primary);
 }
 
 .search-result-card .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    background-color: var(--app-bg-secondary);
+    border-bottom: 1px solid var(--app-border);
 }
 
 /* Match QuestionCard styling */
@@ -29,16 +29,16 @@
 
 .handout {
     padding: 0.75rem;
-    background: #fff3cd;
+    background: var(--app-handout-bg);
     border-radius: 0.25rem;
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid var(--app-handout-border);
     white-space: pre-line;
 }
 
 .answer-section {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px dashed #ccc;
+    border-top: 1px dashed var(--app-border);
 }
 
 .answer-field {
@@ -48,11 +48,11 @@
 
 .answer-label {
     font-weight: 600;
-    color: #555;
+    color: var(--app-text-secondary);
 }
 
 .source-field {
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--app-border-light);
     padding-top: 0.5rem;
     margin-top: 0.5rem;
 }

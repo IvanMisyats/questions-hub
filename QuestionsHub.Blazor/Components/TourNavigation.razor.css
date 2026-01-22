@@ -7,7 +7,7 @@
 }
 
 .nav-header {
-    border-bottom: 2px solid #1b6ec2;
+    border-bottom: 2px solid var(--app-primary);
     padding-bottom: 0.5rem;
 }
 
@@ -22,7 +22,7 @@
 
 .tour-link {
     font-weight: 600;
-    color: #495057;
+    color: var(--app-text-secondary);
     padding: 0.5rem 0;
     display: block;
     background: none;
@@ -33,7 +33,7 @@
 }
 
 .tour-link:hover {
-    color: #1b6ec2;
+    color: var(--app-primary);
 }
 
 .question-links {
@@ -47,8 +47,8 @@
 .question-link {
     padding: 0.25rem 0.5rem;
     font-size: 0.85rem;
-    color: #6c757d;
-    border: 1px solid #dee2e6;
+    color: var(--app-text-muted);
+    border: 1px solid var(--app-border);
     border-radius: 0.25rem;
     text-decoration: none;
     background: none;
@@ -58,8 +58,8 @@
 }
 
 .question-link:hover {
-    background-color: #e9ecef;
-    color: #1b6ec2;
-    border-color: #1b6ec2;
+    background-color: var(--app-bg-tertiary);
+    color: var(--app-primary);
+    border-color: var(--app-primary);
 }
 

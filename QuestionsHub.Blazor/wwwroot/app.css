@@ -1,3 +1,48 @@
+/* Theme CSS Variables */
+:root {
+    --app-bg: #ffffff;
+    --app-bg-secondary: #f7f7f7;
+    --app-bg-tertiary: #fafafa;
+    --app-text: #212529;
+    --app-text-secondary: #333;
+    --app-text-muted: #6c757d;
+    --app-border: #d6d5d5;
+    --app-border-light: #e0e0e0;
+    --app-link: #006bb7;
+    --app-primary: #1b6ec2;
+    --app-primary-border: #1861ac;
+    --app-card-bg: #fafafa;
+    --app-input-bg: #ffffff;
+    --app-handout-bg: #fff3cd;
+    --app-handout-border: #ffc107;
+    --app-host-bg: #e0e0e0;
+    --app-host-border: #6c757d;
+    --app-sortable-ghost: #c8ebfb;
+    --app-sortable-chosen: #f8f9fa;
+}
+
+[data-bs-theme="dark"] {
+    --app-bg: #212529;
+    --app-bg-secondary: #2b3035;
+    --app-bg-tertiary: #343a40;
+    --app-text: #f8f9fa;
+    --app-text-secondary: #dee2e6;
+    --app-text-muted: #adb5bd;
+    --app-border: #495057;
+    --app-border-light: #495057;
+    --app-link: #6ea8fe;
+    --app-primary: #6ea8fe;
+    --app-primary-border: #6ea8fe;
+    --app-card-bg: #2b3035;
+    --app-input-bg: #343a40;
+    --app-handout-bg: #664d03;
+    --app-handout-border: #997404;
+    --app-host-bg: #495057;
+    --app-host-border: #6c757d;
+    --app-sortable-ghost: #1a4971;
+    --app-sortable-chosen: #343a40;
+}
+
 html {
     scroll-behavior: smooth;
 }
@@ -14,13 +59,13 @@ html, body {
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: var(--app-link);
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--app-primary);
+    border-color: var(--app-primary-border);
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
@@ -81,16 +126,16 @@ h1:focus {
 /* Sortable drag and drop styles */
 .sortable-ghost {
     opacity: 0.4;
-    background-color: #c8ebfb;
+    background-color: var(--app-sortable-ghost);
 }
 
 .sortable-chosen {
-    background-color: #f8f9fa;
+    background-color: var(--app-sortable-chosen);
 }
 
 .sortable-drag {
     opacity: 1;
-    background-color: #fff;
+    background-color: var(--app-bg);
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
 }
 
@@ -98,7 +143,7 @@ h1:focus {
 .question-drag-handle,
 .block-drag-handle {
     cursor: grab;
-    color: #6c757d;
+    color: var(--app-text-muted);
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -113,8 +158,8 @@ h1:focus {
 .tour-drag-handle:hover,
 .question-drag-handle:hover,
 .block-drag-handle:hover {
-    color: #495057;
-    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--app-text-secondary);
+    background-color: rgba(128, 128, 128, 0.1);
 }
 
 .tour-drag-handle:active,
@@ -141,8 +186,8 @@ h1:focus {
 /* Accordion header with drag handle */
 .accordion-header.d-flex .tour-drag-handle {
     font-size: 1.25rem;
-    background-color: #f8f9fa;
-    border-right: 1px solid rgba(0, 0, 0, 0.125);
+    background-color: var(--app-sortable-chosen);
+    border-right: 1px solid var(--app-border);
     min-width: 40px;
     align-self: stretch;
 }
