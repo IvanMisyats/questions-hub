@@ -1,9 +1,8 @@
 ﻿@using QuestionsHub.Blazor.Domain
-@inject IJSRuntime JSRuntime
 
 <nav class="tour-navigation">
     <div class="nav-header mb-3">
-        <button type="button" class="nav-link fw-bold" @onclick="@(() => ScrollToElementAsync("top"))">@Package.Title</button>
+        <a href="#top" class="nav-link fw-bold" onclick="scrollToElement('top'); return false;">@Package.Title</a>
     </div>
     @{
         var blockNumberInPackage = 0;
@@ -12,9 +11,9 @@
     {
         var tourElementId = $"tour-{tour.Id}";
         <div class="tour-group mb-3">
-            <button type="button" class="nav-link tour-link" @onclick="@(() => ScrollToElementAsync(tourElementId))">
+            <a href="#@tourElementId" class="nav-link tour-link" onclick="scrollToElement('@tourElementId'); return false;">
                 Тур @tour.Number
-            </button>
+            </a>
             @if (tour.HasBlocks)
             {
                 @* Tour with blocks - show blocks with their questions *@
@@ -24,16 +23,16 @@
                     var blockElementId = $"block-{block.Id}";
                     var currentBlockNumber = blockNumberInPackage;
                     <div class="block-group ms-2">
-                        <button type="button" class="nav-link block-link small text-muted" @onclick="@(() => ScrollToElementAsync(blockElementId))">
+                        <a href="#@blockElementId" class="nav-link block-link small text-muted" onclick="scrollToElement('@blockElementId'); return false;">
                             @block.GetDisplayName(currentBlockNumber)
-                        </button>
+                        </a>
                         <div class="question-links">
                             @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
                             {
                                 var questionElementId = $"question-{question.Id}";
-                                <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                                <a href="#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
                                     @question.Number
-                                </button>
+                                </a>
                             }
                         </div>
                     </div>
@@ -46,9 +45,9 @@
                         @foreach (var question in orphanQuestions)
                         {
                             var questionElementId = $"question-{question.Id}";
-                            <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                            <a href="#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
                                 @question.Number
-                            </button>
+                            </a>
                         }
                     </div>
                 }
@@ -60,9 +59,9 @@
                     @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                     {
                         var questionElementId = $"question-{question.Id}";
-                        <button type="button" class="nav-link question-link" @onclick="@(() => ScrollToElementAsync(questionElementId))">
+                        <a href="#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
                             @question.Number
-                        </button>
+                        </a>
                     }
                 </div>
             }
@@ -73,10 +72,4 @@
 @code {
     [Parameter]
     public required Package Package { get; set; }
-
-    private async Task ScrollToElementAsync(string elementId)
-    {
-        await JSRuntime.InvokeVoidAsync("scrollToElement", elementId);
-    }
 }
-

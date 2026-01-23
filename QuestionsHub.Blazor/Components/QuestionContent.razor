@@ -22,15 +22,11 @@
     </div>
 }
 
-<div class="question-text">
-    @Question.Text
-</div>
+<div class="question-text">@Question.Text.Trim()</div>
 
 @ChildContent
 
-@if (ShowAnswer)
-{
-    <div class="answer-section">
+<div class="answer-section @(ShowAnswer ? "" : "answer-hidden")">
     <div class="answer-field">
         <span class="answer-label">Відповідь:</span> @Question.Answer
     </div>
@@ -78,7 +74,6 @@
         </div>
     }
 </div>
-}
 
 @code {
     [Parameter, EditorRequired]

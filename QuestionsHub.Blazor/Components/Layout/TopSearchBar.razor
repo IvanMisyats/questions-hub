@@ -1,27 +1,9 @@
-﻿@inject NavigationManager Navigation
-@rendermode InteractiveServer
+﻿@* Static SSR - no server interactivity needed *@
 
-<div class="search-bar">
+<form class="search-bar" data-enhance="false" onsubmit="return handleTopSearchSubmit(this)">
     <span class="search-icon"></span>
     <input type="text"
+           name="q"
            class="search-input"
-           placeholder="введіть слова для пошуку"
-           @bind="_searchQuery"
-           @bind:event="oninput"
-           @onkeyup="OnSearchKeyUp" />
-</div>
-
-@code {
-    private string _searchQuery = "";
-
-    private void OnSearchKeyUp(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            var encodedQuery = Uri.EscapeDataString(_searchQuery.Trim());
-            Navigation.NavigateTo($"/search/{encodedQuery}");
-            _searchQuery = "";
-        }
-    }
-}
-
+           placeholder="введіть слова для пошуку" />
+</form>

@@ -1,5 +1,6 @@
 @page "/editors"
-@rendermode InteractiveServer
+@page "/editors/{Page:int}"
+@attribute [StreamRendering]
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Infrastructure
 
@@ -12,26 +13,28 @@
     <h1 class="mb-4">Автори</h1>
 
     <div class="mb-3">
-        <div class="input-group">
+        <form class="input-group" method="get" action="/editors">
             <span class="input-group-text">
                 <Icon Name="search" />
             </span>
             <input type="text"
+                   name="q"
                    class="form-control"
                    placeholder="Пошук за ім'ям або прізвищем..."
-                   @bind="_searchQuery"
-                   @bind:event="oninput"
-                   @bind:after="OnSearchAsync" />
-            @if (!string.IsNullOrEmpty(_searchQuery))
+                   value="@Query" />
+            <button type="submit" class="btn btn-outline-primary">
+                <Icon Name="search" />
+            </button>
+            @if (!string.IsNullOrEmpty(Query))
             {
-                <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                <a href="/editors" class="btn btn-outline-secondary">
                     <Icon Name="close" />
-                </button>
+                </a>
             }
-        </div>
+        </form>
     </div>
 
-    @if (_isLoading)
+    @if (_authors == null)
     {
         <div class="d-flex justify-content-center py-5">
             <div class="spinner-border text-primary" role="status">
@@ -43,7 +46,7 @@
     {
         <div class="card">
             <div class="card-header">
-                <Icon Name="group" Class="me-2" />Список авторів (@_authors.Count@(_hasNextPage ? "+" : ""))
+                <Icon Name="group" Class="me-2" />Список авторів (@_totalCount)
             </div>
             <div class="card-body p-0">
                 @if (_authors.Count == 0)
@@ -79,80 +82,47 @@
             </div>
         </div>
 
-        <Pagination CurrentPage="_currentPage"
-                    HasNextPage="_hasNextPage"
-                    OnPageChanged="OnPageChanged" />
+        <Pagination CurrentPage="CurrentPage"
+                    TotalPages="_totalPages"
+                    BaseUrl="@GetPaginationBaseUrl()" />
     }
 </div>
 
 @code {
     private const int PageSize = 25;
-    private const int SearchDebounceMs = 400;
 
-    private List<AuthorListItem> _authors = [];
-    private bool _isLoading = true;
-    private bool _hasNextPage;
-    private int _currentPage = 1;
-    private string _searchQuery = string.Empty;
-    private string _appliedSearchQuery = string.Empty;
-    private CancellationTokenSource? _searchCts;
-    private PackageAccessContext? _accessContext;
+    [Parameter]
+    public int Page { get; set; } = 1;
+
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    private int CurrentPage => Page < 1 ? 1 : Page;
+
+    private List<AuthorListItem>? _authors;
+    private int _totalCount;
+    private int _totalPages;
 
     protected override async Task OnInitializedAsync()
     {
-        _accessContext = await AccessControl.GetPackageAccessContext();
-        await LoadAuthorsAsync();
-        _isLoading = false;
-    }
-
-    private async Task OnSearchAsync()
-    {
-        _searchCts?.Cancel();
-        _searchCts = new CancellationTokenSource();
-
-        try
-        {
-            await Task.Delay(SearchDebounceMs, _searchCts.Token);
-
-            // Reset to first page when search query changes
-            _currentPage = 1;
-            _appliedSearchQuery = _searchQuery;
-            await LoadAuthorsAsync();
-            StateHasChanged();
-        }
-        catch (TaskCanceledException)
-        {
-            // Search was cancelled, ignore
-        }
-    }
-
-    private async Task ClearSearch()
-    {
-        _searchQuery = string.Empty;
-        _appliedSearchQuery = string.Empty;
-        _currentPage = 1;
-        await LoadAuthorsAsync();
-    }
-
-    private async Task OnPageChanged(int page)
-    {
-        _currentPage = page;
-        await LoadAuthorsAsync();
-    }
-
-    private async Task LoadAuthorsAsync()
-    {
-        if (_accessContext == null)
-            return;
+        var accessContext = await AccessControl.GetPackageAccessContext();
 
         var result = await AuthorService.GetAuthorsWithCountsPaginated(
-            _accessContext,
-            _currentPage,
+            accessContext,
+            CurrentPage,
             PageSize,
-            string.IsNullOrWhiteSpace(_appliedSearchQuery) ? null : _appliedSearchQuery);
+            string.IsNullOrWhiteSpace(Query) ? null : Query);
 
         _authors = result.Items;
-        _hasNextPage = result.HasNextPage;
+        _totalCount = result.TotalCount;
+        _totalPages = (int)Math.Ceiling((double)result.TotalCount / PageSize);
+    }
+
+    private string GetPaginationBaseUrl()
+    {
+        if (string.IsNullOrWhiteSpace(Query))
+            return "/editors";
+
+        return $"/editors?q={Uri.EscapeDataString(Query)}";
     }
 }
-

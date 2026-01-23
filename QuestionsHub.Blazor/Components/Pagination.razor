@@ -143,11 +143,21 @@
 
     private string GetPageUrl(int page)
     {
-        if (page <= 1)
+        if (string.IsNullOrEmpty(BaseUrl))
         {
-            return string.IsNullOrEmpty(BaseUrl) ? "/" : BaseUrl;
+            return page <= 1 ? "/" : $"/{page}";
         }
-        return string.IsNullOrEmpty(BaseUrl) ? $"/{page}" : $"{BaseUrl}/{page}";
+
+        // Check if BaseUrl contains query string
+        var queryIndex = BaseUrl.IndexOf('?');
+        if (queryIndex >= 0)
+        {
+            var path = BaseUrl[..queryIndex];
+            var query = BaseUrl[queryIndex..];
+            return page <= 1 ? BaseUrl : $"{path}/{page}{query}";
+        }
+
+        return page <= 1 ? BaseUrl : $"{BaseUrl}/{page}";
     }
 
     private IEnumerable<int> GetVisiblePages()

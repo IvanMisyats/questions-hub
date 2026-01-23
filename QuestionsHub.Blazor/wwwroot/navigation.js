@@ -61,3 +61,28 @@ window.prefillDateFrom = function(targetId, sourceId) {
         target.value = source.value;
     }
 };
+
+// Handle top search bar form submission (static SSR)
+window.handleTopSearchSubmit = function(form) {
+    const query = form.q.value.trim();
+    if (query) {
+        const encodedQuery = encodeURIComponent(query);
+        window.location.href = '/search/' + encodedQuery;
+    }
+    return false;
+};
+
+// Scroll position preservation for Blazor Server re-renders
+window._savedScrollPosition = null;
+
+window.saveScrollPosition = function() {
+    window._savedScrollPosition = window.scrollY;
+};
+
+window.restoreScrollPosition = function() {
+    if (window._savedScrollPosition !== null) {
+        window.scrollTo(0, window._savedScrollPosition);
+        window._savedScrollPosition = null;
+    }
+};
+

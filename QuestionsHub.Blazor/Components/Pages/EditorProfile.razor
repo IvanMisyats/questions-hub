@@ -148,7 +148,7 @@
                     </ul>
                     @if (_packagesList.Count > _displayedPackagesCount)
                     {
-                        <button class="btn btn-link" @onclick="ShowMorePackages">
+                        <button type="button" class="btn btn-link" @onclick="ShowMorePackages" @onclick:preventDefault>
                             показати більше
                         </button>
                     }
@@ -173,48 +173,12 @@
                 {
                     @foreach (var question in _questionsList)
                     {
-                        <div class="card mb-3">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <div>
-                                    <a href="/package/@question.Tour.PackageId" class="text-decoration-none fw-bold">@question.Tour.Package.Title</a>
-                                    <span class="text-muted mx-2">→</span>
-                                    <span class="text-muted">Тур @question.Tour.Number</span>
-                                    <span class="text-muted mx-2">→</span>
-                                    <span class="text-muted">Запитання @question.Number</span>
-                                </div>
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="@(() => CopyQuestionLink(question.Id))" title="Скопіювати посилання на запитання">
-                                    @if (_copiedQuestionId == question.Id)
-                                    {
-                                        <Icon Name="check" />
-                                    }
-                                    else
-                                    {
-                                        <Icon Name="link" />
-                                    }
-                                </button>
-                            </div>
-                            <div class="card-body">
-                                <QuestionContent Question="@question" ShowAnswer="@GetQuestionAnswerState(question.Id)">
-                                    <div class="answer-toggle-section mt-3">
-                                        <button class="btn btn-link answer-toggle p-0" @onclick="@(() => ToggleQuestionAnswer(question.Id))">
-                                            @if (GetQuestionAnswerState(question.Id))
-                                            {
-                                                <text>Сховати відповідь</text>
-                                            }
-                                            else
-                                            {
-                                                <text>Показати відповідь</text>
-                                            }
-                                        </button>
-                                    </div>
-                                </QuestionContent>
-                            </div>
-                        </div>
+                        <QuestionCard Question="@question" ShowFullHeader="true" />
                     }
                     @if (_hasMoreQuestions)
                     {
                         <div class="text-center mt-3">
-                            <button class="btn btn-primary" @onclick="LoadMoreQuestions" disabled="@_isLoadingQuestions">
+                            <button type="button" class="btn btn-primary" @onclick="LoadMoreQuestions" @onclick:preventDefault disabled="@_isLoadingQuestions">
                                 Показати більше
                             </button>
                         </div>
@@ -261,10 +225,6 @@
     private int _displayedQuestionsCount = 0;
     private bool _isLoadingQuestions = false;
     private bool _hasMoreQuestions = false;
-    private Dictionary<int, bool> _questionAnswerStates = new();
-    private int? _copiedQuestionId;
-    private bool _copyInProgress;
-    private const int CopyFeedbackDelayMs = 2000;
 
     private class PackageListItem
     {
@@ -490,6 +450,9 @@
     {
         if (_author == null) return;
 
+        // Save scroll position before re-render
+        await JS.InvokeVoidAsync("saveScrollPosition");
+
         _isLoadingQuestions = true;
 
         try
@@ -532,56 +495,12 @@
         finally
         {
             _isLoadingQuestions = false;
+
+            // Restore scroll position after re-render
+            await JS.InvokeVoidAsync("restoreScrollPosition");
         }
     }
 
-    private bool GetQuestionAnswerState(int questionId)
-    {
-        return _questionAnswerStates.GetValueOrDefault(questionId, false);
-    }
-
-    private void ToggleQuestionAnswer(int questionId)
-    {
-        if (_questionAnswerStates.ContainsKey(questionId))
-        {
-            _questionAnswerStates[questionId] = !_questionAnswerStates[questionId];
-        }
-        else
-        {
-            _questionAnswerStates[questionId] = true;
-        }
-    }
-
-    private async Task CopyQuestionLink(int questionId)
-    {
-        if (_copyInProgress)
-        {
-            return;
-        }
-
-        _copyInProgress = true;
-
-        try
-        {
-            var baseUri = Navigation.BaseUri.TrimEnd('/');
-            var questionUrl = $"{baseUri}/question/{questionId}";
-
-            var success = await JS.InvokeAsync<bool>("copyToClipboard", questionUrl);
-            if (success)
-            {
-                _copiedQuestionId = questionId;
-                StateHasChanged();
-
-                await Task.Delay(CopyFeedbackDelayMs);
-                _copiedQuestionId = null;
-                StateHasChanged();
-            }
-        }
-        finally
-        {
-            _copyInProgress = false;
-        }
-    }
 
     private async Task LinkUser()
     {

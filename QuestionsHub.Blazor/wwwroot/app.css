@@ -152,4 +152,7 @@ h1:focus {
     min-height: 20px;
 }
 
-
+/* Answer visibility toggle for static SSR pages */
+.answer-hidden {
+    display: none !important;
+}

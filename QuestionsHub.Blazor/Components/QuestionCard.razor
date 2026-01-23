@@ -1,32 +1,32 @@
-﻿@inject IJSRuntime JS
-@inject NavigationManager Navigation
+﻿@using QuestionsHub.Blazor.Domain
 
-<div class="question-card">
+<div class="question-card" data-question-id="@Question.Id">
     <div class="question-header">
-        <span class="question-number">Запитання @Question.Number</span>
-        <button class="btn btn-sm copy-link-btn" @onclick="CopyQuestionLink" title="Скопіювати посилання на питання">
-            @if (_copied)
-            {
-                <Icon Name="check" Class="copy-icon copied" />
-            }
-            else
-            {
-                <Icon Name="link" Class="copy-icon" />
-            }
+        @if (ShowFullHeader && Question.Tour?.Package != null)
+        {
+            <span class="question-number">
+                <a href="/package/@Question.Tour.PackageId" class="text-decoration-none fw-bold">@Question.Tour.Package.Title</a>
+                <span class="text-muted mx-1">→</span>
+                <span class="text-muted">Тур @Question.Tour.Number</span>
+                <span class="text-muted mx-1">→</span>
+                <span class="text-muted fw-normal">Запитання @Question.Number</span>
+            </span>
+        }
+        else
+        {
+            <span class="question-number">Запитання @Question.Number</span>
+        }
+        <button class="btn btn-sm copy-link-btn"
+                onclick="copyQuestionLink(this, @Question.Id)"
+                title="Скопіювати посилання на запитання">
+            <Icon Name="link" Class="copy-icon" />
         </button>
     </div>
 
-    <QuestionContent Question="Question" ShowAnswer="_showAnswer">
-        <div class="answer-toggle-section mt-3">
-            <button class="btn btn-link answer-toggle p-0" @onclick="ToggleAnswer">
-                @if (_showAnswer)
-                {
-                    <text>Сховати відповідь</text>
-                }
-                else
-                {
-                    <text>Показати відповідь</text>
-                }
+    <QuestionContent Question="Question" ShowAnswer="false">
+        <div class="answer-toggle-section">
+            <button class="btn btn-link answer-toggle p-0" onclick="toggleAnswer(this)">
+                Показати відповідь
             </button>
         </div>
     </QuestionContent>
@@ -36,38 +36,9 @@
     [Parameter]
     public required Question Question { get; set; }
 
-    private const int CopyFeedbackDelayMs = 2000;
-    private bool _showAnswer;
-    private bool _copied;
-    private bool _copyInProgress;
-
-    private void ToggleAnswer()
-    {
-        _showAnswer = !_showAnswer;
-    }
-
-    private async Task CopyQuestionLink()
-    {
-        if (_copyInProgress)
-        {
-            return;
-        }
-
-        _copyInProgress = true;
-        var baseUri = Navigation.BaseUri.TrimEnd('/');
-        var questionUrl = $"{baseUri}/question/{Question.Id}";
-
-        var success = await JS.InvokeAsync<bool>("copyToClipboard", questionUrl);
-        if (success)
-        {
-            _copied = true;
-            StateHasChanged();
-
-            await Task.Delay(CopyFeedbackDelayMs);
-            _copied = false;
-            StateHasChanged();
-        }
-        _copyInProgress = false;
-    }
+    /// <summary>
+    /// When true, displays full breadcrumb header: "Package Title → Тур N → Запитання N"
+    /// </summary>
+    [Parameter]
+    public bool ShowFullHeader { get; set; }
 }
-

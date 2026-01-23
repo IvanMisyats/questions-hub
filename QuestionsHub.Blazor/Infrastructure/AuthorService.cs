@@ -244,6 +244,9 @@ public class AuthorService
         // Filter to only authors with accessible content
         query = query.Where(a => a.QuestionCount > 0 || a.PackageCount > 0);
 
+        // Get total count for pagination
+        var totalCount = await query.CountAsync();
+
         // Sort by package count first, then by question count (both descending)
         var orderedQuery = query
             .OrderByDescending(a => a.PackageCount)
@@ -270,7 +273,7 @@ public class AuthorService
             })
             .ToList();
 
-        return new AuthorListResult(resultItems, hasNextPage);
+        return new AuthorListResult(resultItems, hasNextPage, totalCount);
     }
 
     /// <summary>
@@ -511,10 +514,12 @@ public class AuthorListResult
 {
     public List<AuthorListItem> Items { get; }
     public bool HasNextPage { get; }
+    public int TotalCount { get; }
 
-    public AuthorListResult(List<AuthorListItem> items, bool hasNextPage)
+    public AuthorListResult(List<AuthorListItem> items, bool hasNextPage, int totalCount = 0)
     {
         Items = items;
         HasNextPage = hasNextPage;
+        TotalCount = totalCount;
     }
 }
