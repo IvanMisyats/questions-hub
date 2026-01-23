@@ -131,7 +131,7 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label for="packageNumberingMode" class="form-label">Нумерація питань</label>
+                        <label for="packageNumberingMode" class="form-label">Нумерація запитань</label>
                         <select class="form-select" id="packageNumberingMode"
                                 value="@_package.NumberingMode"
                                 @onchange="OnNumberingModeChanged">
@@ -222,7 +222,7 @@
                                                 <strong>Тур @tour.Number</strong>
                                             }
                                         </span>
-                                        <span class="badge bg-info ms-auto me-2">@tour.Questions.Count питань</span>
+                                        <span class="badge bg-info ms-auto me-2">@tour.Questions.Count запитань</span>
                                     </button>
                                 </h2>
                                 <div class="accordion-collapse collapse @(IsExpanded(tour.Id) ? "show" : "")"
@@ -315,13 +315,13 @@
                                                                 {
                                                                     <span class="text-muted" style="cursor: pointer;" @onclick="() => ToggleBlockExpand(block.Id)">— @block.Name</span>
                                                                 }
-                                                                <span class="badge bg-secondary">@tour.Questions.Count(q => q.BlockId == block.Id) питань</span>
+                                                                <span class="badge bg-secondary">@tour.Questions.Count(q => q.BlockId == block.Id) запитань</span>
                                                             </div>
                                                             <button class="btn btn-outline-danger btn-sm d-flex align-items-center justify-content-center"
                                                                     style="width: 24px; height: 24px; padding: 0; font-size: 1rem; line-height: 1;"
                                                                     @onclick="() => ConfirmDeleteBlock(tour, block)"
                                                                     @onclick:stopPropagation="true"
-                                                                    title="Видалити блок (питання залишаться у турі)">×</button>
+                                                                    title="Видалити блок (запитання залишаться у турі)">×</button>
                                                         </div>
                                                         @if (isBlockExpanded)
                                                         {
@@ -378,13 +378,13 @@
                                                             else
                                                             {
                                                                 <div class="list-group-item text-center text-muted py-2">
-                                                                    <small>Перетягніть сюди питання</small>
+                                                                    <small>Перетягніть сюди запитання</small>
                                                                 </div>
                                                             }
                                                             </div>
                                                             <button class="btn btn-outline-success btn-sm"
                                                                     @onclick="() => AddQuestionToBlockAsync(tour, block)">
-                                                                + Додати питання
+                                                                + Додати запитання
                                                             </button>
                                                         </div>
                                                         }
@@ -401,12 +401,12 @@
                                                     <div class="card-header d-flex justify-content-between align-items-center py-2 bg-warning-subtle">
                                                         <div class="d-flex align-items-center gap-2">
                                                             <i class="bi bi-exclamation-triangle text-warning"></i>
-                                                            <strong>Питання поза блоками</strong>
-                                                            <span class="badge bg-warning text-dark">@orphanQuestions.Count питань</span>
+                                                            <strong>Запитання поза блоками</strong>
+                                                            <span class="badge bg-warning text-dark">@orphanQuestions.Count запитань</span>
                                                         </div>
                                                     </div>
                                                     <div class="card-body py-2">
-                                                        <p class="text-muted small mb-2">Ці питання не належать жодному блоку. Перетягніть їх до відповідного блоку.</p>
+                                                        <p class="text-muted small mb-2">Ці запитання не належать жодному блоку. Перетягніть їх до відповідного блоку.</p>
                                                         <div class="list-group mb-2" id="questions-orphan-@tour.Id" data-tour-id="@tour.Id" data-block-id="">
                                                             @foreach (var question in orphanQuestions)
                                                             {
@@ -446,7 +446,7 @@
                                             @if (tour.Questions.Count == 0)
                                             {
                                                 <div class="list-group-item text-center text-muted py-3">
-                                                    <p class="mb-0">Тур ще не має питань. Перетягніть сюди питання або додайте нове.</p>
+                                                    <p class="mb-0">Тур ще не має запитань. Перетягніть сюди запитання або додайте нове.</p>
                                                 </div>
                                             }
                                             else
@@ -475,7 +475,7 @@
 
                                             <button class="btn btn-outline-success btn-sm"
                                                     @onclick="() => AddQuestionAsync(tour)">
-                                                <i class="bi bi-plus-lg me-1"></i>Додати питання
+                                                <i class="bi bi-plus-lg me-1"></i>Додати запитання
                                             </button>
                                         }
                                     </div>
@@ -509,7 +509,7 @@
                     <p>Ви впевнені, що хочете видалити <strong>Тур @_tourToDelete.Number</strong>?</p>
                     <p class="text-danger mb-0">
                         <i class="bi bi-exclamation-triangle me-2"></i>
-                        Всі @_tourToDelete.Questions.Count питань туру будуть видалені.
+                        Всі @_tourToDelete.Questions.Count запитань туру будуть видалені.
                     </p>
                 </div>
                 <div class="modal-footer">
@@ -528,11 +528,11 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Видалити питання</h5>
+                    <h5 class="modal-title">Видалити запитання</h5>
                     <button type="button" class="btn-close" @onclick="CancelDeleteQuestion"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Ви впевнені, що хочете видалити <strong>Питання @_questionToDelete.Number</strong>?</p>
+                    <p>Ви впевнені, що хочете видалити <strong>Запитання @_questionToDelete.Number</strong>?</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CancelDeleteQuestion">Скасувати</button>
@@ -562,11 +562,11 @@
                         }
                         @if (blockQuestionCount > 0)
                         {
-                            <text>@blockQuestionCount питань блоку залишаться у турі.</text>
+                            <text>@blockQuestionCount запитань блоку залишаться у турі.</text>
                         }
                         else
                         {
-                            <text>Блок не містить питань.</text>
+                            <text>Блок не містить запитань.</text>
                         }
                     </p>
                 </div>
@@ -587,7 +587,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        Питання @_editingQuestion.Number
+                        Запитання @_editingQuestion.Number
                         <span class="text-muted">(Тур @_editingTour.Number)</span>
                     </h5>
                     <div class="ms-auto me-3">
@@ -605,7 +605,7 @@
                         {
                             <button class="btn btn-outline-success btn-sm ms-1"
                                     @onclick="CreateAndNavigateToNextQuestion"
-                                    title="Створити нове питання в цьому турі">
+                                    title="Створити нове запитання в цьому турі">
                                 <i class="bi bi-plus-lg"></i> Створити наступне
                             </button>
                         }
@@ -639,7 +639,7 @@
                         <div class="col-md-10">
                             <div class="row g-2">
                                 <div class="col-md-6">
-                                    <textarea class="form-control auto-expand" placeholder="Текст роздавального матеріалу"
+                                    <textarea class="form-control auto-expand" placeholder="Текст роздаткового матеріалу"
                                               @bind="_editingQuestion.HandoutText" @onblur="SaveEditingQuestionAsync"></textarea>
                                 </div>
                                 <div class="col-md-6">
@@ -707,7 +707,7 @@
                             </div>
                         </div>
                         <div class="col-md-2">
-                            <label class="col-form-label">Текст питання <span class="text-danger">*</span></label>
+                            <label class="col-form-label">Текст запитання <span class="text-danger">*</span></label>
                         </div>
                         <div class="col-md-10">
                             <textarea class="form-control auto-expand @(_isTextEmpty ? "field-required-empty" : "")"
@@ -1216,7 +1216,7 @@
 
         try
         {
-            _saveStatus = "Оновлення порядку питань...";
+            _saveStatus = "Оновлення порядку запитань...";
             StateHasChanged();
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
@@ -1235,7 +1235,7 @@
             // Renumber, reload and reinitialize sortables
             await RenumberAndReload();
 
-            _saveStatus = "Порядок питань оновлено";
+            _saveStatus = "Порядок запитань оновлено";
         }
         catch (Exception ex)
         {
@@ -1296,7 +1296,7 @@
 
         try
         {
-            _saveStatus = "Переміщення питання...";
+            _saveStatus = "Переміщення запитання...";
             StateHasChanged();
 
             var sourceTour = _package.Tours.FirstOrDefault(t => t.Id == fromTourId);
@@ -1305,7 +1305,7 @@
 
             if (sourceTour == null || targetTour == null || question == null)
             {
-                _saveStatus = "Помилка: питання або тур не знайдено";
+                _saveStatus = "Помилка: запитання або тур не знайдено";
                 StateHasChanged();
                 return;
             }
@@ -1350,7 +1350,7 @@
                 var dbMovedQuestion = await context.Questions.FindAsync(questionId);
                 if (dbMovedQuestion == null)
                 {
-                    _saveStatus = "Помилка: питання не знайдено в базі";
+                    _saveStatus = "Помилка: запитання не знайдено в базі";
                     StateHasChanged();
                     return;
                 }
@@ -1407,7 +1407,7 @@
             // Renumber, reload and reinitialize sortables
             await RenumberAndReload();
 
-            _saveStatus = "Питання переміщено";
+            _saveStatus = "Запитання переміщено";
         }
         catch (Exception ex)
         {
@@ -1934,7 +1934,7 @@
             var reloadedTour = _package.Tours.FirstOrDefault(t => t.Id == tour.Id);
             var reloadedQuestion = reloadedTour?.Questions.FirstOrDefault(q => q.Id == question.Id);
 
-            _saveStatus = "Питання додано";
+            _saveStatus = "Запитання додано";
             return reloadedQuestion ?? question;
         }
         catch (Exception ex)
@@ -1986,7 +1986,7 @@
             _showDeleteQuestionModal = false;
             _questionToDelete = null;
             _questionToDeleteTour = null;
-            _saveStatus = "Питання видалено";
+            _saveStatus = "Запитання видалено";
             _needsSortableInit = true;
         }
         catch (Exception ex)
@@ -2891,7 +2891,7 @@
             {
                 OpenQuestionEditor(reloadedTour, reloadedQuestion);
             }
-            _saveStatus = "Питання додано";
+            _saveStatus = "Запитання додано";
         }
         catch (Exception ex)
         {

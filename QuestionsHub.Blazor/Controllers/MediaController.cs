@@ -58,7 +58,7 @@ public class MediaController : ControllerBase
 
         if (question == null)
         {
-            return NotFound(new MediaUploadErrorDto("Питання не знайдено"));
+            return NotFound(new MediaUploadErrorDto("Запитання не знайдено"));
         }
 
         if (!User.CanAccessPackage(question.Tour.Package))
@@ -137,7 +137,7 @@ public class MediaController : ControllerBase
 
         if (question == null)
         {
-            return NotFound(new MediaUploadErrorDto("Питання не знайдено"));
+            return NotFound(new MediaUploadErrorDto("Запитання не знайдено"));
         }
 
         if (!User.CanAccessPackage(question.Tour.Package))

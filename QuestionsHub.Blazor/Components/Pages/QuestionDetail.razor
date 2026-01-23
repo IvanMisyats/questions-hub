@@ -7,14 +7,14 @@
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
 
-<PageTitle>Питання @(_question?.Number ?? "") - База українських запитань</PageTitle>
+<PageTitle>Запитання @(_question?.Number ?? "") - База українських запитань</PageTitle>
 
 @if (_notFound)
 {
     <div class="container mt-4">
         <div class="alert alert-warning">
-            <h4>Питання не знайдено</h4>
-            <p>Питання з ідентифікатором @Id не існує або недоступне.</p>
+            <h4>Запитання не знайдено</h4>
+            <p>Запитання з ідентифікатором @Id не існує або недоступне.</p>
             <a href="/" class="btn btn-primary">Повернутися на головну</a>
         </div>
     </div>
@@ -28,7 +28,7 @@ else if (_question == null)
 else
 {
     <div class="container-fluid">
-        <h4 class="mb-4">Питання</h4>
+        <h4 class="mb-4">Запитання</h4>
 
         <div class="row">
             <div class="col-12 mb-4">
@@ -39,7 +39,7 @@ else
                             <span class="text-muted mx-2">·</span>
                             <span class="text-muted">Тур @_question.Tour.Number</span>
                             <span class="text-muted mx-2">·</span>
-                            <span class="text-muted">Питання @_question.Number</span>
+                            <span class="text-muted">Запитання @_question.Number</span>
                         </div>
                         <a href="/package/@_question.Tour.PackageId#question-@_question.Id"
                            class="btn btn-sm btn-outline-primary">

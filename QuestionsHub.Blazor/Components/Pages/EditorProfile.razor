@@ -108,11 +108,11 @@
             <div class="col-md-6">
                 <div class="card h-100" @onclick="ShowQuestionsList" style="cursor: pointer;">
                     <div class="card-header">
-                        <i class="bi bi-question-circle me-2"></i>Питання
+                        <i class="bi bi-question-circle me-2"></i>Запитання
                     </div>
                     <div class="card-body">
                         <h3 class="card-title">@_questionsCount</h3>
-                        <p class="card-text text-muted">питань, де @_author.FirstName є автором</p>
+                        <p class="card-text text-muted">запитань, де @_author.FirstName є автором</p>
                     </div>
                 </div>
             </div>
@@ -180,9 +180,9 @@
                                     <span class="text-muted mx-2">→</span>
                                     <span class="text-muted">Тур @question.Tour.Number</span>
                                     <span class="text-muted mx-2">→</span>
-                                    <span class="text-muted">Питання @question.Number</span>
+                                    <span class="text-muted">Запитання @question.Number</span>
                                 </div>
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="@(() => CopyQuestionLink(question.Id))" title="Скопіювати посилання на питання">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="@(() => CopyQuestionLink(question.Id))" title="Скопіювати посилання на запитання">
                                     @if (_copiedQuestionId == question.Id)
                                     {
                                         <Icon Name="check" />
@@ -223,7 +223,7 @@
                 else
                 {
                     <div class="alert alert-info">
-                        <p class="mb-0">Питання не знайдено.</p>
+                        <p class="mb-0">Запитання не знайдено.</p>
                     </div>
                 }
             </div>
