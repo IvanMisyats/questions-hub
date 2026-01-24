@@ -33,7 +33,7 @@
                                 <h5 class="card-title">@package.Title</h5>
                                 <p class="card-text text-muted mb-2">
                                     <small>
-                                        <strong>@GetQuestionsCount(package)</strong> запитань
+                                        <strong>@package.QuestionsCount</strong> запитань
                                         @{ var playedPeriod = PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo); }
                                         @if (!string.IsNullOrEmpty(playedPeriod))
                                         {
@@ -58,11 +58,10 @@
                                     <p class="card-text">
                                         <small class="text-muted">
                                             <strong>Редактори:</strong>
-                                            @{ var editors = package.Editors.ToList(); }
-                                            @for (var i = 0; i < editors.Count; i++)
+                                            @for (var i = 0; i < package.Editors.Count; i++)
                                             {
-                                                var editor = editors[i];
-                                                @(" ")<a href="/editor/@editor.Id" class="text-muted">@editor.FullName</a>@(i < editors.Count - 1 ? " ·" : "")
+                                                var editor = package.Editors[i];
+                                                @(" ")<a href="/editor/@editor.Id" class="text-muted">@editor.FullName</a>@(i < package.Editors.Count - 1 ? " ·" : "")
                                             }
                                         </small>
                                     </p>
@@ -83,11 +82,26 @@
     [Parameter]
     public int Page { get; set; } = 1;
 
-    private List<Package>? _packages;
+    private List<PackageCardDto>? _packages;
     private int _totalCount;
     private int _totalPages;
 
     private int CurrentPage => Page < 1 ? 1 : Page;
+
+    private record PackageCardDto(
+        int Id,
+        string Title,
+        string? Description,
+        DateTime? PublicationDate,
+        DateOnly? PlayedFrom,
+        DateOnly? PlayedTo,
+        int QuestionsCount,
+        List<EditorDto> Editors);
+
+    private record EditorDto(int Id, string FirstName, string LastName)
+    {
+        public string FullName => $"{FirstName} {LastName}";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -96,41 +110,88 @@
 
     private async Task LoadPackages()
     {
-        // Get access context for filtering
         var accessContext = await AccessControl.GetPackageAccessContext();
+        var accessFilter = accessContext.GetAccessFilter();
 
-        // Load all published packages
-        var allPackages = await DbContext.Packages
+        var baseQuery = DbContext.Packages
+            .AsNoTracking()
             .Where(p => p.Status == PackageStatus.Published)
+            .Where(accessFilter);
+
+        _totalCount = await baseQuery.CountAsync();
+        _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
+
+        // First query: Get basic package data and questions count
+        var packageData = await baseQuery
+            .OrderByDescending(p => p.Id)
+            .Skip((CurrentPage - 1) * PageSize)
+            .Take(PageSize)
+            .Select(p => new
+            {
+                p.Id,
+                p.Title,
+                p.Description,
+                p.PublicationDate,
+                p.PlayedFrom,
+                p.PlayedTo,
+                QuestionsCount = p.Tours.SelectMany(t => t.Questions).Count()
+            })
+            .ToListAsync();
+
+        var packageIds = packageData.Select(p => p.Id).ToList();
+
+        // Second query: Get editors for these packages using Include (simpler, EF Core handles it)
+        var packagesWithEditors = await DbContext.Packages
+            .AsNoTracking()
+            .Where(p => packageIds.Contains(p.Id))
             .Include(p => p.PackageEditors)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Blocks)
                     .ThenInclude(b => b.Editors)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Questions)
-            .OrderByDescending(p => p.Id)
-            .ToListAsync();
+            .ToDictionaryAsync(p => p.Id);
 
-        // Filter by access level using PackageAccessContext
-        var filteredPackages = allPackages
-            .Where(p => accessContext.CanAccessPackage(p))
+        // Map to DTOs in memory
+        _packages = packageData
+            .Select(p =>
+            {
+                var pkg = packagesWithEditors.GetValueOrDefault(p.Id);
+
+                // Explicitly gather editors from all sources
+                var allEditors = new List<Author>();
+                if (pkg != null)
+                {
+                    // Add package-level editors
+                    allEditors.AddRange(pkg.PackageEditors);
+
+                    // Add tour and block editors
+                    foreach (var tour in pkg.Tours)
+                    {
+                        allEditors.AddRange(tour.Editors);
+                        foreach (var block in tour.Blocks)
+                        {
+                            allEditors.AddRange(block.Editors);
+                        }
+                    }
+                }
+
+                var editors = allEditors
+                    .DistinctBy(e => e.Id)
+                    .Select(e => new EditorDto(e.Id, e.FirstName, e.LastName))
+                    .ToList();
+
+                return new PackageCardDto(
+                    p.Id,
+                    p.Title,
+                    p.Description,
+                    p.PublicationDate,
+                    p.PlayedFrom,
+                    p.PlayedTo,
+                    p.QuestionsCount,
+                    editors
+                );
+            })
             .ToList();
-
-        _totalCount = filteredPackages.Count;
-        _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
-
-        // Apply pagination
-        _packages = filteredPackages
-            .Skip((CurrentPage - 1) * PageSize)
-            .Take(PageSize)
-            .ToList();
-    }
-
-
-    private int GetQuestionsCount(Package package)
-    {
-        return package.Tours.Sum(t => t.Questions.Count);
     }
 }

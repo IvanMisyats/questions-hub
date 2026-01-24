@@ -66,6 +66,16 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
                 .WithOne(t => t.Package)
                 .HasForeignKey(t => t.PackageId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Indexes for home page query optimization
+            entity.HasIndex(p => p.Status)
+                .HasDatabaseName("IX_Packages_Status");
+
+            entity.HasIndex(p => p.OwnerId)
+                .HasDatabaseName("IX_Packages_OwnerId");
+
+            entity.HasIndex(p => new { p.Status, p.AccessLevel })
+                .HasDatabaseName("IX_Packages_Status_AccessLevel");
         });
 
         builder.Entity<Tour>(entity =>

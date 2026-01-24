@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 namespace QuestionsHub.Blazor.Domain;
 
 /// <summary>
@@ -15,6 +17,25 @@ public record PackageAccessContext(
     bool HasVerifiedEmail,
     string? UserId)
 {
+    /// <summary>
+    /// Returns an expression for EF Core queries to filter packages by access level.
+    /// This is the SQL-translatable version of CanAccessPackage.
+    /// </summary>
+    public Expression<Func<Package, bool>> GetAccessFilter()
+    {
+        if (IsAdmin)
+            return p => true;
+
+        var userId = UserId;
+        var hasVerifiedEmail = HasVerifiedEmail;
+        var isEditor = IsEditor;
+
+        return p =>
+            (userId != null && p.OwnerId == userId) ||
+            p.AccessLevel == PackageAccessLevel.All ||
+            (p.AccessLevel == PackageAccessLevel.RegisteredOnly && hasVerifiedEmail) ||
+            (p.AccessLevel == PackageAccessLevel.EditorsOnly && isEditor);
+    }
     /// <summary>
     /// Checks if the user can access the given package based on its access level.
     /// Does not consider package status - use CanViewPackage for full visibility check.
