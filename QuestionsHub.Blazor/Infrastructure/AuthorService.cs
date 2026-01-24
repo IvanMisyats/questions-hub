@@ -88,23 +88,6 @@ public class AuthorService
     }
 
     /// <summary>
-    /// Gets an author by their ID, including their questions, tours, and linked user.
-    /// </summary>
-    /// <param name="authorId">The author ID.</param>
-    /// <returns>The author if found, null otherwise.</returns>
-    public async Task<Author?> GetAuthorById(int authorId)
-    {
-        await using var context = await _dbContextFactory.CreateDbContextAsync();
-
-        return await context.Authors
-            .Include(a => a.User)
-            .Include(a => a.Tours)
-                .ThenInclude(t => t.Package)
-            .Include(a => a.Questions)
-            .FirstOrDefaultAsync(a => a.Id == authorId);
-    }
-
-    /// <summary>
     /// Searches for authors matching the query (first or last name starts with query).
     /// </summary>
     /// <param name="query">Search query.</param>
@@ -128,62 +111,6 @@ public class AuthorService
             .ThenBy(a => a.FirstName)
             .Take(limit)
             .ToListAsync(ct);
-    }
-
-    /// <summary>
-    /// Gets all authors with their question and package counts.
-    /// Only counts questions and packages from published packages that the user can access.
-    /// Authors with no accessible content are excluded from the list.
-    /// </summary>
-    /// <param name="accessContext">User access context for filtering by access level.</param>
-    /// <returns>List of author view models with counts.</returns>
-    public async Task<List<AuthorListItem>> GetAllAuthorsWithCounts(PackageAccessContext accessContext)
-    {
-        await using var context = await _dbContextFactory.CreateDbContextAsync();
-
-        // Load all authors with their relationships
-        var authors = await context.Authors
-            .Include(a => a.Questions)
-                .ThenInclude(q => q.Tour)
-                    .ThenInclude(t => t.Package)
-            .Include(a => a.Tours)
-                .ThenInclude(t => t.Package)
-            .Include(a => a.Blocks)
-                .ThenInclude(b => b.Tour)
-                    .ThenInclude(t => t.Package)
-            .ToListAsync();
-
-        // Filter and count in memory based on access context
-        var result = authors
-            .Select(a => new AuthorListItem
-            {
-                Id = a.Id,
-                FirstName = a.FirstName,
-                LastName = a.LastName,
-                // Only count questions from accessible packages
-                QuestionCount = a.Questions.Count(q =>
-                    q.Tour.Package.Status == PackageStatus.Published
-                    && accessContext.CanAccessPackage(q.Tour.Package)),
-                // Count packages from both tours and blocks, only accessible ones
-                PackageCount = a.Tours
-                    .Where(t => t.Package.Status == PackageStatus.Published
-                             && accessContext.CanAccessPackage(t.Package))
-                    .Select(t => t.PackageId)
-                    .Union(a.Blocks
-                        .Where(b => b.Tour.Package.Status == PackageStatus.Published
-                                 && accessContext.CanAccessPackage(b.Tour.Package))
-                        .Select(b => b.Tour.PackageId))
-                    .Distinct()
-                    .Count()
-            })
-            // Exclude authors with no accessible content
-            .Where(a => a.QuestionCount > 0 || a.PackageCount > 0)
-            .OrderByDescending(a => a.QuestionCount)
-            .ThenBy(a => a.LastName)
-            .ThenBy(a => a.FirstName)
-            .ToList();
-
-        return result;
     }
 
     /// <summary>
@@ -218,7 +145,7 @@ public class AuthorService
                 QuestionCount = a.Questions.Count(q =>
                     q.Tour.Package.Status == PackageStatus.Published &&
                     accessiblePackageIds.Contains(q.Tour.PackageId)),
-                // Count unique packages from tours and blocks
+                // Count unique packages from tours, blocks, and package-level editors
                 PackageCount = a.Tours
                     .Where(t => t.Package.Status == PackageStatus.Published &&
                                accessiblePackageIds.Contains(t.PackageId))
@@ -227,6 +154,11 @@ public class AuthorService
                         .Where(b => b.Tour.Package.Status == PackageStatus.Published &&
                                    accessiblePackageIds.Contains(b.Tour.PackageId))
                         .Select(b => b.Tour.PackageId))
+                    .Union(a.Packages
+                        .Where(p => p.SharedEditors &&
+                                   p.Status == PackageStatus.Published &&
+                                   accessiblePackageIds.Contains(p.Id))
+                        .Select(p => p.Id))
                     .Distinct()
                     .Count()
             });
@@ -278,25 +210,15 @@ public class AuthorService
 
     /// <summary>
     /// Builds a queryable of package IDs that are accessible to the user.
+    /// Uses PackageAccessContext.GetAccessFilter() for consistency with other pages.
     /// </summary>
     private static IQueryable<int> GetAccessiblePackageIdsQuery(
         QuestionsHubDbContext context,
         PackageAccessContext accessContext)
     {
-        // Admin can access all packages
-        if (accessContext.IsAdmin)
-        {
-            return context.Packages.Select(p => p.Id);
-        }
-
+        var accessFilter = accessContext.GetAccessFilter();
         return context.Packages
-            .Where(p =>
-                // Owner always has access
-                (accessContext.UserId != null && p.OwnerId == accessContext.UserId) ||
-                // Access level checks
-                p.AccessLevel == PackageAccessLevel.All ||
-                (p.AccessLevel == PackageAccessLevel.RegisteredOnly && accessContext.HasVerifiedEmail) ||
-                (p.AccessLevel == PackageAccessLevel.EditorsOnly && accessContext.IsEditor))
+            .Where(accessFilter)
             .Select(p => p.Id);
     }
 
