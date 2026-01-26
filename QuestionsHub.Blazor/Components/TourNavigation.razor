@@ -1,6 +1,4 @@
-﻿@using QuestionsHub.Blazor.Domain
-
-<nav class="tour-navigation">
+﻿<nav class="tour-navigation">
     <div class="nav-header mb-3">
         <a href="#top" class="nav-link fw-bold" onclick="scrollToElement('top'); return false;">@Package.Title</a>
     </div>
@@ -12,7 +10,7 @@
         var tourElementId = $"tour-{tour.Id}";
         <div class="tour-group mb-3">
             <a href="#@tourElementId" class="nav-link tour-link" onclick="scrollToElement('@tourElementId'); return false;">
-                Тур @tour.Number
+                Тур @tour.Number@(tour.IsWarmup ? " (Розминка)" : "")
             </a>
             @if (tour.HasBlocks)
             {
