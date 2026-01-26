@@ -73,31 +73,31 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
-    // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:"
-    [GeneratedRegex(@"^\s*Автор(?:а|и|ка|ки)?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:", "Автор(и):"
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ка|ки|\(и\))?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorLabel();
 
-    // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ..."
-    [GeneratedRegex(@"^\s*Автор(?:а|ка)?\s+запитань\s+(\d+)\s*[-–—]\s*(\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ...", "Автори запитань 1-6: ..."
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ка|ки)?\s+запитань\s+(\d+)\s*[-–—]\s*(\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorRangeLabel();
 
     // Special markers
-    // Matches: [Ведучому: ...], [Ведучим: ...], [Ведучому -(ій): ...], [Вказівка ведучому: ...]
+    // Matches: [Ведучому: ...], [Ведучим: ...], [Ведучому -(ій): ...], [Вказівка ведучому: ...], [Ведучій: ...]
     // Captures the instruction text inside brackets and any text after the closing bracket
-    [GeneratedRegex(@"^\s*\[(?:Ведучому|Ведучим|Вказівка\s*ведучому)[^:]*:\s*([^\]]+)\]\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[(?:Ведучому|Ведучим|Ведучій|Вказівка\s*ведучому)[^:]*:\s*([^\]]+)\]\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HostInstructionsBracket();
 
-    [GeneratedRegex(@"^\s*(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarker();
 
-    // Matches: [Роздатка: ...], [Роздатковий матеріал: ...]
+    // Matches: [Роздатка: ...], [Роздатковий матеріал: ...], [Роздатковий матеріял: ...]
     // Captures the handout text inside brackets and any text after the closing bracket
-    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*([^\]]*)\]\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*([^\]]*)\]\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarkerBracket();
 
     // Matches opening of a multiline bracketed handout (no closing bracket on same line)
     // Captures any text after the colon as handout content
-    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матеріал)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarkerBracketOpen();
 
     // Matches a closing bracket with optional text after it (for multiline handouts)

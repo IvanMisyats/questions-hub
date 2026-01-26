@@ -920,6 +920,8 @@ public class PackageParserTests
     [InlineData("Автори: Іван; Марія; Петро", new[] { "Іван", "Марія", "Петро" })]
     [InlineData("Авторка: Галина Синєока (Львів)", new[] { "Галина Синєока (Львів)" })]
     [InlineData("Авторки: Марія, Олена", new[] { "Марія", "Олена" })]
+    [InlineData("Автор(и): Петро Сидоренко", new[] { "Петро Сидоренко" })]
+    [InlineData("Автор(и): Іван, Марія, Петро", new[] { "Іван", "Марія", "Петро" })]
     public void Parse_AuthorLabel_ExtractsAuthors(string line, string[] expectedAuthors)
     {
         // Arrange
@@ -938,6 +940,95 @@ public class PackageParserTests
         result.Tours[0].Questions[0].Authors.Should().BeEquivalentTo(expectedAuthors);
     }
 
+    /// <summary>
+    /// Tests author range labels that assign authors to a range of questions in the package header.
+    /// </summary>
+    [Fact]
+    public void Parse_AuthorRangeLabel_AssignsAuthorsToQuestionRange()
+    {
+        // Arrange - Author range header before questions
+        var blocks = new List<DocBlock>
+        {
+            Block("Автор запитань 1-2: Іван Петренко"),
+            Block("ТУР 1"),
+            Block("1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("2. Друге питання"),
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().Contain("Іван Петренко");
+        result.Tours[0].Questions[1].Authors.Should().Contain("Іван Петренко");
+    }
+
+    /// <summary>
+    /// Tests that "Автори запитань" label correctly parses comma-separated list of authors.
+    /// </summary>
+    [Fact]
+    public void Parse_AuthoriZapytanLabel_AssignsMultipleAuthorsToQuestionRange()
+    {
+        // Arrange - Multiple authors for a range of questions
+        var blocks = new List<DocBlock>
+        {
+            Block("Автори запитань 1-2: Іван Петренко, Марія Коваленко, Петро Сидоренко"),
+            Block("ТУР 1"),
+            Block("1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("2. Друге питання"),
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().BeEquivalentTo(
+            ["Іван Петренко", "Марія Коваленко", "Петро Сидоренко"]);
+        result.Tours[0].Questions[1].Authors.Should().BeEquivalentTo(
+            ["Іван Петренко", "Марія Коваленко", "Петро Сидоренко"]);
+    }
+
+    /// <summary>
+    /// Tests various author range label formats.
+    /// </summary>
+    [Theory]
+    [InlineData("Автор запитань 1-3: Іван Петренко")]
+    [InlineData("Автора запитань 1-3: Іван Петренко")]
+    [InlineData("Авторка запитань 1-3: Іван Петренко")]
+    [InlineData("Автори запитань 1-3: Іван Петренко")]
+    [InlineData("Авторки запитань 1-3: Іван Петренко")]
+    public void Parse_AuthorRangeLabelVariants_AssignsAuthors(string authorRangeLine)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(authorRangeLine),
+            Block("ТУР 1"),
+            Block("1. Питання 1"),
+            Block("Відповідь: Відповідь 1"),
+            Block("2. Питання 2"),
+            Block("Відповідь: Відповідь 2"),
+            Block("3. Питання 3"),
+            Block("Відповідь: Відповідь 3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(3);
+        foreach (var question in result.Tours[0].Questions)
+        {
+            question.Authors.Should().Contain("Іван Петренко");
+        }
+    }
+
     #endregion
 
     #region Host Instructions
@@ -947,6 +1038,7 @@ public class PackageParserTests
     [InlineData("[Ведучому-(ій): наголос на слові] Текст", "наголос на слові")]
     [InlineData("[Вказівка ведучому: пауза 5 секунд] Текст", "пауза 5 секунд")]
     [InlineData("[Ведучим: читати чітко] Текст", "читати чітко")]
+    [InlineData("[Ведучій: наголос на останньому слові] Текст", "наголос на останньому слові")]
     public void Parse_HostInstructions_ExtractsInstructions(string line, string expectedInstruction)
     {
         // Arrange
@@ -1032,6 +1124,7 @@ public class PackageParserTests
     [Theory]
     [InlineData("Роздатка: Таблиця даних", "Таблиця даних")]
     [InlineData("Роздатковий матеріал: Текст для гравців", "Текст для гравців")]
+    [InlineData("Роздатковий матеріял: Текст для команд", "Текст для команд")]
     public void Parse_HandoutMarker_ExtractsHandoutText(string line, string expected)
     {
         // Arrange
@@ -1077,6 +1170,7 @@ public class PackageParserTests
     [InlineData("[Роздатка: Таблиця] Питання", "Таблиця", "Питання")]
     [InlineData("[Роздатковий матеріал: Схема] Який результат?", "Схема", "Який результат?")]
     [InlineData("[Роздатка: ] Питання без тексту роздатки", "", "Питання без тексту роздатки")]
+    [InlineData("[Роздатковий матеріял: Діаграма] Що зображено?", "Діаграма", "Що зображено?")]
     public void Parse_BracketedHandoutWithText_SeparatesHandoutAndQuestion(
         string line, string expectedHandout, string expectedQuestionText)
     {
