@@ -30,6 +30,8 @@ The following icons are available in the sprite file:
 | `i-chevron-right` | chevron-right, arrow-right | Right arrow for pagination |
 | `i-chevron-double-left` | chevron-double-left, chevrons-left | Double left arrow for first page |
 | `i-chevron-double-right` | chevron-double-right, chevrons-right | Double right arrow for last page |
+| `i-sun` | sun, light | Sun icon for light theme indicator |
+| `i-moon` | moon, dark | Moon icon for dark theme indicator |
 
 ## Usage
 

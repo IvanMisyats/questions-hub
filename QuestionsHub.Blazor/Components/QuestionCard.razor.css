@@ -1,9 +1,9 @@
 ﻿.question-card {
     margin-bottom: 1.5rem;
     padding: 1rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--app-border-light);
     border-radius: 0.5rem;
-    background: #fafafa;
+    background: var(--app-card-bg);
 }
 
 .question-header {
@@ -15,19 +15,19 @@
 
 .question-number {
     font-weight: 600;
-    color: #1b6ec2;
+    color: var(--app-primary);
     font-size: 1rem;
 }
 
 .answer-toggle-section {
     margin-top: 0.75rem;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--app-border-light);
     padding-top: 0.75rem;
 }
 
 .answer-toggle {
     cursor: pointer;
-    color: #0d6efd;
+    color: var(--app-link);
     font-size: 0.9rem;
     text-decoration: none;
 }
@@ -39,14 +39,14 @@
 
 .copy-link-btn {
     padding: 0.15rem 0.35rem;
-    color: #6c757d;
+    color: var(--app-text-muted);
     background: transparent;
     border: none;
     line-height: 1;
 }
 
 .copy-link-btn:hover {
-    color: #1b6ec2;
+    color: var(--app-primary);
 }
 
 .copy-icon {

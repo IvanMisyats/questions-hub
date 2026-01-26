@@ -36,11 +36,11 @@
 }
 
 .author-selector .author-input::placeholder {
-    color: #6c757d;
+    color: var(--app-text-muted);
 }
 
 .author-selector .dropdown-item.disabled {
-    color: #6c757d;
-    background-color: #f8f9fa;
+    color: var(--app-text-muted);
+    background-color: var(--app-bg-secondary);
 }
 
