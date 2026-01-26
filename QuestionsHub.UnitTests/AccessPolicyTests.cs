@@ -1,6 +1,6 @@
-﻿using FluentAssertions;
+﻿using System.Globalization;
+using FluentAssertions;
 using QuestionsHub.Blazor.Domain;
-using QuestionsHub.Blazor.Infrastructure;
 using Xunit;
 
 namespace QuestionsHub.UnitTests;
@@ -564,7 +564,7 @@ public class AccessPolicyTests
             var question = new Question
             {
                 Id = Random.Shared.Next(1, 10000),
-                Number = (i + 1).ToString(),
+                Number = (i + 1).ToString(CultureInfo.InvariantCulture),
                 Text = $"Test question {i + 1}",
                 Answer = $"Test answer {i + 1}",
                 OrderIndex = i,

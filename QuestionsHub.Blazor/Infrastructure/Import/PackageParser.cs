@@ -814,7 +814,7 @@ public class PackageParser
     /// <summary>
     /// Saves the current question to the current block (if any) or tour.
     /// </summary>
-    private void SaveCurrentQuestion(ParserContext ctx)
+    private static void SaveCurrentQuestion(ParserContext ctx)
     {
         if (ctx.CurrentQuestion == null || ctx.CurrentTour == null)
             return;
@@ -860,7 +860,7 @@ public class PackageParser
     /// <summary>
     /// Finalizes the parsing result: saves the last question, parses remaining header, and calculates confidence.
     /// </summary>
-    private void FinalizeParsingResult(ParserContext ctx)
+    private static void FinalizeParsingResult(ParserContext ctx)
     {
         SaveCurrentQuestion(ctx);
 

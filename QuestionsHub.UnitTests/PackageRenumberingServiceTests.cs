@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+﻿using System.Globalization;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
 using Xunit;
@@ -7,7 +7,7 @@ namespace QuestionsHub.UnitTests;
 
 public class PackageRenumberingServiceTests
 {
-    private PackageRenumberingService CreateService()
+    private static PackageRenumberingService CreateService()
     {
         // The service can work with in-memory packages using RenumberPackageInMemory
         return new PackageRenumberingService(null!);
@@ -32,7 +32,7 @@ public class PackageRenumberingServiceTests
         {
             Id = id,
             OrderIndex = orderIndex,
-            Number = (orderIndex + 1).ToString(),
+            Number = (orderIndex + 1).ToString(CultureInfo.InvariantCulture),
             IsWarmup = isWarmup,
             Questions = []
         };
@@ -44,7 +44,7 @@ public class PackageRenumberingServiceTests
         {
             Id = id,
             OrderIndex = orderIndex,
-            Number = string.IsNullOrEmpty(number) ? (orderIndex + 1).ToString() : number,
+            Number = string.IsNullOrEmpty(number) ? (orderIndex + 1).ToString(CultureInfo.InvariantCulture) : number,
             Text = $"Question {id}",
             Answer = $"Answer {id}"
         };
@@ -343,7 +343,7 @@ public class PackageRenumberingServiceTests
         var mainTour = CreateTour(1, 1);
         for (int i = 0; i < 31; i++)
         {
-            mainTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString()));
+            mainTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString(CultureInfo.InvariantCulture)));
         }
 
         // Simulate new warmup tour at first position with 1 question
@@ -369,7 +369,7 @@ public class PackageRenumberingServiceTests
         var mainQuestions = mainTour.Questions.OrderBy(q => q.OrderIndex).ToList();
         for (int i = 0; i < 31; i++)
         {
-            Assert.Equal((i + 1).ToString(), mainQuestions[i].Number);
+            Assert.Equal((i + 1).ToString(CultureInfo.InvariantCulture), mainQuestions[i].Number);
         }
     }
 
@@ -396,7 +396,7 @@ public class PackageRenumberingServiceTests
         var originalTour = CreateTour(1, 1);
         for (int i = 0; i < 12; i++)
         {
-            originalTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString()));
+            originalTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString(CultureInfo.InvariantCulture)));
         }
 
         package.Tours.Add(newTour);
@@ -419,7 +419,7 @@ public class PackageRenumberingServiceTests
         var originalTourQuestions = originalTour.Questions.OrderBy(q => q.OrderIndex).ToList();
         for (int i = 0; i < 12; i++)
         {
-            Assert.Equal((i + 4).ToString(), originalTourQuestions[i].Number);
+            Assert.Equal((i + 4).ToString(CultureInfo.InvariantCulture), originalTourQuestions[i].Number);
         }
     }
 
@@ -442,7 +442,7 @@ public class PackageRenumberingServiceTests
         var mainTour = CreateTour(2, 1);
         for (int i = 0; i < 31; i++)
         {
-            mainTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString()));
+            mainTour.Questions.Add(CreateQuestion(i + 1, i, (i + 1).ToString(CultureInfo.InvariantCulture)));
         }
 
         package.Tours.Add(warmupTour);
@@ -460,7 +460,7 @@ public class PackageRenumberingServiceTests
         var mainQuestions = mainTour.Questions.OrderBy(q => q.OrderIndex).ToList();
         for (int i = 0; i < 31; i++)
         {
-            Assert.Equal((i + 1).ToString(), mainQuestions[i].Number);
+            Assert.Equal((i + 1).ToString(CultureInfo.InvariantCulture), mainQuestions[i].Number);
         }
     }
 
@@ -509,7 +509,7 @@ public class PackageRenumberingServiceTests
         var main1Questions = mainTour1.Questions.OrderBy(q => q.OrderIndex).ToList();
         for (int i = 0; i < 5; i++)
         {
-            Assert.Equal((i + 1).ToString(), main1Questions[i].Number);
+            Assert.Equal((i + 1).ToString(CultureInfo.InvariantCulture), main1Questions[i].Number);
         }
 
         // Main tour 2 questions: 6-8 (continues global numbering)

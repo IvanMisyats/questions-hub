@@ -27,10 +27,15 @@ public class PackageManagementService(
     /// <summary>
     /// Result of creating a new entity.
     /// </summary>
-    public record CreateResult<T>(bool Success, T? Entity, string? ErrorMessage = null)
+    public record CreateResult<T>(bool Success, T? Entity, string? ErrorMessage = null);
+
+    /// <summary>
+    /// Factory methods for CreateResult.
+    /// </summary>
+    public static class CreateResult
     {
-        public static CreateResult<T> Ok(T entity) => new(true, entity);
-        public static CreateResult<T> Fail(string error) => new(false, default, error);
+        public static CreateResult<T> Ok<T>(T entity) => new(true, entity);
+        public static CreateResult<T> Fail<T>(string error) => new(false, default, error);
     }
 
     /// <summary>
@@ -110,11 +115,11 @@ public class PackageManagementService(
             context.Tours.Add(tour);
             await context.SaveChangesAsync();
 
-            return CreateResult<Tour>.Ok(tour);
+            return CreateResult.Ok(tour);
         }
         catch (Exception ex)
         {
-            return CreateResult<Tour>.Fail(ex.Message);
+            return CreateResult.Fail<Tour>(ex.Message);
         }
     }
 
@@ -227,7 +232,7 @@ public class PackageManagementService(
                 .FirstOrDefaultAsync(t => t.Id == tourId);
 
             if (tour == null)
-                return CreateResult<Question>.Fail("Tour not found");
+                return CreateResult.Fail<Question>("Tour not found");
 
             var newOrderIndex = tour.Questions.Count;
 
@@ -271,11 +276,11 @@ public class PackageManagementService(
                 .Include(q => q.Authors)
                 .FirstOrDefaultAsync(q => q.Id == question.Id);
 
-            return CreateResult<Question>.Ok(reloadedQuestion!);
+            return CreateResult.Ok(reloadedQuestion!);
         }
         catch (Exception ex)
         {
-            return CreateResult<Question>.Fail(ex.Message);
+            return CreateResult.Fail<Question>(ex.Message);
         }
     }
 
