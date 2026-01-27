@@ -1,8 +1,6 @@
 @page "/editor/{Id:int}"
-@rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
-@using QuestionsHub.Blazor.Domain
-@using QuestionsHub.Blazor.Infrastructure
+@rendermode InteractiveServer
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -214,7 +212,7 @@
     private bool _linkSuccess;
     private int _packagesCount;
     private int _questionsCount;
-    private List<PackageListItem> _packagesList = [];
+    private List<AuthorPackageListItem> _packagesList = [];
     private const int PackagesPerPage = 20;
     private int _displayedPackagesCount = PackagesPerPage;
     private const string TourSeparator = " → ";
@@ -226,26 +224,7 @@
     private bool _isLoadingQuestions = false;
     private bool _hasMoreQuestions = false;
 
-    private class PackageListItem
-    {
-        public int PackageId { get; set; }
-        public required string PackageTitle { get; set; }
-        public bool IsGlobalEditor { get; set; }
-        public List<TourListItem> Tours { get; set; } = [];
-    }
 
-    private class TourListItem
-    {
-        public int TourId { get; set; }
-        public required string TourNumber { get; set; }
-        public List<BlockListItem> Blocks { get; set; } = [];
-    }
-
-    private class BlockListItem
-    {
-        public int BlockId { get; set; }
-        public int BlockNumber { get; set; }
-    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -271,162 +250,16 @@
         // Get current user's access context
         var accessContext = await AccessControl.GetPackageAccessContext();
 
-        // Get all package IDs where this author is involved in ONE query using UNION
-        var allAuthorPackageIds = await context.Tours
-            .AsNoTracking()
-            .Where(t => t.Editors.Any(e => e.Id == Id))
-            .Where(t => t.Package.Status == PackageStatus.Published)
-            .Select(t => t.PackageId)
-            .Union(
-                context.Blocks
-                    .AsNoTracking()
-                    .Where(b => b.Editors.Any(e => e.Id == Id))
-                    .Where(b => b.Tour.Package.Status == PackageStatus.Published)
-                    .Select(b => b.Tour.PackageId)
-            )
-            .Union(
-                context.Packages
-                    .AsNoTracking()
-                    .Where(p => p.SharedEditors && p.PackageEditors.Any(e => e.Id == Id))
-                    .Where(p => p.Status == PackageStatus.Published)
-                    .Select(p => p.Id)
-            )
-            .ToListAsync();
+        // Get statistics using the centralized AuthorService
+        var stats = await AuthorService.GetAuthorStatistics(Id, accessContext);
+        if (stats != null)
+        {
+            _questionsCount = stats.QuestionCount;
+            _packagesCount = stats.PackageCount;
+        }
 
-        // Now filter by access (only check packages the author is actually involved in)
-        var packageAccessFilter = accessContext.GetAccessFilter();
-        var accessiblePackageIds = await context.Packages
-            .AsNoTracking()
-            .Where(p => allAuthorPackageIds.Contains(p.Id))
-            .Where(packageAccessFilter)
-            .Select(p => p.Id)
-            .ToListAsync();
-
-        // Query tours where author is a tour editor (filtered by accessible packages)
-        var tourData = await context.Tours
-            .AsNoTracking()
-            .Where(t => accessiblePackageIds.Contains(t.PackageId))
-            .Where(t => t.Editors.Any(e => e.Id == Id))
-            .Select(t => new
-            {
-                t.Id,
-                t.Number,
-                t.PackageId,
-                PackageTitle = t.Package.Title
-            })
-            .ToListAsync();
-
-        // Query blocks where author is a block editor (filtered by accessible packages)
-        var blockData = await context.Blocks
-            .AsNoTracking()
-            .Where(b => accessiblePackageIds.Contains(b.Tour.PackageId))
-            .Where(b => b.Editors.Any(e => e.Id == Id))
-            .Select(b => new
-            {
-                b.Id,
-                b.OrderIndex,
-                TourId = b.Tour.Id,
-                TourNumber = b.Tour.Number,
-                b.Tour.PackageId,
-                PackageTitle = b.Tour.Package.Title
-            })
-            .ToListAsync();
-
-        // Query packages where author is a package-level editor (SharedEditors packages)
-        var globalEditorPackages = await context.Packages
-            .AsNoTracking()
-            .Where(p => accessiblePackageIds.Contains(p.Id))
-            .Where(p => p.SharedEditors && p.PackageEditors.Any(e => e.Id == Id))
-            .Select(p => new { p.Id, p.Title })
-            .ToListAsync();
-
-        // Count questions (SQL-level, filtered by accessible packages)
-        _questionsCount = await context.Questions
-            .AsNoTracking()
-            .Where(q => q.Authors.Any(a => a.Id == Id))
-            .Where(q => accessiblePackageIds.Contains(q.Tour.PackageId))
-            .CountAsync();
-
-        // Calculate packages count
-        var allPackageIds = tourData.Select(t => t.PackageId)
-            .Union(blockData.Select(b => b.PackageId))
-            .Union(globalEditorPackages.Select(p => p.Id))
-            .Distinct();
-        _packagesCount = allPackageIds.Count();
-
-        // Build packages list
-        var globalEditorPackageIds = globalEditorPackages.Select(p => p.Id).ToHashSet();
-
-        var tourItems = tourData
-            .Where(t => !globalEditorPackageIds.Contains(t.PackageId))
-            .Select(t => new
-            {
-                t.PackageId,
-                t.PackageTitle,
-                TourId = t.Id,
-                TourNumber = (string?)t.Number,
-                BlockId = (int?)null,
-                BlockOrderIndex = (int?)null,
-                IsGlobalEditor = false
-            });
-
-        var blockItems = blockData
-            .Where(b => !globalEditorPackageIds.Contains(b.PackageId))
-            .Select(b => new
-            {
-                b.PackageId,
-                b.PackageTitle,
-                b.TourId,
-                TourNumber = (string?)b.TourNumber,
-                BlockId = (int?)b.Id,
-                BlockOrderIndex = (int?)b.OrderIndex,
-                IsGlobalEditor = false
-            });
-
-        var globalEditorPackageItems = globalEditorPackages
-            .Select(p => new
-            {
-                PackageId = p.Id,
-                PackageTitle = p.Title,
-                TourId = 0,
-                TourNumber = (string?)null,
-                BlockId = (int?)null,
-                BlockOrderIndex = (int?)null,
-                IsGlobalEditor = true
-            });
-
-        _packagesList = tourItems
-            .Union(blockItems)
-            .Union(globalEditorPackageItems)
-            .GroupBy(x => new { x.PackageId, x.PackageTitle })
-            .Select(g => new PackageListItem
-            {
-                PackageId = g.Key.PackageId,
-                PackageTitle = g.Key.PackageTitle,
-                IsGlobalEditor = g.Any(x => x.IsGlobalEditor),
-                Tours = g
-                    .Where(x => !x.IsGlobalEditor && x.TourNumber != null)
-                    .GroupBy(x => new { x.TourId, x.TourNumber })
-                    .Select(tg => new TourListItem
-                    {
-                        TourId = tg.Key.TourId,
-                        TourNumber = tg.Key.TourNumber!,
-                        Blocks = tg
-                            .Where(x => x.BlockId.HasValue)
-                            .OrderBy(x => x.BlockOrderIndex)
-                            .Select((x, index) => new BlockListItem
-                            {
-                                BlockId = x.BlockId!.Value,
-                                BlockNumber = index + 1
-                            })
-                            .ToList()
-                    })
-                    .OrderBy(t => int.TryParse(t.TourNumber, out var num) ? num : int.MaxValue)
-                    .ThenBy(t => t.TourNumber)
-                    .ToList()
-            })
-            .OrderByDescending(p => p.PackageId)
-            .ToList();
+        // Get packages list using the centralized AuthorService
+        _packagesList = await AuthorService.GetAuthorPackages(Id, accessContext);
 
         // Load linked user info
         _linkedUser = await AuthorService.GetLinkedUser(Id);
@@ -443,7 +276,7 @@
         _displayedPackagesCount += PackagesPerPage;
     }
 
-    private IEnumerable<((string Text, string Href) Entry, bool IsLast)> GetPackageEntries(PackageListItem packageItem)
+    private IEnumerable<((string Text, string Href) Entry, bool IsLast)> GetPackageEntries(AuthorPackageListItem packageItem)
     {
         var allEntries = new List<(string Text, string Href)>();
 
