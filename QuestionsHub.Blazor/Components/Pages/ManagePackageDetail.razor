@@ -1,11 +1,9 @@
 @page "/manage/package/{Id:int?}"
 @rendermode InteractiveServer
+@attribute [Authorize(Roles = "Editor,Admin")]
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@using Microsoft.JSInterop
-@using QuestionsHub.Blazor.Domain
-@using QuestionsHub.Blazor.Infrastructure
-@attribute [Authorize(Roles = "Editor,Admin")]
+@using QuestionsHub.Blazor.Utils
 @implements IAsyncDisposable
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
@@ -2020,16 +2018,17 @@
 
         try
         {
-            // Trim whitespaces from text fields
+            // Normalize text fields (trim whitespaces and normalize apostrophes)
             _editingQuestion.Number = _editingQuestion.Number.Trim();
-            _editingQuestion.Text = _editingQuestion.Text.Trim();
-            _editingQuestion.Answer = _editingQuestion.Answer.Trim();
-            _editingQuestion.HostInstructions = _editingQuestion.HostInstructions?.Trim();
-            _editingQuestion.HandoutText = _editingQuestion.HandoutText?.Trim();
-            _editingQuestion.AcceptedAnswers = _editingQuestion.AcceptedAnswers?.Trim();
-            _editingQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers?.Trim();
-            _editingQuestion.Comment = _editingQuestion.Comment?.Trim();
-            _editingQuestion.Source = _editingQuestion.Source?.Trim();
+            _editingQuestion.Text = TextNormalizer.Normalize(_editingQuestion.Text) ?? "";
+            _editingQuestion.Answer = TextNormalizer.Normalize(_editingQuestion.Answer) ?? "";
+            _editingQuestion.HostInstructions = TextNormalizer.Normalize(_editingQuestion.HostInstructions);
+            _editingQuestion.HandoutText = TextNormalizer.Normalize(_editingQuestion.HandoutText);
+            _editingQuestion.AcceptedAnswers = TextNormalizer.Normalize(_editingQuestion.AcceptedAnswers);
+            _editingQuestion.RejectedAnswers = TextNormalizer.Normalize(_editingQuestion.RejectedAnswers);
+            _editingQuestion.Comment = TextNormalizer.Normalize(_editingQuestion.Comment);
+            // Source is not normalized for apostrophes as it may contain URLs
+            _editingQuestion.Source = TextNormalizer.NormalizeExcludingApostrophes(_editingQuestion.Source);
 
             await using var context = await DbContextFactory.CreateDbContextAsync();
             var dbQuestion = await context.Questions

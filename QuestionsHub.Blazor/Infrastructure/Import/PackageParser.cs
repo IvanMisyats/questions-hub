@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Utils;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -277,7 +278,7 @@ public class PackageParser
             var afterBracket = closeMatch.Groups[1].Value.Trim();
             if (!string.IsNullOrWhiteSpace(afterBracket) && ctx.HasCurrentQuestion)
             {
-                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterBracket);
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, TextNormalizer.NormalizeApostrophes(afterBracket)!);
             }
 
             return true;
@@ -294,14 +295,14 @@ public class PackageParser
             var beforeBracket = line[..bracketIndex].Trim();
             if (!string.IsNullOrWhiteSpace(beforeBracket) && ctx.HasCurrentQuestion)
             {
-                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, beforeBracket);
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(beforeBracket)!);
             }
 
             // Text after the bracket is question text
             var afterBracket = line[(bracketIndex + 1)..].Trim();
             if (!string.IsNullOrWhiteSpace(afterBracket) && ctx.HasCurrentQuestion)
             {
-                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterBracket);
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, TextNormalizer.NormalizeApostrophes(afterBracket)!);
             }
 
             return true;
@@ -310,7 +311,7 @@ public class PackageParser
         // Line is still inside the handout bracket - add to handout text (unless it's just whitespace)
         if (!string.IsNullOrWhiteSpace(line) && ctx.HasCurrentQuestion)
         {
-            ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, line);
+            ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(line)!);
         }
 
         return true;
@@ -510,10 +511,10 @@ public class PackageParser
         if (!TryExtractHostInstructions(line, out var instructions, out var afterInstructions))
             return false;
 
-        ctx.CurrentQuestion!.HostInstructions = AppendText(ctx.CurrentQuestion.HostInstructions, instructions);
+        ctx.CurrentQuestion!.HostInstructions = AppendText(ctx.CurrentQuestion.HostInstructions, TextNormalizer.NormalizeApostrophes(instructions)!);
 
         if (!string.IsNullOrWhiteSpace(afterInstructions))
-            ctx.CurrentQuestion.Text = AppendText(ctx.CurrentQuestion.Text, afterInstructions);
+            ctx.CurrentQuestion.Text = AppendText(ctx.CurrentQuestion.Text, TextNormalizer.NormalizeApostrophes(afterInstructions)!);
 
         return true;
     }
@@ -528,10 +529,10 @@ public class PackageParser
         if (TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
         {
             if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(handoutText))
-                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, handoutText);
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(handoutText)!);
 
             if (!string.IsNullOrWhiteSpace(afterHandout) && ctx.HasCurrentQuestion)
-                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, afterHandout);
+                ctx.CurrentQuestion!.Text = AppendText(ctx.CurrentQuestion.Text, TextNormalizer.NormalizeApostrophes(afterHandout)!);
 
             // Single-line bracketed handout is complete, subsequent lines are question text
             ctx.CurrentSection = ParserSection.QuestionText;
@@ -546,7 +547,7 @@ public class PackageParser
             ctx.InsideMultilineHandoutBracket = true;
 
             if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(openingHandoutText))
-                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, openingHandoutText);
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(openingHandoutText)!);
 
             return true;
         }
@@ -601,7 +602,7 @@ public class PackageParser
             var content = line[1..^1].Trim();
             if (!string.IsNullOrWhiteSpace(content) && ctx.HasCurrentQuestion)
             {
-                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, content);
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(content)!);
             }
             // Section stays as Handout - next non-bracket line will be question text
             // The asset association happens after ProcessBlock, so assets will be associated correctly
@@ -710,7 +711,7 @@ public class PackageParser
             ctx.CurrentSection = ParserSection.Handout;
             var handoutContent = handoutMatch.Groups[1].Value.Trim();
             if (!string.IsNullOrWhiteSpace(handoutContent))
-                question.HandoutText = AppendText(question.HandoutText, handoutContent);
+                question.HandoutText = AppendText(question.HandoutText, TextNormalizer.NormalizeApostrophes(handoutContent)!);
             return;
         }
 
@@ -720,11 +721,11 @@ public class PackageParser
             ctx.CurrentSection = ParserSection.Handout;
 
             if (!string.IsNullOrWhiteSpace(handout))
-                question.HandoutText = AppendText(question.HandoutText, handout);
+                question.HandoutText = AppendText(question.HandoutText, TextNormalizer.NormalizeApostrophes(handout)!);
 
             if (!string.IsNullOrWhiteSpace(afterHandout))
             {
-                question.Text = AppendText(question.Text, afterHandout);
+                question.Text = AppendText(question.Text, TextNormalizer.NormalizeApostrophes(afterHandout)!);
                 ctx.CurrentSection = ParserSection.QuestionText;
             }
 
@@ -738,7 +739,7 @@ public class PackageParser
             ctx.InsideMultilineHandoutBracket = true;
 
             if (!string.IsNullOrWhiteSpace(openingHandout))
-                question.HandoutText = AppendText(question.HandoutText, openingHandout);
+                question.HandoutText = AppendText(question.HandoutText, TextNormalizer.NormalizeApostrophes(openingHandout)!);
 
             return;
         }
@@ -746,16 +747,16 @@ public class PackageParser
         // Try host instructions (e.g., "6. [Ведучому: ...] Question text")
         if (TryExtractHostInstructions(remainingText, out var instructions, out var afterInstructions))
         {
-            question.HostInstructions = AppendText(question.HostInstructions, instructions);
+            question.HostInstructions = AppendText(question.HostInstructions, TextNormalizer.NormalizeApostrophes(instructions)!);
 
             if (!string.IsNullOrWhiteSpace(afterInstructions))
-                question.Text = AppendText(question.Text, afterInstructions);
+                question.Text = AppendText(question.Text, TextNormalizer.NormalizeApostrophes(afterInstructions)!);
 
             return;
         }
 
         // Regular question text
-        question.Text = AppendText(question.Text, remainingText);
+        question.Text = AppendText(question.Text, TextNormalizer.NormalizeApostrophes(remainingText)!);
     }
 
     /// <summary>
@@ -969,9 +970,7 @@ public class PackageParser
 
     private static string NormalizeText(string text)
     {
-        text = text.Replace('\u00A0', ' ');
-        text = text.Replace('–', '-').Replace('—', '-');
-        return text.Trim();
+        return TextNormalizer.NormalizeWhitespaceAndDashes(text) ?? "";
     }
 
     private static bool TryParseTourStart(string text, out string tourNumber)
@@ -1261,7 +1260,7 @@ public class PackageParser
                 }
                 else
                 {
-                    tour.Preamble = AppendText(tour.Preamble, text);
+                    tour.Preamble = AppendText(tour.Preamble, TextNormalizer.NormalizeApostrophes(text)!);
                 }
             }
             else if (section == ParserSection.BlockHeader && block != null)
@@ -1284,7 +1283,7 @@ public class PackageParser
                     }
                     else
                     {
-                        block.Preamble = AppendText(block.Preamble, text);
+                        block.Preamble = AppendText(block.Preamble, TextNormalizer.NormalizeApostrophes(text)!);
                     }
                 }
             }
@@ -1294,27 +1293,28 @@ public class PackageParser
         switch (section)
         {
             case ParserSection.QuestionText:
-                question.Text = AppendText(question.Text, text);
+                question.Text = AppendText(question.Text, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.HostInstructions:
-                question.HostInstructions = AppendText(question.HostInstructions, text);
+                question.HostInstructions = AppendText(question.HostInstructions, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.Handout:
-                question.HandoutText = AppendText(question.HandoutText, text);
+                question.HandoutText = AppendText(question.HandoutText, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.Answer:
-                question.Answer = AppendText(question.Answer, text);
+                question.Answer = AppendText(question.Answer, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.AcceptedAnswers:
-                question.AcceptedAnswers = AppendText(question.AcceptedAnswers, text);
+                question.AcceptedAnswers = AppendText(question.AcceptedAnswers, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.RejectedAnswers:
-                question.RejectedAnswers = AppendText(question.RejectedAnswers, text);
+                question.RejectedAnswers = AppendText(question.RejectedAnswers, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.Comment:
-                question.Comment = AppendText(question.Comment, text);
+                question.Comment = AppendText(question.Comment, TextNormalizer.NormalizeApostrophes(text)!);
                 break;
             case ParserSection.Source:
+                // Source is not normalized for apostrophes as it may contain URLs
                 question.Source = AppendText(question.Source, text);
                 break;
             case ParserSection.Authors:
@@ -1349,7 +1349,8 @@ public class PackageParser
 
         // Determine title blocks based on font size and style
         var titleBlocks = DetermineTitleBlocks(headerBlocks);
-        result.Title = string.Join(" ", titleBlocks.Select(b => NormalizeText(b.Text)));
+        result.Title = TextNormalizer.NormalizeApostrophes(
+            string.Join(" ", titleBlocks.Select(b => NormalizeText(b.Text))));
 
         var preambleLines = new List<string>();
 
@@ -1368,7 +1369,7 @@ public class PackageParser
             }
             else
             {
-                preambleLines.Add(text);
+                preambleLines.Add(TextNormalizer.NormalizeApostrophes(text)!);
             }
         }
 
@@ -1480,6 +1481,7 @@ public class PackageParser
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)
             .SelectMany(s => s.Split([" та ", " і ", " and "], StringSplitOptions.RemoveEmptyEntries))
             .Select(s => StripAccents(s.Trim().TrimEnd('.', ',', ';')))
+            .Select(s => TextNormalizer.NormalizeApostrophes(s)!)
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .ToList();
     }

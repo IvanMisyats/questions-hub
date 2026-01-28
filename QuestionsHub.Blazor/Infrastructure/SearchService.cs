@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Utils;
 
 namespace QuestionsHub.Blazor.Infrastructure;
 
@@ -70,6 +71,9 @@ public class SearchService
         {
             return [];
         }
+
+        // Normalize apostrophes in search query to match stored data
+        query = TextNormalizer.NormalizeApostrophes(query)!;
 
         // Clamp limit to reasonable bounds
         limit = Math.Clamp(limit, 1, 100);

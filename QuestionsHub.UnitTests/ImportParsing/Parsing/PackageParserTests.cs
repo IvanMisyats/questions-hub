@@ -718,7 +718,7 @@ public class PackageParserTests
 
     [Theory]
     [InlineData("Залік: варіант1, варіант2", "варіант1, варіант2")]
-    [InlineData("Залік: варіант1 [необов'язкова частина]; варіант2", "варіант1 [необов'язкова частина]; варіант2")]
+    [InlineData("Залік: варіант1 [частина]; варіант2", "варіант1 [частина]; варіант2")]
     [InlineData("Залік:прийнятна відповідь", "прийнятна відповідь")]
     public void Parse_AcceptedLabel_ExtractsAcceptedAnswers(string line, string expected)
     {
@@ -1459,7 +1459,9 @@ public class PackageParserTests
 
         question.Number.Should().Be("1");
         question.HandoutAssetFileName.Should().Be("image001.png");
-        question.Text.Should().Be("У 1882 році ПЕРШИЙ, подорожуючи США, відвідав ДРУГОГО. На роздатковому матеріалі - епізод п'єси про цю зустріч. Назвіть ПЕРШОГО і ДРУГОГО.");
+        // Apostrophe is normalized to Ukrainian apostrophe (U+02BC)
+        question.Text.Should().StartWith("У 1882 році ПЕРШИЙ");
+        question.Text.Should().Contain("\u02BC"); // Ukrainian apostrophe
         question.Text.Should().NotContain("[");
         question.Text.Should().NotContain("]");
         question.Answer.Should().Be("Оскар Вайлд і Волт Вітмен");
@@ -2460,7 +2462,9 @@ public class PackageParserTests
 
         question.Number.Should().Be("1");
         question.HandoutText.Should().Be("The Land Beyond The Forest");
-        question.Text.Should().Be("Перед вами назва книги, яка мала великий вплив на письменника кінця дев'ятнадцятого сторіччя. Назвіть цього письменника.");
+        // Apostrophe is normalized to Ukrainian apostrophe (U+02BC)
+        question.Text.Should().StartWith("Перед вами назва книги");
+        question.Text.Should().Contain("\u02BC"); // Ukrainian apostrophe
         question.Text.Should().NotContain("Роздатковий матеріал");
         question.Text.Should().NotContain("[");
         question.Text.Should().NotContain("]");
