@@ -1578,15 +1578,15 @@ public class PackageParserTests
     }
 
     [Fact]
-    public void Parse_TitleWithIncreasingThenDecreasingFontSize_IncludesLargerFontBlocks()
+    public void Parse_TitleWithSimilarFontSizes_IncludesAllSimilarBlocks()
     {
         // Arrange - pt 15, then pt 18, then pt 15
-        // Title should include first two blocks (up to and including largest font)
+        // All blocks are within 70% threshold of first block, so all should be included
         var blocks = new List<DocBlock>
         {
             BlockWithFont("Перша частина заголовка", 15),
             BlockWithFont("ГОЛОВНА ЧАСТИНА", 18),
-            BlockWithFont("Опис турніру", 15),
+            BlockWithFont("Підзаголовок турніру", 15),
             Block("ТУР 1"),
             Block("1. Питання"),
             Block("Відповідь: Тест")
@@ -1595,9 +1595,8 @@ public class PackageParserTests
         // Act
         var result = _parser.Parse(blocks, []);
 
-        // Assert
-        result.Title.Should().Be("Перша частина заголовка ГОЛОВНА ЧАСТИНА");
-        result.Preamble.Should().Contain("Опис турніру");
+        // Assert - all 3 blocks should be included as they have similar font sizes
+        result.Title.Should().Be("Перша частина заголовка ГОЛОВНА ЧАСТИНА Підзаголовок турніру");
     }
 
     [Fact]
@@ -1683,6 +1682,94 @@ public class PackageParserTests
         // Assert
         result.Title.Should().Be("Назва турніру");
         result.Preamble.Should().Contain("Опис турніру");
+    }
+
+    [Fact]
+    public void Parse_TitleWithSignificantFontSizeDrop_StopsAtSmallerBlock()
+    {
+        // Arrange - Large font (26pt) followed by much smaller font (14pt)
+        // 14/26 = 53.8% which is below 70% threshold
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Дзеркало Чемпіонату Грузії 2023 - 1", 26, "Title"),
+            BlockWithFont("Липень - серпень 2023", 14, "Title"),
+            BlockWithFont("[Шановні ведучі, у квадратних дужках вказівки]", 14, "Title"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Only first block should be title due to significant font size drop
+        result.Title.Should().Be("Дзеркало Чемпіонату Грузії 2023 - 1");
+        result.Preamble.Should().Contain("Липень - серпень 2023");
+    }
+
+    [Fact]
+    public void Parse_TitleStopsAtPreambleMarker()
+    {
+        // Arrange - Title followed by preamble marker starting with [
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Назва турніру", 18, "Title"),
+            BlockWithFont("Підзаголовок", 18, "Title"),
+            BlockWithFont("[Шановні ведучі, це інструкції для вас]", 18, "Title"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Title should stop before preamble marker
+        result.Title.Should().Be("Назва турніру Підзаголовок");
+        result.Preamble.Should().Contain("[Шановні ведучі, це інструкції для вас]");
+    }
+
+    [Fact]
+    public void Parse_TitleWithOnlyPreambleMarker_ReturnsEmptyTitle()
+    {
+        // Arrange - First block is a preamble marker
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("[Шановні ведучі, інструкції]", 18, "Title"),
+            BlockWithFont("Назва турніру", 18, "Title"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Title should be empty since first block is preamble marker
+        result.Title.Should().BeEmpty();
+        result.Preamble.Should().Contain("[Шановні ведучі, інструкції]");
+    }
+
+    [Fact]
+    public void Parse_FontSizeTakesPriorityOverStyle()
+    {
+        // Arrange - All blocks have Title style, but font size drops significantly
+        // First block 26pt, second block 14pt (54% < 70%)
+        var blocks = new List<DocBlock>
+        {
+            BlockWithFont("Головний заголовок", 26, "Title"),
+            BlockWithFont("Другорядний текст", 14, "Title"),
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Font size drop should exclude second block despite Title style
+        result.Title.Should().Be("Головний заголовок");
+        result.Preamble.Should().Contain("Другорядний текст");
     }
 
     #endregion

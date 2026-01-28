@@ -1379,8 +1379,10 @@ public class PackageParser
 
     /// <summary>
     /// Determines which header blocks should be included in the title based on:
-    /// 1. Blocks with "Title" or "Heading" style (take consecutive styled blocks)
-    /// 2. Blocks up to and including the block with the largest font size
+    /// 1. Font size consistency (subsequent blocks must be ≥70% of first block's font size)
+    /// 2. Style consistency (if first block has Title/Heading style, subsequent blocks must too)
+    /// 3. Preamble markers (stop if text starts with '[' indicating host instructions)
+    /// 4. Editors label (stop if text starts with 'Редактор:' pattern)
     /// Limited to maximum 3 blocks.
     /// </summary>
     private static List<DocBlock> DetermineTitleBlocks(List<DocBlock> headerBlocks)
@@ -1391,45 +1393,89 @@ public class PackageParser
         // Take at most first 3 blocks for title consideration
         var candidates = headerBlocks.Take(3).ToList();
 
-        // Strategy 1: Look for consecutive blocks with Title/Heading style
+        var firstBlock = candidates[0];
+
+        // Check if first block itself is a preamble marker or editors label
+        if (IsTitleTerminator(firstBlock.Text))
+            return [];
+
+        var firstBlockHasTitleStyle = HasTitleOrHeadingStyle(firstBlock);
+
+        // Strategy 1 (Primary): Use font size to determine title extent
+        if (firstBlock.FontSizeHalfPoints.HasValue && firstBlock.FontSizeHalfPoints.Value > 0)
+        {
+            var referenceFontSize = firstBlock.FontSizeHalfPoints.Value;
+            const double fontSizeThreshold = 0.70; // 70% threshold
+
+            var result = new List<DocBlock> { firstBlock };
+
+            for (var i = 1; i < candidates.Count; i++)
+            {
+                var block = candidates[i];
+
+                // Stop if preamble marker or editors label encountered
+                if (IsTitleTerminator(block.Text))
+                    break;
+
+                // If first block has Title/Heading style, subsequent blocks must also have it
+                if (firstBlockHasTitleStyle && !HasTitleOrHeadingStyle(block))
+                    break;
+
+                // If block has font size, check if it's within threshold
+                if (block.FontSizeHalfPoints.HasValue)
+                {
+                    var ratio = (double)block.FontSizeHalfPoints.Value / referenceFontSize;
+                    if (ratio < fontSizeThreshold)
+                        break;
+                }
+
+                result.Add(block);
+            }
+
+            return result;
+        }
+
+        // Strategy 2 (Fallback): Use style-based detection when no font size available
         var titleStyleBlocks = candidates
-            .TakeWhile(b => b.StyleId?.Contains("Title", StringComparison.OrdinalIgnoreCase) == true
-                         || b.StyleId?.Contains("Heading", StringComparison.OrdinalIgnoreCase) == true)
+            .TakeWhile(b => !IsTitleTerminator(b.Text) && HasTitleOrHeadingStyle(b))
             .ToList();
 
         if (titleStyleBlocks.Count > 0)
             return titleStyleBlocks;
 
-        // Strategy 2: Use font size to determine title extent
-        // Find the maximum font size among candidates
-        var maxFontSize = candidates
-            .Where(b => b.FontSizeHalfPoints.HasValue)
-            .Select(b => b.FontSizeHalfPoints!.Value)
-            .DefaultIfEmpty(0)
-            .Max();
+        // Fallback: just return the first block if not a preamble marker
+        return [firstBlock];
+    }
 
-        if (maxFontSize == 0)
-        {
-            // No font size info - just return the first non-empty block
-            return candidates.Take(1).ToList();
-        }
+    /// <summary>
+    /// Checks if block has Title or Heading style.
+    /// </summary>
+    private static bool HasTitleOrHeadingStyle(DocBlock block)
+    {
+        return block.StyleId?.Contains("Title", StringComparison.OrdinalIgnoreCase) == true
+            || block.StyleId?.Contains("Heading", StringComparison.OrdinalIgnoreCase) == true;
+    }
 
-        // Find the index of the last block with max font size
-        var lastMaxFontIndex = -1;
-        for (var i = 0; i < candidates.Count; i++)
-        {
-            if (candidates[i].FontSizeHalfPoints == maxFontSize)
-                lastMaxFontIndex = i;
-        }
+    /// <summary>
+    /// Checks if text should terminate title extraction.
+    /// Returns true for preamble markers and editors labels.
+    /// </summary>
+    private static bool IsTitleTerminator(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
 
-        if (lastMaxFontIndex >= 0)
-        {
-            // Include all blocks up to and including the last max font block
-            return candidates.Take(lastMaxFontIndex + 1).ToList();
-        }
+        var trimmed = text.TrimStart();
 
-        // Fallback: just return the first block
-        return candidates.Take(1).ToList();
+        // Preamble marker: text starting with '['
+        if (trimmed.StartsWith('['))
+            return true;
+
+        // Editors label: "Редактор:", "Редактори:", etc.
+        if (ParserPatterns.EditorsLabel().IsMatch(trimmed))
+            return true;
+
+        return false;
     }
 
     private static void FinalizeQuestion(QuestionDto question, List<AuthorRangeRule> authorRanges, ParseResult result)
