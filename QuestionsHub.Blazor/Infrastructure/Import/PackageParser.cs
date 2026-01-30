@@ -187,6 +187,32 @@ public class PackageParser
         /// </summary>
         public bool InsideMultilineHandoutBracket { get; set; }
 
+        /// <summary>
+        /// Tracks asset filenames that have already been associated in the current block.
+        /// Reset at the start of each block processing.
+        /// </summary>
+        public HashSet<string> AssociatedAssetFileNames { get; } = [];
+
+        /// <summary>
+        /// Tracks the section before transitioning to answer-related sections within a block.
+        /// Used for associating assets with the correct section when processing mixed-content blocks.
+        /// </summary>
+        public ParserSection SectionBeforeAnswerRelated { get; set; } = ParserSection.QuestionText;
+
+        /// <summary>
+        /// Indicates a handout marker was detected in the current block.
+        /// When true and transitioning to answer-related sections, assets are associated with handout.
+        /// Reset at the start of each block processing.
+        /// </summary>
+        public bool HandoutMarkerDetectedInCurrentBlock { get; set; }
+
+        /// <summary>
+        /// Tracks the previous question when a new question is detected within the same block.
+        /// Used at end-of-block processing to associate assets with the correct question.
+        /// Reset at the start of each block processing.
+        /// </summary>
+        public QuestionDto? PreviousQuestionInBlock { get; set; }
+
         public bool HasCurrentQuestion => CurrentQuestion != null;
         public bool HasCurrentTour => CurrentTour != null;
         public bool HasCurrentBlock => CurrentBlockDto != null;
@@ -206,7 +232,17 @@ public class PackageParser
 
         _logger.LogInformation("Parsing {BlockCount} blocks", blocks.Count);
 
-        foreach (var block in blocks)
+        // Pre-process: merge asset-only blocks backward to fix DOCX anchoring issues
+        // Images in Word are often placed in empty paragraphs after the text they relate to
+        var normalizedBlocks = MergeAssetOnlyBlocksBackward(blocks);
+
+        if (normalizedBlocks.Count != blocks.Count)
+        {
+            _logger.LogDebug("Merged {MergedCount} asset-only blocks backward",
+                blocks.Count - normalizedBlocks.Count);
+        }
+
+        foreach (var block in normalizedBlocks)
         {
             ProcessBlock(block, ctx);
         }
@@ -221,6 +257,33 @@ public class PackageParser
     }
 
     /// <summary>
+    /// Merges asset-only blocks (blocks with no meaningful text but with assets) backward
+    /// into the previous textual block. This fixes DOCX anchoring issues where images
+    /// are placed in empty paragraphs after the text they visually relate to.
+    /// </summary>
+    private static List<DocBlock> MergeAssetOnlyBlocksBackward(List<DocBlock> blocks)
+    {
+        var result = new List<DocBlock>();
+
+        foreach (var block in blocks)
+        {
+            var text = TextNormalizer.NormalizeWhitespaceAndDashes(block.Text);
+            var hasText = !string.IsNullOrWhiteSpace(text);
+
+            // If this block has no text but has assets, merge assets to previous block
+            if (!hasText && block.Assets.Count > 0 && result.Count > 0)
+            {
+                result[^1].Assets.AddRange(block.Assets);
+                continue; // Drop this asset-only block
+            }
+
+            result.Add(block);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Processes a single document block (paragraph).
     /// </summary>
     private void ProcessBlock(DocBlock block, ParserContext ctx)
@@ -231,12 +294,32 @@ public class PackageParser
 
         ctx.QuestionCreatedInCurrentBlock = false;
         ctx.CurrentBlock = block;
+        ctx.AssociatedAssetFileNames.Clear();
+        ctx.HandoutMarkerDetectedInCurrentBlock = false;
+        ctx.PreviousQuestionInBlock = null;
+        ctx.SectionBeforeAnswerRelated = IsAnswerRelatedSection(ctx.CurrentSection)
+            ? ParserSection.QuestionText
+            : ctx.CurrentSection;
 
         foreach (var line in SplitIntoLines(text))
         {
+            var sectionBeforeLine = ctx.CurrentSection;
             ProcessLine(line, ctx);
+
+            // When transitioning to an answer-related section AND a handout marker was detected,
+            // associate any remaining block assets with the pre-answer section (handout or question text).
+            // This ensures assets in blocks with [Роздатковий матеріал: ...] followed by Коментар:
+            // are correctly associated with handout, not comment.
+            if (ctx.HandoutMarkerDetectedInCurrentBlock &&
+                !IsAnswerRelatedSection(sectionBeforeLine) &&
+                IsAnswerRelatedSection(ctx.CurrentSection))
+            {
+                ctx.SectionBeforeAnswerRelated = sectionBeforeLine;
+                AssociateBlockAssetsBeforeAnswerSection(block.Assets, ctx);
+            }
         }
 
+        // Associate any remaining assets at the end of block processing
         AssociateBlockAssets(block.Assets, ctx);
     }
 
@@ -469,12 +552,23 @@ public class PackageParser
         // (In practice, assets after a question starts are directly associated, not pending)
         FlushPendingAssetsToCurrentQuestion(ctx);
 
+        // When a new question is detected, save reference to current question as previous.
+        // This allows end-of-block processing to associate assets with the correct question.
+        // The previous question could have been created in a prior block or earlier in this block.
+        if (ctx.HasCurrentQuestion)
+        {
+            ctx.PreviousQuestionInBlock = ctx.CurrentQuestion;
+        }
+
         SaveCurrentQuestion(ctx);
         EnsureDefaultTourExists(ctx);
 
         ctx.CurrentQuestion = new QuestionDto { Number = questionNumber };
         ctx.CurrentSection = ParserSection.QuestionText;
         ctx.QuestionCreatedInCurrentBlock = true;
+
+        // Reset handout marker tracking for the new question within the same block
+        ctx.HandoutMarkerDetectedInCurrentBlock = false;
 
         // Apply any pending assets from before the first question
         ApplyPendingAssetsToNewQuestion(ctx);
@@ -528,6 +622,8 @@ public class PackageParser
         // Try single-line bracket first (has closing bracket on same line)
         if (TryExtractBracketedHandout(line, out var handoutText, out var afterHandout))
         {
+            ctx.HandoutMarkerDetectedInCurrentBlock = true;
+
             if (ctx.HasCurrentQuestion && !string.IsNullOrWhiteSpace(handoutText))
                 ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(handoutText)!);
 
@@ -543,6 +639,7 @@ public class PackageParser
         // Try multiline bracket opening (no closing bracket on this line)
         if (TryExtractMultilineHandoutOpening(line, out var openingHandoutText))
         {
+            ctx.HandoutMarkerDetectedInCurrentBlock = true;
             ctx.CurrentSection = ParserSection.Handout;
             ctx.InsideMultilineHandoutBracket = true;
 
@@ -566,6 +663,10 @@ public class PackageParser
         {
             ctx.CurrentSection = newSection.Value;
             line = remainder;
+
+            // Track when handout marker is detected via label
+            if (newSection == ParserSection.Handout)
+                ctx.HandoutMarkerDetectedInCurrentBlock = true;
         }
 
         if (string.IsNullOrWhiteSpace(line))
@@ -708,6 +809,7 @@ public class PackageParser
         var handoutMatch = ParserPatterns.HandoutMarker().Match(remainingText);
         if (handoutMatch.Success)
         {
+            ctx.HandoutMarkerDetectedInCurrentBlock = true;
             ctx.CurrentSection = ParserSection.Handout;
             var handoutContent = handoutMatch.Groups[1].Value.Trim();
             if (!string.IsNullOrWhiteSpace(handoutContent))
@@ -718,6 +820,7 @@ public class PackageParser
         // Try single-line bracketed handout
         if (TryExtractBracketedHandout(remainingText, out var handout, out var afterHandout))
         {
+            ctx.HandoutMarkerDetectedInCurrentBlock = true;
             ctx.CurrentSection = ParserSection.Handout;
 
             if (!string.IsNullOrWhiteSpace(handout))
@@ -735,6 +838,7 @@ public class PackageParser
         // Try multiline bracketed handout opening
         if (TryExtractMultilineHandoutOpening(remainingText, out var openingHandout))
         {
+            ctx.HandoutMarkerDetectedInCurrentBlock = true;
             ctx.CurrentSection = ParserSection.Handout;
             ctx.InsideMultilineHandoutBracket = true;
 
@@ -760,23 +864,108 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Associates block assets with the current question or adds them to pending assets.
+    /// Checks if a section is answer-related (Answer, AcceptedAnswers, RejectedAnswers, Comment, Source, Authors).
+    /// Assets found in these sections should be associated as comment assets.
     /// </summary>
-    private static void AssociateBlockAssets(List<AssetReference> assets, ParserContext ctx)
+    private static bool IsAnswerRelatedSection(ParserSection section) =>
+        section is ParserSection.Answer or
+                   ParserSection.AcceptedAnswers or
+                   ParserSection.RejectedAnswers or
+                   ParserSection.Comment or
+                   ParserSection.Source or
+                   ParserSection.Authors;
+
+    /// <summary>
+    /// Associates block assets with handout section when transitioning to answer-related sections.
+    /// This ensures assets appearing before answers/comments in the same block are correctly
+    /// associated with the handout rather than the comment.
+    /// </summary>
+    private static void AssociateBlockAssetsBeforeAnswerSection(List<AssetReference> assets, ParserContext ctx)
     {
         foreach (var asset in assets)
         {
-            // If we have a current question, associate the asset directly
+            // Skip if already associated
+            if (ctx.AssociatedAssetFileNames.Contains(asset.FileName))
+                continue;
+
             if (ctx.HasCurrentQuestion)
             {
-                // When inside a multiline handout bracket, force association with handout section
-                var section = ctx.InsideMultilineHandoutBracket ? ParserSection.Handout : ctx.CurrentSection;
-                AssociateAsset(asset, section, ctx.CurrentQuestion);
+                // Force association with pre-answer section (handout or question text)
+                var section = ctx.InsideMultilineHandoutBracket
+                    ? ParserSection.Handout
+                    : ctx.SectionBeforeAnswerRelated;
+                AssociateAsset(asset, section, ctx.CurrentQuestion, ctx.Result);
+                ctx.AssociatedAssetFileNames.Add(asset.FileName);
             }
             else
             {
                 // No question yet - add to pending assets for later association
+                ctx.PendingAssets.Add((asset, ctx.SectionBeforeAnswerRelated));
+                ctx.AssociatedAssetFileNames.Add(asset.FileName);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Associates block assets with the current question or adds them to pending assets.
+    /// Skips assets that have already been associated in the current block.
+    ///
+    /// For multi-question blocks (where QuestionCreatedInCurrentBlock is true and
+    /// PreviousQuestionInBlock is set), the logic depends on whether a handout marker
+    /// was detected for the current question:
+    /// - If handout marker detected: associate with current question's handout
+    /// - Otherwise: distribute assets between previous and current questions
+    /// </summary>
+    private static void AssociateBlockAssets(List<AssetReference> assets, ParserContext ctx)
+    {
+        // Get unassociated assets
+        var unassociatedAssets = assets
+            .Where(a => !ctx.AssociatedAssetFileNames.Contains(a.FileName))
+            .ToList();
+
+        if (unassociatedAssets.Count == 0)
+            return;
+
+        // If we have a current question, associate the assets
+        if (ctx.HasCurrentQuestion)
+        {
+            // When inside a multiline handout bracket, force association with handout section
+            var section = ctx.InsideMultilineHandoutBracket ? ParserSection.Handout : ctx.CurrentSection;
+
+            // For multi-question blocks without handout marker for current question:
+            // Distribute assets between previous and current questions
+            if (ctx.PreviousQuestionInBlock != null && !ctx.HandoutMarkerDetectedInCurrentBlock)
+            {
+                // First asset goes to previous question (as comment)
+                // Remaining assets go to current question (as comment)
+                var firstAsset = unassociatedAssets[0];
+                AssociateAsset(firstAsset, ParserSection.Comment, ctx.PreviousQuestionInBlock, ctx.Result);
+                ctx.AssociatedAssetFileNames.Add(firstAsset.FileName);
+
+                // Associate remaining assets with current question
+                foreach (var asset in unassociatedAssets.Skip(1))
+                {
+                    AssociateAsset(asset, ParserSection.Comment, ctx.CurrentQuestion, ctx.Result);
+                    ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                }
+            }
+            else
+            {
+                // Normal case: associate all assets with current question
+                foreach (var asset in unassociatedAssets)
+                {
+                    AssociateAsset(asset, section, ctx.CurrentQuestion, ctx.Result);
+                    ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                }
+            }
+        }
+        else
+        {
+            // No question yet - add to pending assets for later association
+            foreach (var asset in unassociatedAssets)
+            {
                 ctx.PendingAssets.Add((asset, ctx.CurrentSection));
+                ctx.AssociatedAssetFileNames.Add(asset.FileName);
             }
         }
     }
@@ -794,10 +983,33 @@ public class PackageParser
         {
             // For assets that were pending before we had a question,
             // associate them based on their original section context
-            AssociateAsset(asset, section, ctx.CurrentQuestion);
+            AssociateAsset(asset, section, ctx.CurrentQuestion, ctx.Result);
         }
 
         ctx.PendingAssets.Clear();
+    }
+
+    /// <summary>
+    /// Associates remaining unassociated block assets with a specific question.
+    /// Called when transitioning to a new question within the same block to ensure
+    /// assets belonging to the previous question don't leak to the next one.
+    /// Assets are associated as comment assets since question/answer content has been processed.
+    /// </summary>
+    private static void AssociateRemainingBlockAssetsToQuestion(
+        List<AssetReference> assets,
+        QuestionDto question,
+        ParserContext ctx)
+    {
+        foreach (var asset in assets)
+        {
+            // Skip if already associated in this block
+            if (ctx.AssociatedAssetFileNames.Contains(asset.FileName))
+                continue;
+
+            // Associate as comment asset (since we've processed Q/A content for this question)
+            AssociateAsset(asset, ParserSection.Comment, question, ctx.Result);
+            ctx.AssociatedAssetFileNames.Add(asset.FileName);
+        }
     }
 
     /// <summary>
@@ -807,7 +1019,7 @@ public class PackageParser
     private static void ApplyPendingAssetsToNewQuestion(ParserContext ctx)
     {
         foreach (var (asset, section) in ctx.PendingAssets)
-            AssociateAsset(asset, section, ctx.CurrentQuestion);
+            AssociateAsset(asset, section, ctx.CurrentQuestion, ctx.Result);
 
         ctx.PendingAssets.Clear();
     }
@@ -1324,7 +1536,7 @@ public class PackageParser
         }
     }
 
-    private static void AssociateAsset(AssetReference asset, ParserSection section, QuestionDto? question)
+    private static void AssociateAsset(AssetReference asset, ParserSection section, QuestionDto? question, ParseResult? result = null)
     {
         if (question == null) return;
 
@@ -1338,9 +1550,29 @@ public class PackageParser
             ParserSection.Authors;
 
         if (isAnswerRelatedSection)
-            question.CommentAssetFileName ??= asset.FileName;
+        {
+            if (question.CommentAssetFileName == null)
+            {
+                question.CommentAssetFileName = asset.FileName;
+            }
+            else
+            {
+                // Warn about dropped asset
+                result?.Warnings.Add($"Question {question.Number}: extra comment asset ignored: {asset.FileName} (already has: {question.CommentAssetFileName})");
+            }
+        }
         else
-            question.HandoutAssetFileName ??= asset.FileName;
+        {
+            if (question.HandoutAssetFileName == null)
+            {
+                question.HandoutAssetFileName = asset.FileName;
+            }
+            else
+            {
+                // Warn about dropped asset
+                result?.Warnings.Add($"Question {question.Number}: extra handout asset ignored: {asset.FileName} (already has: {question.HandoutAssetFileName})");
+            }
+        }
     }
 
     private static void ParsePackageHeader(List<DocBlock> headerBlocks, ParseResult result)
