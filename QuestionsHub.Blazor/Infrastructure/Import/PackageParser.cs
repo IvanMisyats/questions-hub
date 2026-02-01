@@ -21,6 +21,16 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*[-–—]\s*(?:ТУР|Тур)\s+(\d+)[\.:]?\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStartDashed();
 
+    // Matches Ukrainian ordinal tour names: "Перший тур", "Другий тур", etc. (1-9)
+    // Explicitly includes both cases since IgnoreCase may not work reliably with Cyrillic
+    // Uses character class [''ʼ] to match different apostrophe variants (', ', ʼ)
+    [GeneratedRegex(@"^\s*([ПпДдТтЧчШшСсВв][''ʼА-яі]+)\s+[Тт][Уу][Рр]\s*$")]
+    public static partial Regex OrdinalTourStart();
+
+    // Matches reversed format: "Тур перший", "Тур другий", etc. (1-9)
+    [GeneratedRegex(@"^\s*[Тт][Уу][Рр]\s+([ПпДдТтЧчШшСсВв][''ʼА-яі]+)\s*$")]
+    public static partial Regex TourOrdinalStart();
+
     // Warmup tour detection: "Розминка", "Warmup", "Тур 0", "Розминковий тур"
     [GeneratedRegex(@"^\s*(?:Розминка|Warmup|Розминковий\s+тур)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex WarmupTourStart();
@@ -1190,11 +1200,53 @@ public class PackageParser
     {
         tourNumber = "";
 
-        if (!TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartWithColon(), ParserPatterns.TourStartDashed()))
-            return false;
+        // Try numeric patterns first
+        if (TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartWithColon(), ParserPatterns.TourStartDashed()))
+        {
+            tourNumber = match.Groups[1].Value;
+            return true;
+        }
 
-        tourNumber = match.Groups[1].Value;
-        return true;
+        // Try ordinal patterns (normalize apostrophes for matching)
+        var normalizedText = TextNormalizer.NormalizeApostrophes(text) ?? text;
+
+        var ordinalMatch = ParserPatterns.OrdinalTourStart().Match(normalizedText);
+        if (ordinalMatch.Success)
+        {
+            tourNumber = OrdinalToNumber(ordinalMatch.Groups[1].Value);
+            return true;
+        }
+
+        var tourOrdinalMatch = ParserPatterns.TourOrdinalStart().Match(normalizedText);
+        if (tourOrdinalMatch.Success)
+        {
+            tourNumber = OrdinalToNumber(tourOrdinalMatch.Groups[1].Value);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Maps Ukrainian ordinal words to their numeric values (1-9).
+    /// </summary>
+    private static string OrdinalToNumber(string ordinal)
+    {
+        // Normalize apostrophes and convert to lowercase for matching
+        var normalized = TextNormalizer.NormalizeApostrophes(ordinal)?.ToLowerInvariant() ?? ordinal.ToLowerInvariant();
+
+        // Use StartsWith for more robust matching against potential encoding variations
+        if (normalized.StartsWith("перш")) return "1";
+        if (normalized.StartsWith("друг")) return "2";
+        if (normalized.StartsWith("трет")) return "3";
+        if (normalized.StartsWith("четв")) return "4";
+        if (normalized.StartsWith("п") && normalized.Contains("ят")) return "5";
+        if (normalized.StartsWith("шост")) return "6";
+        if (normalized.StartsWith("сьом") || normalized.StartsWith("сём")) return "7";
+        if (normalized.StartsWith("вось")) return "8";
+        if (normalized.StartsWith("дев")) return "9";
+
+        return "1"; // Fallback, should not happen if regex matches
     }
 
     private static bool TryParseWarmupTourStart(string text)

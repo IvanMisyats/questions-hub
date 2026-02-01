@@ -74,6 +74,99 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Tests Ukrainian ordinal tour names: "Перший тур", "Другий тур", etc.
+    /// </summary>
+    [Theory]
+    [InlineData("Перший тур", "1")]
+    [InlineData("Другий тур", "2")]
+    [InlineData("Третій тур", "3")]
+    [InlineData("Четвертий тур", "4")]
+    [InlineData("П'ятий тур", "5")]
+    [InlineData("Шостий тур", "6")]
+    [InlineData("Сьомий тур", "7")]
+    [InlineData("Восьмий тур", "8")]
+    [InlineData("Дев'ятий тур", "9")]
+    [InlineData("ПЕРШИЙ ТУР", "1")]  // Case insensitive
+    [InlineData("  Другий тур  ", "2")]  // With whitespace
+    public void Parse_OrdinalTourStart_DetectsTour(string tourLine, string expectedNumber)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+    }
+
+    /// <summary>
+    /// Tests reversed ordinal format: "Тур перший", "Тур другий", etc.
+    /// </summary>
+    [Theory]
+    [InlineData("Тур перший", "1")]
+    [InlineData("Тур другий", "2")]
+    [InlineData("Тур третій", "3")]
+    [InlineData("ТУР ЧЕТВЕРТИЙ", "4")]  // Case insensitive
+    [InlineData("тур п'ятий", "5")]
+    public void Parse_TourOrdinalStart_DetectsTour(string tourLine, string expectedNumber)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+    }
+
+    /// <summary>
+    /// Tests that ordinal tours work correctly with multiple tours in a package.
+    /// </summary>
+    [Fact]
+    public void Parse_MultipleOrdinalTours_ParsesAllTours()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Перший тур"),
+            Block("1. Питання туру 1"),
+            Block("Відповідь: В1"),
+            Block("Другий тур"),
+            Block("1. Питання туру 2"),
+            Block("Відповідь: В2"),
+            Block("Третій тур"),
+            Block("1. Питання туру 3"),
+            Block("Відповідь: В3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Number.Should().Be("1");
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+        result.Tours[2].Number.Should().Be("3");
+        result.Tours[2].Questions.Should().HaveCount(1);
+    }
+
+    /// <summary>
     /// Tests parsing of a tour block that contains tour header, preamble, and question in one block.
     /// Real case format:
     /// - Тур 3 -
