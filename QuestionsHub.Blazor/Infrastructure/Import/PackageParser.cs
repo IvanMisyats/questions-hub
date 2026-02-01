@@ -53,12 +53,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(\d+)\.\s*$")]
     public static partial Regex QuestionStartNumberOnly();
 
-    // Matches: "Запитання 1", "Питання 1.", "Запитання 1:"
-    [GeneratedRegex(@"^\s*(?:Запитання|Питання)\s+(\d+)[\.:]?\s*$", RegexOptions.IgnoreCase)]
+    // Matches: "Запитання 1", "Питання 1.", "Запитання 1:", "Запитання №1", "Питання №1."
+    [GeneratedRegex(@"^\s*(?:Запитання|Питання)\s+№?(\d+)[\.:]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex QuestionStartNamed();
 
-    // Matches: "Запитання 1. text", "Питання 1: text" (named format with text after)
-    [GeneratedRegex(@"^\s*(?:Запитання|Питання)\s+(\d+)[\.:]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    // Matches: "Запитання 1. text", "Питання 1: text", "Запитання №1. text" (named format with text after)
+    [GeneratedRegex(@"^\s*(?:Запитання|Питання)\s+№?(\d+)[\.:]?\s+(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex QuestionStartNamedWithText();
 
     // Labels (field markers)

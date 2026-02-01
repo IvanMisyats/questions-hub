@@ -694,6 +694,9 @@ public class PackageParserTests
     [InlineData("Питання 1.")]
     [InlineData("Запитання 1:")]
     [InlineData("Питання 1:")]
+    [InlineData("Запитання №1")]
+    [InlineData("Питання №1.")]
+    [InlineData("Запитання №1:")]
     public void Parse_NamedQuestionStart_DetectsQuestion(string line)
     {
         // Arrange
@@ -710,6 +713,30 @@ public class PackageParserTests
 
         // Assert
         result.Tours[0].Questions.Should().NotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Запитання №1. Текст питання", "1", "Текст питання")]
+    [InlineData("Питання №1: Інший текст", "1", "Інший текст")]
+    [InlineData("Запитання №1. У вже згаданій серії", "1", "У вже згаданій серії")]
+    public void Parse_NamedQuestionStartWithNumberSign_ExtractsNumberAndText(string line, string expectedNumber, string expectedText)
+    {
+        // Arrange - "Запитання №N" format with text after number
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block(line),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(1);
+        var question = result.Tours[0].Questions[0];
+        question.Number.Should().Be(expectedNumber);
+        question.Text.Should().Contain(expectedText.Trim());
     }
 
     [Fact]
@@ -741,6 +768,65 @@ public class PackageParserTests
         question.AcceptedAnswers.Should().Be("за прізвищем");
         question.Comment.Should().Contain("перевертень");
         question.Source.Should().Contain("Надприродне сезон 5");
+    }
+
+    [Fact]
+    public void Parse_QuestionWithNumberSign_ParsesFullStructure()
+    {
+        // Arrange - format "Запитання №N" (with № symbol before number)
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання №1. У вже згаданій серії «Надприродного» ВІН парадоксально нападає на героя."),
+            Block("Відповідь: Махатма Ґанді"),
+            Block("Залік: за прізвищем"),
+            Block("Коментар: перевертень з епізоду із попереднього запитання перетворився на вегетаріанця."),
+            Block("Джерела: Надприродне сезон 5, серія 5"),
+            Block("Автор: Тест Тестович")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Questions.Should().HaveCount(1);
+
+        var question = result.Tours[0].Questions[0];
+        question.Number.Should().Be("1");
+        question.Text.Should().Contain("Надприродного");
+        question.Answer.Should().Be("Махатма Ґанді");
+        question.AcceptedAnswers.Should().Be("за прізвищем");
+        question.Comment.Should().Contain("перевертень");
+        question.Source.Should().Contain("Надприродне сезон 5");
+    }
+
+    [Fact]
+    public void Parse_MultipleQuestionsWithNumberSign_ParsesAll()
+    {
+        // Arrange - multiple questions using "Запитання №N" format
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання №1"),
+            Block("Перше питання тексту"),
+            Block("Відповідь: Перша відповідь"),
+            Block("Запитання №2"),
+            Block("Друге питання тексту"),
+            Block("Відповідь: Друга відповідь"),
+            Block("Питання №3"),
+            Block("Третє питання тексту"),
+            Block("Відповідь: Третя відповідь")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(3);
+        result.Tours[0].Questions[0].Number.Should().Be("1");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+        result.Tours[0].Questions[2].Number.Should().Be("3");
     }
 
     [Fact]
