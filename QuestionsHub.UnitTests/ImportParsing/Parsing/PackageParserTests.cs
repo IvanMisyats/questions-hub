@@ -167,6 +167,123 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Tests tour start with inline preamble/name: "Тур 1. Фізики", "Тур 2: Лірики".
+    /// The text after the number should become the tour preamble.
+    /// </summary>
+    [Theory]
+    [InlineData("Тур 1. Фізики", "1", "Фізики")]
+    [InlineData("Тур 2. Лірики", "2", "Лірики")]
+    [InlineData("Тур 3: Фізлірики", "3", "Фізлірики")]
+    [InlineData("ТУР 1. НАЗВА ТУРУ", "1", "НАЗВА ТУРУ")]
+    [InlineData("Tour 2. Physics", "2", "Physics")]
+    public void Parse_TourStartWithPreamble_DetectsTourAndPreamble(string tourLine, string expectedNumber, string expectedPreamble)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("Запитання №1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+        result.Tours[0].Preamble.Should().Be(expectedPreamble);
+    }
+
+    /// <summary>
+    /// Tests multiple tours with inline preambles - a real-world scenario.
+    /// </summary>
+    [Fact]
+    public void Parse_MultipleToursWithPreamble_ParsesAllToursAndPreambles()
+    {
+        // Arrange - real scenario with named tours
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1. Фізики"),
+            Block("Запитання №1. Питання туру 1"),
+            Block("Відповідь: В1"),
+            Block("Тур 2. Лірики"),
+            Block("Запитання №1. Питання туру 2"),
+            Block("Відповідь: В2"),
+            Block("Тур 3. Фізлірики"),
+            Block("Запитання №1. Питання туру 3"),
+            Block("Відповідь: В3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Number.Should().Be("1");
+        result.Tours[0].Preamble.Should().Be("Фізики");
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Preamble.Should().Be("Лірики");
+        result.Tours[1].Questions.Should().HaveCount(1);
+        result.Tours[2].Number.Should().Be("3");
+        result.Tours[2].Preamble.Should().Be("Фізлірики");
+        result.Tours[2].Questions.Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// Tests that tours without inline preamble (just "Тур N") don't have the inline preamble,
+    /// but still collect subsequent tour header text.
+    /// </summary>
+    [Fact]
+    public void Parse_TourWithoutInlinePreamble_CollectsSubsequentTextAsPreamble()
+    {
+        // Arrange - use text that won't match editor pattern
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Тема туру: Історія"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be("1");
+        // The preamble should contain the theme line (collected as tour header text)
+        result.Tours[0].Preamble.Should().Contain("Тема туру: Історія");
+    }
+
+    /// <summary>
+    /// Tests that inline preamble from tour header is different from preamble collected later.
+    /// </summary>
+    [Fact]
+    public void Parse_TourWithInlinePreambleAndSubsequentText_CombinesBoth()
+    {
+        // Arrange - use text that won't match editor pattern
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1. Фізики"),
+            Block("Тема: Природничі науки"),
+            Block("Запитання №1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be("1");
+        // The preamble should contain both the inline text and subsequent header text
+        result.Tours[0].Preamble.Should().Contain("Фізики");
+        result.Tours[0].Preamble.Should().Contain("Тема: Природничі науки");
+    }
+
+    /// <summary>
     /// Tests parsing of a tour block that contains tour header, preamble, and question in one block.
     /// Real case format:
     /// - Тур 3 -

@@ -14,6 +14,10 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+(\d+)[\.:]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStart();
 
+    // Matches: "Тур 1. Назва туру", "ТУР 2: Лірики" (tour number followed by name/preamble)
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+(\d+)[\.:]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourStartWithPreamble();
+
     // Matches: "Тур: 1", "ТУР: 2" (colon before number)
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s*:\s*(\d+)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourStartWithColon();
@@ -418,6 +422,7 @@ public class PackageParser
     {
         var isWarmup = false;
         string tourNumber;
+        string? preamble = null;
 
         // Check for warmup tour first
         if (TryParseWarmupTourStart(line))
@@ -431,7 +436,7 @@ public class PackageParser
             isWarmup = true;
             tourNumber = "0";
         }
-        else if (!TryParseTourStart(line, out tourNumber))
+        else if (!TryParseTourStart(line, out tourNumber, out preamble))
         {
             return false;
         }
@@ -445,7 +450,8 @@ public class PackageParser
         {
             Number = tourNumber,
             OrderIndex = orderIndex,
-            IsWarmup = isWarmup
+            IsWarmup = isWarmup,
+            Preamble = preamble
         };
         ctx.Result.Tours.Add(ctx.CurrentTour);
         ctx.CurrentBlockDto = null;
@@ -1196,14 +1202,24 @@ public class PackageParser
         return TextNormalizer.NormalizeWhitespaceAndDashes(text) ?? "";
     }
 
-    private static bool TryParseTourStart(string text, out string tourNumber)
+    private static bool TryParseTourStart(string text, out string tourNumber, out string? preamble)
     {
         tourNumber = "";
+        preamble = null;
 
-        // Try numeric patterns first
+        // Try numeric patterns first (without preamble)
         if (TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartWithColon(), ParserPatterns.TourStartDashed()))
         {
             tourNumber = match.Groups[1].Value;
+            return true;
+        }
+
+        // Try pattern with preamble: "Тур 2. Лірики", "Тур 3: Фізлірики"
+        var preambleMatch = ParserPatterns.TourStartWithPreamble().Match(text);
+        if (preambleMatch.Success)
+        {
+            tourNumber = preambleMatch.Groups[1].Value;
+            preamble = preambleMatch.Groups[2].Value.Trim();
             return true;
         }
 

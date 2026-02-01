@@ -145,6 +145,10 @@ Tours are detected by patterns like:
 - `Тур: 1`
 - `- Тур 1 -`
 - `ТУР 1`
+- `Тур 1. Назва туру` (with inline preamble/name)
+- `Тур 2: Лірики` (with inline preamble/name)
+
+When a tour header includes text after the number (e.g., `Тур 1. Фізики`), this text becomes the tour's preamble.
 
 **Warmup Tour Detection:**
 The parser also detects warmup tours using patterns like:
@@ -176,6 +180,8 @@ Questions are detected by patterns like:
 - `1. Question text`
 - `Питання 1.`
 - `Запитання 1.`
+- `Запитання №1` (with № symbol)
+- `Питання №1.` (with № symbol)
 
 ### Text Normalization
 
