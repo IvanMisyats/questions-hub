@@ -74,12 +74,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
-    // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:", "Автор(и):"
-    [GeneratedRegex(@"^\s*Автор(?:а|и|ка|ки|\(и\))?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:", "Автор(и):", "Авторы:" (Russian)
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ы|ка|ки|\(и\))?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorLabel();
 
-    // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ...", "Автори запитань 1-6: ..."
-    [GeneratedRegex(@"^\s*Автор(?:а|и|ка|ки)?\s+запитань\s+(\d+)\s*[-–—]\s*(\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ...", "Автори запитань 1-6: ...", "Авторы запитань 1-6: ..." (Russian)
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ы|ка|ки)?\s+запитань\s+(\d+)\s*[-–—]\s*(\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorRangeLabel();
 
     // Special markers
@@ -442,6 +442,7 @@ public class PackageParser
         ctx.CurrentQuestion = null;
         ctx.CurrentSection = ParserSection.TourHeader;
         ctx.ExpectedNextQuestionInTour = null;
+        ctx.Format = QuestionFormat.Unknown; // Allow each tour to use its own format
 
         _logger.LogDebug("Found tour: {TourNumber}, IsWarmup: {IsWarmup}", tourNumber, isWarmup);
         return true;

@@ -179,6 +179,126 @@ public class PackageParserTests
         result.Tours[1].Preamble.Should().Contain("Запитання 25");
     }
 
+    /// <summary>
+    /// Verifies that each tour can use its own question format (Named vs Numbered).
+    /// Tour 1 uses "Запитання N" format, Tour 2 uses "N." format - both should parse correctly.
+    /// This is a real-world scenario from the Hayfive-7 package.
+    /// </summary>
+    [Fact]
+    public void Parse_MixedFormatAcrossTours_NamedThenNumbered_ParsesBothTours()
+    {
+        // Arrange - Tour 1 uses "Запитання N", Tour 2 uses "N."
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Редактор туру: Олексій Файнбурд"),
+            Block("Запитання 1"),
+            Block("Текст першого питання туру 1"),
+            Block("Відповідь: Відповідь 1"),
+            Block("Запитання 2"),
+            Block("Текст другого питання туру 1"),
+            Block("Відповідь: Відповідь 2"),
+            Block("Тур 2"),
+            Block("Редактор туру: Інший Редактор"),
+            Block("1. Текст першого питання туру 2"),
+            Block("Відповідь: Відповідь 1 туру 2"),
+            Block("2. Текст другого питання туру 2"),
+            Block("Відповідь: Відповідь 2 туру 2")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+
+        // Tour 1 should have 2 questions using Named format
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Number.Should().Be("1");
+        result.Tours[0].Questions[0].Text.Should().Contain("першого питання туру 1");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+
+        // Tour 2 should have 2 questions using Numbered format
+        result.Tours[1].Questions.Should().HaveCount(2);
+        result.Tours[1].Questions[0].Number.Should().Be("1");
+        result.Tours[1].Questions[0].Text.Should().Contain("першого питання туру 2");
+        result.Tours[1].Questions[1].Number.Should().Be("2");
+    }
+
+    /// <summary>
+    /// Verifies the reverse case: Tour 1 uses "N." format, Tour 2 uses "Запитання N" format.
+    /// </summary>
+    [Fact]
+    public void Parse_MixedFormatAcrossTours_NumberedThenNamed_ParsesBothTours()
+    {
+        // Arrange - Tour 1 uses "N.", Tour 2 uses "Запитання N"
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Текст першого питання туру 1"),
+            Block("Відповідь: Відповідь 1"),
+            Block("2. Текст другого питання туру 1"),
+            Block("Відповідь: Відповідь 2"),
+            Block("Тур 2"),
+            Block("Запитання 1. Текст першого питання туру 2"),
+            Block("Відповідь: Відповідь 1 туру 2"),
+            Block("Запитання 2. Текст другого питання туру 2"),
+            Block("Відповідь: Відповідь 2 туру 2")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+
+        // Tour 1 should have 2 questions using Numbered format
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Number.Should().Be("1");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+
+        // Tour 2 should have 2 questions using Named format
+        result.Tours[1].Questions.Should().HaveCount(2);
+        result.Tours[1].Questions[0].Number.Should().Be("1");
+        result.Tours[1].Questions[0].Text.Should().Contain("першого питання туру 2");
+        result.Tours[1].Questions[1].Number.Should().Be("2");
+    }
+
+    /// <summary>
+    /// Verifies that three tours with mixed formats all parse correctly.
+    /// This matches the real-world scenario from Hayfive-7: Tour 1 "Запитання N", Tours 2-3 "N."
+    /// </summary>
+    [Fact]
+    public void Parse_ThreeToursWithMixedFormats_ParsesAllTours()
+    {
+        // Arrange - Tour 1 uses "Запитання N", Tours 2 and 3 use "N."
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1. Питання туру 1"),
+            Block("Відповідь: В1"),
+            Block("Тур 2"),
+            Block("1. Питання туру 2"),
+            Block("Відповідь: В2"),
+            Block("Тур 3"),
+            Block("1. Питання туру 3"),
+            Block("Відповідь: В3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Questions.Should().HaveCount(1);
+        result.Tours[2].Questions.Should().HaveCount(1);
+
+        result.Tours[0].Questions[0].Text.Should().Contain("Питання туру 1");
+        result.Tours[1].Questions[0].Text.Should().Contain("Питання туру 2");
+        result.Tours[2].Questions[0].Text.Should().Contain("Питання туру 3");
+    }
+
     [Fact]
     public void Parse_MultipleTours_ParsesAll()
     {
@@ -2658,6 +2778,63 @@ public class PackageParserTests
         question.Comment.Should().Contain("ivy");
         question.Source.Should().Contain("topspeed.com");
         question.Authors.Should().Contain("Олексій Чирков");
+    }
+
+    /// <summary>
+    /// Edge case: Russian "Авторы" (with ы) used instead of Ukrainian "Автори" (with і).
+    /// This is critical because if "Авторы:" is not recognized, the parser stays in Source section
+    /// and subsequent numbered questions like "18. text" are blocked.
+    /// </summary>
+    [Theory]
+    [InlineData("Авторы: Іван Іванов", "Іван Іванов")]
+    [InlineData("Авторы: Богдана Романцова (Київ), Олександр Мерзликін (Кривий Ріг)", "Богдана Романцова (Київ)")]
+    public void Parse_RussianAuthorsLabel_ShouldParseCorrectly(string line, string expectedAuthor)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: відповідь"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().Contain(expectedAuthor);
+    }
+
+    /// <summary>
+    /// Critical test: When "Авторы:" (Russian) is used, subsequent numbered questions must still be parsed.
+    /// This reproduces the Hayfive-7 bug where Q18+ were not parsed because "Авторы:" wasn't recognized.
+    /// </summary>
+    [Fact]
+    public void Parse_RussianAuthorsLabel_ShouldNotBlockNextQuestion()
+    {
+        // Arrange - Q17 ends with "Авторы:", Q18 starts with "18."
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання 1"),
+            Block("Відповідь: В1"),
+            Block("Джерело: https://example.com"),
+            Block("Авторы: Автор Один"),  // Russian "Авторы" with ы
+            Block("2. Питання 2"),  // This must be recognized as a new question
+            Block("Відповідь: В2"),
+            Block("Автор: Автор Два")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert - Both questions should be parsed
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Number.Should().Be("1");
+        result.Tours[0].Questions[0].Authors.Should().Contain("Автор Один");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+        result.Tours[0].Questions[1].Text.Should().Contain("Питання 2");
     }
 
     /// <summary>
