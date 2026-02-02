@@ -910,6 +910,7 @@
     }
 
     private bool _needsSortableInit = true;
+    private bool _jsInteropReady = false;
 
     private async Task InitializeSortables()
     {
@@ -917,6 +918,8 @@
 
         try
         {
+            _jsInteropReady = true;
+
             // Initialize tours sortable
             await JS.InvokeVoidAsync("sortableInterop.initToursSortable", "toursAccordion", _dotNetRef);
 
@@ -964,13 +967,20 @@
 
     public async ValueTask DisposeAsync()
     {
-        try
+        if (_jsInteropReady)
         {
-            await JS.InvokeVoidAsync("sortableInterop.destroyAll");
-        }
-        catch (JSDisconnectedException)
-        {
-            // Ignore - already disconnected
+            try
+            {
+                await JS.InvokeVoidAsync("sortableInterop.destroyAll");
+            }
+            catch (JSDisconnectedException)
+            {
+                // Ignore - already disconnected
+            }
+            catch (InvalidOperationException)
+            {
+                // Ignore - JS interop not available (e.g., during prerendering)
+            }
         }
 
         _dotNetRef?.Dispose();
