@@ -69,7 +69,8 @@ public static partial class ParserPatterns
     // Note: Using character class to match both Cyrillic 'і' (U+0456) and Latin 'i' (U+0069)
     // This handles common typing/OCR errors where Latin 'i' is used instead of Cyrillic 'і'
     // Also supports Russian "Ответ" as alternative to Ukrainian "Відповідь"
-    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]дь|Ответ)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with required whitespace (. ) to avoid matching mid-sentence
+    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]дь|Ответ)\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AnswerLabel();
 
     // Matches: "Залік: ...", "Заліки: ...", "Залік (не оголошувати): ..."
@@ -80,16 +81,19 @@ public static partial class ParserPatterns
     public static partial Regex RejectedLabel();
 
     // Matches: "Коментар: ..." (Ukrainian), "Комментарий: ..." (Russian)
-    [GeneratedRegex(@"^\s*(?:Коментар|Комментарий)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with required whitespace (. )
+    [GeneratedRegex(@"^\s*(?:Коментар|Комментарий)\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex CommentLabel();
 
     // Matches: "Джерело: ...", "Джерела: ...", "Джерело(а): ...", "Джерел(а): ..." (Ukrainian)
     // Also: "Источник: ...", "Источники: ..." (Russian)
-    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with required whitespace (. )
+    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
     // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:", "Автор(и):", "Авторы:" (Russian)
-    [GeneratedRegex(@"^\s*Автор(?:а|и|ы|ка|ки|\(и\))?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with required whitespace (. )
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ы|ка|ки|\(и\))?\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorLabel();
 
     // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ...", "Автори запитань 1-6: ...", "Авторы запитань 1-6: ..." (Russian)
@@ -98,8 +102,12 @@ public static partial class ParserPatterns
 
     // Special markers
     // Matches: [Ведучому: ...], [Ведучим: ...], [Ведучому -(ій): ...], [Вказівка ведучому: ...], [Ведучій: ...]
+    // Separator can be colon, dot, dash, or long dash. Colon can have no whitespace, others need whitespace after.
+    // Uses alternation to handle different separator cases:
+    // - Colon: [Ведучому: text] (traditional format, no whitespace required)
+    // - Dot/dash: [Ведучому. text] or [Ведучому - text] (requires whitespace after)
     // Captures the instruction text inside brackets and any text after the closing bracket
-    [GeneratedRegex(@"^\s*\[(?:Ведучому|Ведучим|Ведучій|Вказівка\s*ведучому)[^:]*:\s*([^\]]+)\]\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[(?:Ведучому|Ведучим|Ведучій|Вказівка\s*ведучому)[^:]*(?::\s*|[.\-–—]\s+)([^\]]+)\]\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HostInstructionsBracket();
 
     [GeneratedRegex(@"^\s*(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
@@ -536,6 +544,13 @@ public class PackageParser
         if (!TryParseQuestionStart(line, out var questionNumber, out var remainingText, out var detectedFormat))
             return false;
 
+        // Tour-existence guard: question patterns before any tour are treated as preamble/header content.
+        // This prevents numbered lines like "1. PayPal: email@example.com" from being parsed as questions.
+        if (!ctx.HasCurrentTour)
+        {
+            return false;
+        }
+
         // Context-based validation: don't allow "N." pattern in Source section
         // This prevents numbered list items in sources from being parsed as questions
         // But allow if it's in Authors section (which typically ends a question)
@@ -750,37 +765,23 @@ public class PackageParser
     /// <summary>
     /// Finds the start index of an inline label in text.
     /// Returns -1 if no inline label is found, or the index of the label start.
+    /// Only Залік and Незалік can appear inline (mid-line).
+    /// All other labels (Відповідь, Коментар, Джерело, Автор) must appear at line start.
     /// </summary>
     private static int FindInlineLabelStart(string text)
     {
         var minIndex = int.MaxValue;
 
-        // Label keywords that can appear inline (without ^ anchor)
-        // These are the prefixes we look for to split inline labels
-        // Note: Include both Cyrillic 'і' and Latin 'i' variants for Відповідь
-        // Also include Russian equivalents for common labels
+        // Only Залік/Незалік variants can appear inline within answer text.
+        // Other labels (Відповідь, Коментар, Джерело, Автор, Роздатка) must be at line start.
+        // This prevents phrases like "Дайте відповідь:" in question text from being parsed as answer labels.
         string[] labelKeywords =
         [
-            "Відповідь:",
-            "Вiдповiдь:",  // Latin 'i' variant (common OCR/typing error)
-            "Ответ:",      // Russian for "Answer"
             "Залік:",
             "Заліки:",
             "Незалік:",
             "Не залік:",
-            "Не приймається:",
-            "Коментар:",
-            "Комментарий:",  // Russian for "Comment"
-            "Джерело:",
-            "Джерела:",
-            "Источник:",     // Russian for "Source"
-            "Источники:",    // Russian for "Sources"
-            "Автор:",
-            "Автори:",
-            "Авторка:",
-            "Авторки:",
-            "Роздатка:",
-            "Роздатковий матеріал:"
+            "Не приймається:"
         ];
 
         foreach (var keyword in labelKeywords)

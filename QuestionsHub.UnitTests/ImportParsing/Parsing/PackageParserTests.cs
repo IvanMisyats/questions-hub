@@ -1233,14 +1233,16 @@ public class PackageParserTests
     }
 
     [Fact]
-    public void Parse_MultipleInlineLabels_ExtractsAll()
+    public void Parse_MultipleInlineLabels_ExtractsZalikOnly()
     {
         // Arrange - Multiple labels on the same line
+        // Only Залік/Незалік can appear inline; Коментар must be at line start
         var blocks = new List<DocBlock>
         {
             Block("ТУР 1"),
             Block("1. Питання"),
-            Block("Відповідь: answer. Залік: accepted. Коментар: comment text")
+            Block("Відповідь: answer. Залік: accepted. Незалік: rejected."),
+            Block("Коментар: comment text")  // Comment on separate line
         };
 
         // Act
@@ -1250,6 +1252,7 @@ public class PackageParserTests
         var q = result.Tours[0].Questions[0];
         q.Answer.Should().Be("answer.");
         q.AcceptedAnswers.Should().Be("accepted.");
+        q.RejectedAnswers.Should().Be("rejected.");
         q.Comment.Should().Be("comment text");
     }
 
@@ -3171,6 +3174,186 @@ public class PackageParserTests
         question.Text.Should().NotContain("]");
         question.Answer.Should().Be("Брем Стокер");
         question.AcceptedAnswers.Should().Be("Стокер");
+    }
+
+    /// <summary>
+    /// Tests that numbered lines in preamble (before any tour) are not parsed as questions.
+    /// Example: "1. PayPal: email@example.com" in payment instructions.
+    /// </summary>
+    [Fact]
+    public void Parse_NumberedLinesInPreambleBeforeTour_ShouldNotCreateQuestions()
+    {
+        // Arrange - numbered list in preamble followed by actual tour and question
+        var blocks = new List<DocBlock>
+        {
+            Block("Турнір \"Тест\""),
+            Block("Способи оплати:"),
+            Block("1. PayPal: example@gmail.com"),
+            Block("2. ПриватБанк: 4731000000000000"),
+            Block("3. МоноБанк: 5375000000000000"),
+            Block("Тур 1"),
+            Block("1. Справжнє питання"),
+            Block("Відповідь: Правильна відповідь")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[0].Questions[0].Text.Should().Be("Справжнє питання");
+        result.Tours[0].Questions[0].Answer.Should().Be("Правильна відповідь");
+    }
+
+    /// <summary>
+    /// Tests that "Дайте відповідь:" in question text is not parsed as answer label.
+    /// Only labels at line start should be recognized.
+    /// </summary>
+    [Fact]
+    public void Parse_VidpovidInQuestionText_ShouldNotSplitAsAnswerLabel()
+    {
+        // Arrange - "Дайте відповідь:" is a common phrasing in question text
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1.\nПобачивши варіацію Герти Барб на тему відомого малюнка. Дайте відповідь: що таке ІКС або хто такий ІГРЕК?"),
+            Block("Відповідь: капелюх."),
+            Block("Залік: удав; інші синонімічні відповіді."),
+            Block("Незалік: слон в удаві."),
+            Block("Коментар: малюнок Герти відсилає до ілюстрації Екзюпері до «Маленького принца»."),
+            Block("Джерело: https://www.facebook.com/example"),
+            Block("Автор: Олександр Мерзликін (Кривий Ріг)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().Contain("Дайте відповідь: що таке ІКС");
+        q.Answer.Should().Be("капелюх.");
+        q.AcceptedAnswers.Should().Be("удав; інші синонімічні відповіді.");
+        q.RejectedAnswers.Should().Be("слон в удаві.");
+    }
+
+    /// <summary>
+    /// Tests that labels with dot separator (e.g., "Відповідь. ") are recognized.
+    /// </summary>
+    [Theory]
+    [InlineData("Відповідь. капелюх", "капелюх")]
+    [InlineData("Відповідь.  два пробіли", "два пробіли")]
+    public void Parse_AnswerLabelWithDotSeparator_ExtractsAnswer(string line, string expected)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Answer.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Tests that labels with dot separator without whitespace are not recognized.
+    /// E.g., "Відповідь.капелюх" should not match.
+    /// </summary>
+    [Fact]
+    public void Parse_AnswerLabelWithDotNoWhitespace_DoesNotMatch()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь.капелюх"),  // No space after dot - should not match
+            Block("Відповідь: правильна відповідь")  // This should match
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("правильна відповідь");
+        // The line without space should go to question text
+        q.Text.Should().Contain("Відповідь.капелюх");
+    }
+
+    /// <summary>
+    /// Tests that Source label with dot separator is recognized.
+    /// </summary>
+    [Theory]
+    [InlineData("Джерело. https://example.com", "https://example.com")]
+    [InlineData("Джерела. посилання 1; посилання 2", "посилання 1; посилання 2")]
+    public void Parse_SourceLabelWithDotSeparator_ExtractsSource(string line, string expected)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Source.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Tests that Author label with dot separator is recognized.
+    /// </summary>
+    [Fact]
+    public void Parse_AuthorLabelWithDotSeparator_ExtractsAuthor()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор. Іван Петренко")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().Contain("Іван Петренко");
+    }
+
+    /// <summary>
+    /// Tests host instructions with dot separator.
+    /// </summary>
+    [Theory]
+    [InlineData("[Ведучому. слова виділити голосом]", "слова виділити голосом")]
+    [InlineData("[Ведучому - слова виділити голосом]", "слова виділити голосом")]
+    [InlineData("[Ведучому – слова виділити голосом]", "слова виділити голосом")]
+    [InlineData("[Ведучому — слова виділити голосом]", "слова виділити голосом")]
+    public void Parse_HostInstructionsWithDifferentSeparators_ExtractsInstructions(string line, string expected)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block($"1. {line} Питання тексту")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].HostInstructions.Should().Be(expected);
     }
 
 
