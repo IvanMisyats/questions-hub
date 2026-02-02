@@ -1,12 +1,11 @@
 @page "/search"
 @page "/search/{Query}"
+@attribute [StreamRendering]
 @using QuestionsHub.Blazor.Infrastructure
 @using static QuestionsHub.Blazor.Infrastructure.HighlightSanitizer
 @using static QuestionsHub.Blazor.Infrastructure.SourceLinkifier
 @inject SearchService SearchService
 @inject AccessControlService AccessControl
-@inject NavigationManager Navigation
-@rendermode InteractiveServer
 
 <PageTitle>Пошук питань</PageTitle>
 
@@ -15,25 +14,16 @@
 
     <div class="row mb-4">
         <div class="col-12 col-md-8 col-lg-6">
-            <div class="input-group">
+            <form class="input-group" data-enhance="false" onsubmit="return handleSearchFormSubmit(this)">
                 <input type="text"
+                       name="q"
                        class="form-control form-control-lg"
                        placeholder="Введіть слова для пошуку..."
-                       @bind="SearchQuery"
-                       @bind:event="oninput"
-                       @onkeyup="OnKeyUp" />
-                <button class="btn btn-primary" @onclick="PerformSearch" disabled="@_isSearching">
-                    @if (_isSearching)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        <span>Шукаю...</span>
-                    }
-                    else
-                    {
-                        <span>Шукати</span>
-                    }
+                       value="@_searchedQuery" />
+                <button type="submit" class="btn btn-primary">
+                    <span>Шукати</span>
                 </button>
-            </div>
+            </form>
             <small class="text-muted mt-2 d-block">
                 Підтримується: <code>слово1 слово2</code> (обидва), <code>слово1 OR слово2</code> (будь-яке),
                 <code>"точна фраза"</code>, <code>-виключити</code>
@@ -48,7 +38,14 @@
         </div>
     }
 
-    @if (_results != null)
+    @if (_isLoading)
+    {
+        <div class="d-flex align-items-center text-muted">
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            <span>Шукаю...</span>
+        </div>
+    }
+    else if (_results != null)
     {
         @if (_results.Count > 0)
         {
@@ -171,52 +168,39 @@
     [Parameter]
     public string? Query { get; set; }
 
-    private string SearchQuery { get; set; } = "";
     private List<SearchResult>? _results;
-    private bool _isSearching;
+    private bool _isLoading = true;
     private bool _hasSearched;
     private string? _errorMessage;
     private string? _searchedQuery;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        // If query passed via URL parameter, use it
-        if (!string.IsNullOrWhiteSpace(Query) && Query != SearchQuery)
+        // If query passed via URL parameter, perform search
+        if (!string.IsNullOrWhiteSpace(Query))
         {
-            SearchQuery = Uri.UnescapeDataString(Query);
+            _searchedQuery = Uri.UnescapeDataString(Query);
             await PerformSearch();
         }
-    }
-
-    private async Task OnKeyUp(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
+        else
         {
-            await PerformSearch();
+            _isLoading = false;
         }
     }
 
     private async Task PerformSearch()
     {
-        if (string.IsNullOrWhiteSpace(SearchQuery))
+        if (string.IsNullOrWhiteSpace(_searchedQuery))
         {
+            _isLoading = false;
             return;
         }
-
-        _isSearching = true;
-        _errorMessage = null;
-        StateHasChanged();
 
         try
         {
             var accessContext = await AccessControl.GetPackageAccessContext();
-            _results = await SearchService.Search(SearchQuery.Trim(), accessContext);
-            _searchedQuery = SearchQuery.Trim();
+            _results = await SearchService.Search(_searchedQuery.Trim(), accessContext);
             _hasSearched = true;
-
-            // Update URL without full navigation
-            var encodedQuery = Uri.EscapeDataString(SearchQuery.Trim());
-            Navigation.NavigateTo($"/search/{encodedQuery}", replace: true);
         }
         catch (Exception)
         {
@@ -225,7 +209,7 @@
         }
         finally
         {
-            _isSearching = false;
+            _isLoading = false;
         }
     }
 

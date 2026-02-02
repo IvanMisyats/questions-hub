@@ -1,51 +1,57 @@
-﻿@rendermode InteractiveServer
-@inject AuthenticationStateProvider AuthenticationStateProvider
+﻿@* Static SSR - uses HttpContext for authentication state *@
 
-<AuthorizeView>
-    <Authorized>
-        <div class="dropdown">
-            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                @_userName
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
-                <li><a class="dropdown-item" href="/Account/Profile">Мій профіль</a></li>
-                <AuthorizeView Roles="Editor,Admin" Context="roleContext">
-                    <Authorized>
-                        <li><a class="dropdown-item" href="/manage/packages">Мої пакети</a></li>
-                        <li><a class="dropdown-item" href="/admin/editors">Редактори</a></li>
-                    </Authorized>
-                </AuthorizeView>
-                <AuthorizeView Roles="Admin" Context="adminContext">
-                    <Authorized>
-                        <li><a class="dropdown-item" href="/admin/users">Користувачі</a></li>
-                    </Authorized>
-                </AuthorizeView>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                    <form method="post" action="/api/Auth/logout">
-                        <button type="submit" class="dropdown-item">Вийти</button>
-                    </form>
-                </li>
-            </ul>
-        </div>
-    </Authorized>
-    <NotAuthorized>
-        <a href="/Account/Login" class="btn btn-primary me-2">Увійти</a>
-        <a href="/Account/Register" class="btn btn-outline-primary">Реєстрація</a>
-    </NotAuthorized>
-</AuthorizeView>
+@if (_isAuthenticated)
+{
+    <div class="dropdown">
+        <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            @_userName
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+            <li><a class="dropdown-item" href="/Account/Profile">Мій профіль</a></li>
+            @if (_isEditor || _isAdmin)
+            {
+                <li><a class="dropdown-item" href="/manage/packages">Мої пакети</a></li>
+                <li><a class="dropdown-item" href="/admin/editors">Редактори</a></li>
+            }
+            @if (_isAdmin)
+            {
+                <li><a class="dropdown-item" href="/admin/users">Користувачі</a></li>
+            }
+            <li><hr class="dropdown-divider"></li>
+            <li>
+                <form method="post" action="/api/Auth/logout">
+                    <button type="submit" class="dropdown-item">Вийти</button>
+                </form>
+            </li>
+        </ul>
+    </div>
+}
+else
+{
+    <a href="/Account/Login" class="btn btn-primary me-2">Увійти</a>
+    <a href="/Account/Register" class="btn btn-outline-primary">Реєстрація</a>
+}
 
 @code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private bool _isAuthenticated;
+    private bool _isEditor;
+    private bool _isAdmin;
     private string _userName = "Користувач";
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
+        var user = HttpContext?.User;
+        _isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
 
-        if (user.Identity?.IsAuthenticated == true)
+        if (_isAuthenticated && user != null)
         {
-            // Get name from claims to avoid database query (prevents DbContext concurrency issues)
+            _isAdmin = user.IsInRole("Admin");
+            _isEditor = user.IsInRole("Editor");
+
+            // Get name from claims (added during login)
             var firstName = user.FindFirst("FirstName")?.Value;
             var lastName = user.FindFirst("LastName")?.Value;
 
@@ -56,7 +62,7 @@
             else
             {
                 // Fallback to email if claims not set
-                _userName = user.Identity.Name ?? "Користувач";
+                _userName = user.Identity?.Name ?? "Користувач";
             }
         }
     }

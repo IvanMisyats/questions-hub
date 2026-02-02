@@ -72,6 +72,16 @@ window.handleTopSearchSubmit = function(form) {
     return false;
 };
 
+// Handle search page form submission (static SSR)
+window.handleSearchFormSubmit = function(form) {
+    const query = form.q.value.trim();
+    if (query) {
+        const encodedQuery = encodeURIComponent(query);
+        window.location.href = '/search/' + encodedQuery;
+    }
+    return false;
+};
+
 // Scroll position preservation for Blazor Server re-renders
 window._savedScrollPosition = null;
 
