@@ -3261,19 +3261,19 @@ public class PackageParserTests
     }
 
     /// <summary>
-    /// Tests that labels with dot separator without whitespace are not recognized.
-    /// E.g., "Відповідь.капелюх" should not match.
+    /// Tests that labels with dot separator without whitespace ARE recognized.
+    /// E.g., "Відповідь.капелюх" should match as Answer label with value "капелюх".
+    /// This enables "Джерело." followed by newline to work correctly.
     /// </summary>
     [Fact]
-    public void Parse_AnswerLabelWithDotNoWhitespace_DoesNotMatch()
+    public void Parse_AnswerLabelWithDotNoWhitespace_IsRecognized()
     {
         // Arrange
         var blocks = new List<DocBlock>
         {
             Block("Тур 1"),
             Block("1. Питання"),
-            Block("Відповідь.капелюх"),  // No space after dot - should not match
-            Block("Відповідь: правильна відповідь")  // This should match
+            Block("Відповідь.капелюх")  // No space after dot - should still match
         };
 
         // Act
@@ -3281,9 +3281,8 @@ public class PackageParserTests
 
         // Assert
         var q = result.Tours[0].Questions[0];
-        q.Answer.Should().Be("правильна відповідь");
-        // The line without space should go to question text
-        q.Text.Should().Contain("Відповідь.капелюх");
+        q.Answer.Should().Be("капелюх");
+        q.Text.Should().Be("Питання");
     }
 
     /// <summary>
@@ -3354,6 +3353,178 @@ public class PackageParserTests
 
         // Assert
         result.Tours[0].Questions[0].HostInstructions.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Tests that Залік (accepted answers) with dot separator is recognized.
+    /// </summary>
+    [Theory]
+    [InlineData("Залік. варіант1, варіант2", "варіант1, варіант2")]
+    [InlineData("Заліки. варіанти", "варіанти")]
+    [InlineData("Залік.варіант без пробілу", "варіант без пробілу")]
+    public void Parse_AcceptedLabelWithDotSeparator_ExtractsAcceptedAnswers(string line, string expected)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].AcceptedAnswers.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Tests that Незалік (rejected answers) with dot separator is recognized.
+    /// </summary>
+    [Theory]
+    [InlineData("Незалік. неправильно", "неправильно")]
+    [InlineData("Не залік. варіант", "варіант")]
+    [InlineData("Не приймається. відповідь", "відповідь")]
+    public void Parse_RejectedLabelWithDotSeparator_ExtractsRejectedAnswers(string line, string expected)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].RejectedAnswers.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Tests that Коментар with dot separator and Коментарі variant are recognized.
+    /// </summary>
+    [Theory]
+    [InlineData("Коментар. Цікавий факт", "Цікавий факт")]
+    [InlineData("Коментарі: Інформація", "Інформація")]
+    [InlineData("Коментарі. Декілька коментарів", "Декілька коментарів")]
+    public void Parse_CommentLabelVariantsWithDotSeparator_ExtractsComment(string line, string expected)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block(line)
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Comment.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Tests that Джерело. followed by newline (content on next line) is properly parsed.
+    /// </summary>
+    [Fact]
+    public void Parse_SourceLabelWithDotAndNewline_ExtractsSource()
+    {
+        // Arrange - "Джерело." on its own line, content on next line
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Джерело."),
+            Block("https://example.com"),
+            Block("https://another.com")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var source = result.Tours[0].Questions[0].Source;
+        source.Should().Contain("https://example.com");
+        source.Should().Contain("https://another.com");
+    }
+
+    /// <summary>
+    /// Tests the complete question format from the reported bug:
+    /// all fields use dot separators, Джерело. has content on next lines.
+    /// </summary>
+    [Fact]
+    public void Parse_AllFieldsWithDotSeparator_ParsesCorrectly()
+    {
+        // Arrange - exact format from the bug report
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. ВОНИ - назва фільму про стосунки на відстані."),
+            Block("Відповідь. Листи з фронту"),
+            Block("Залік. За згадкою листів та фронту"),
+            Block("Джерело."),
+            Block("https://www.kino-teatr.ru/kino/movie/asia/159176/annot/"),
+            Block("https://murawei.de/r006696.html"),
+            Block("Автор. Олексій Жидких")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().Be("ВОНИ - назва фільму про стосунки на відстані.");
+        q.Answer.Should().Be("Листи з фронту");
+        q.AcceptedAnswers.Should().Be("За згадкою листів та фронту");
+        q.Source.Should().Contain("https://www.kino-teatr.ru/kino/movie/asia/159176/annot/");
+        q.Source.Should().Contain("https://murawei.de/r006696.html");
+        q.Authors.Should().Contain("Олексій Жидких");
+    }
+
+    /// <summary>
+    /// Tests that all fields with dot separators don't merge into Answer.
+    /// This is the core bug being fixed.
+    /// </summary>
+    [Fact]
+    public void Parse_DotSeparators_DoNotMergeIntoAnswer()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання тексту"),
+            Block("Відповідь. Відповідь тексту"),
+            Block("Залік. Залік тексту"),
+            Block("Незалік. Незалік тексту"),
+            Block("Коментар. Коментар тексту"),
+            Block("Джерело. Джерело тексту"),
+            Block("Автор. Автор тексту")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("Відповідь тексту");
+        q.Answer.Should().NotContain("Залік");
+        q.Answer.Should().NotContain("Незалік");
+        q.Answer.Should().NotContain("Коментар");
+        q.Answer.Should().NotContain("Джерело");
+        q.Answer.Should().NotContain("Автор");
+        q.AcceptedAnswers.Should().Be("Залік тексту");
+        q.RejectedAnswers.Should().Be("Незалік тексту");
+        q.Comment.Should().Be("Коментар тексту");
+        q.Source.Should().Be("Джерело тексту");
+        q.Authors.Should().Contain("Автор тексту");
     }
 
 

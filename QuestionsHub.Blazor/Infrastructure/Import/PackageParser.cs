@@ -69,31 +69,33 @@ public static partial class ParserPatterns
     // Note: Using character class to match both Cyrillic 'і' (U+0456) and Latin 'i' (U+0069)
     // This handles common typing/OCR errors where Latin 'i' is used instead of Cyrillic 'і'
     // Also supports Russian "Ответ" as alternative to Ukrainian "Відповідь"
-    // Separator can be colon (:) or dot with required whitespace (. ) to avoid matching mid-sentence
-    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]дь|Ответ)\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with optional whitespace (.) to support dot at end of line
+    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]дь|Ответ)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AnswerLabel();
 
-    // Matches: "Залік: ...", "Заліки: ...", "Залік (не оголошувати): ..."
-    [GeneratedRegex(@"^\s*Залік(?:и)?(?:\s*\([^)]+\))?\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Залік: ...", "Заліки: ...", "Залік (не оголошувати): ...", "Залік. ..."
+    // Separator can be colon (:) or dot with optional whitespace (.)
+    [GeneratedRegex(@"^\s*Залік(?:и)?(?:\s*\([^)]+\))?\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AcceptedLabel();
 
-    [GeneratedRegex(@"^\s*(?:Незалік|Не\s*залік|Не\s*приймається)\s*:\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with optional whitespace (.)
+    [GeneratedRegex(@"^\s*(?:Незалік|Не\s*залік|Не\s*приймається)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex RejectedLabel();
 
-    // Matches: "Коментар: ..." (Ukrainian), "Комментарий: ..." (Russian)
-    // Separator can be colon (:) or dot with required whitespace (. )
-    [GeneratedRegex(@"^\s*(?:Коментар|Комментарий)\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Matches: "Коментар: ...", "Коментарі: ..." (Ukrainian), "Комментарий: ..." (Russian)
+    // Separator can be colon (:) or dot with optional whitespace (.)
+    [GeneratedRegex(@"^\s*(?:Коментар|Коментарі|Комментарий)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex CommentLabel();
 
     // Matches: "Джерело: ...", "Джерела: ...", "Джерело(а): ...", "Джерел(а): ..." (Ukrainian)
     // Also: "Источник: ...", "Источники: ..." (Russian)
-    // Separator can be colon (:) or dot with required whitespace (. )
-    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with optional whitespace (.)
+    [GeneratedRegex(@"^\s*(?:Джерело|Джерела|Джерело\(а\)|Джерел\(а\)|Источник|Источники)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex SourceLabel();
 
     // Matches: "Автор:", "Автори:", "Автора:", "Авторка:", "Авторки:", "Автор(и):", "Авторы:" (Russian)
-    // Separator can be colon (:) or dot with required whitespace (. )
-    [GeneratedRegex(@"^\s*Автор(?:а|и|ы|ка|ки|\(и\))?\s*(?::|[.]\s)\s*(.*)$", RegexOptions.IgnoreCase)]
+    // Separator can be colon (:) or dot with optional whitespace (.)
+    [GeneratedRegex(@"^\s*Автор(?:а|и|ы|ка|ки|\(и\))?\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AuthorLabel();
 
     // Author ranges in header: "Автор запитань 1-18: ...", "Автора запитань 19–36: ...", "Авторка запитань 1-12: ...", "Автори запитань 1-6: ...", "Авторы запитань 1-6: ..." (Russian)
