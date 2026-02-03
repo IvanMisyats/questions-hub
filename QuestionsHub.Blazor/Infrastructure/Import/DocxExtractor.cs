@@ -74,12 +74,10 @@ public class DocxExtractor
                         }
                     }
 
-                    // Only add non-empty blocks
-                    if (!string.IsNullOrWhiteSpace(block.Text) || block.Assets.Count > 0)
-                    {
-                        blocks.Add(block);
-                        blockIndex++;
-                    }
+                    // Include all blocks - empty paragraphs represent blank lines in the source
+                    // that may need to be preserved in content sections (question text, comments, etc.)
+                    blocks.Add(block);
+                    blockIndex++;
                 }
                 else if (element is Table table)
                 {

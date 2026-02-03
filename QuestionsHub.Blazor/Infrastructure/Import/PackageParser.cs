@@ -313,8 +313,16 @@ public class PackageParser
     private void ProcessBlock(DocBlock block, ParserContext ctx)
     {
         var text = NormalizeText(block.Text);
+        
+        // Handle empty blocks (blank paragraphs in DOCX) - append blank line to content sections
         if (string.IsNullOrWhiteSpace(text) && block.Assets.Count == 0)
+        {
+            if (ctx.CurrentQuestion != null && IsContentSection(ctx.CurrentSection))
+            {
+                AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
+            }
             return;
+        }
 
         ctx.QuestionCreatedInCurrentBlock = false;
         ctx.CurrentBlock = block;
@@ -327,6 +335,16 @@ public class PackageParser
 
         foreach (var line in SplitIntoLines(text))
         {
+            // Handle blank lines - append to content sections to preserve paragraph structure
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                if (ctx.CurrentQuestion != null && IsContentSection(ctx.CurrentSection))
+                {
+                    AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
+                }
+                continue;
+            }
+
             var sectionBeforeLine = ctx.CurrentSection;
             ProcessLine(line, ctx);
 
@@ -896,6 +914,53 @@ public class PackageParser
                    ParserSection.Authors;
 
     /// <summary>
+    /// Checks if a section is a content section that can contain multiline text with blank lines.
+    /// </summary>
+    private static bool IsContentSection(ParserSection section) =>
+        section is ParserSection.QuestionText or
+                   ParserSection.Handout or
+                   ParserSection.HostInstructions or
+                   ParserSection.Answer or
+                   ParserSection.AcceptedAnswers or
+                   ParserSection.RejectedAnswers or
+                   ParserSection.Comment or
+                   ParserSection.Source;
+
+    /// <summary>
+    /// Appends a blank line to the appropriate field of the question based on the current section.
+    /// </summary>
+    private static void AppendBlankLineToSection(ParserSection section, QuestionDto question)
+    {
+        switch (section)
+        {
+            case ParserSection.QuestionText:
+                question.Text = AppendBlankLine(question.Text);
+                break;
+            case ParserSection.Handout:
+                question.HandoutText = AppendBlankLine(question.HandoutText);
+                break;
+            case ParserSection.HostInstructions:
+                question.HostInstructions = AppendBlankLine(question.HostInstructions);
+                break;
+            case ParserSection.Answer:
+                question.Answer = AppendBlankLine(question.Answer);
+                break;
+            case ParserSection.AcceptedAnswers:
+                question.AcceptedAnswers = AppendBlankLine(question.AcceptedAnswers);
+                break;
+            case ParserSection.RejectedAnswers:
+                question.RejectedAnswers = AppendBlankLine(question.RejectedAnswers);
+                break;
+            case ParserSection.Comment:
+                question.Comment = AppendBlankLine(question.Comment);
+                break;
+            case ParserSection.Source:
+                question.Source = AppendBlankLine(question.Source);
+                break;
+        }
+    }
+
+    /// <summary>
     /// Associates block assets with handout section when transitioning to answer-related sections.
     /// This ensures assets appearing before answers/comments in the same block are correctly
     /// associated with the handout rather than the comment.
@@ -1109,7 +1174,32 @@ public class PackageParser
         // Assign OrderIndex values
         AssignTourOrderIndices(ctx.Result);
 
+        // Trim leading/trailing blank lines from all question text fields
+        TrimQuestionBlankLines(ctx.Result);
+
         CalculateConfidence(ctx.Result);
+    }
+
+    /// <summary>
+    /// Trims leading and trailing blank lines from all question text fields.
+    /// Preserves internal blank lines for paragraph structure.
+    /// </summary>
+    private static void TrimQuestionBlankLines(ParseResult result)
+    {
+        foreach (var tour in result.Tours)
+        {
+            foreach (var question in tour.Questions)
+            {
+                question.Text = TrimBlankLines(question.Text);
+                question.Answer = TrimBlankLines(question.Answer);
+                question.AcceptedAnswers = TrimBlankLines(question.AcceptedAnswers);
+                question.RejectedAnswers = TrimBlankLines(question.RejectedAnswers);
+                question.Comment = TrimBlankLines(question.Comment);
+                question.Source = TrimBlankLines(question.Source);
+                question.HandoutText = TrimBlankLines(question.HandoutText);
+                question.HostInstructions = TrimBlankLines(question.HostInstructions);
+            }
+        }
     }
 
     /// <summary>
@@ -1191,9 +1281,20 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Splits text into non-empty, trimmed lines.
+    /// Splits text into lines, trimming each line individually.
+    /// Preserves blank lines to maintain paragraph structure.
     /// </summary>
     private static IEnumerable<string> SplitIntoLines(string text)
+    {
+        return text.Split('\n')
+            .Select(line => line.Trim());
+    }
+
+    /// <summary>
+    /// Splits text into non-empty, trimmed lines.
+    /// Use this when blank lines should be ignored (e.g., for structural parsing).
+    /// </summary>
+    private static IEnumerable<string> SplitIntoNonEmptyLines(string text)
     {
         return text.Split('\n')
             .Select(line => line.Trim())
@@ -1850,5 +1951,42 @@ public class PackageParser
         if (string.IsNullOrWhiteSpace(existing))
             return newText;
         return existing + "\n" + newText;
+    }
+
+    /// <summary>
+    /// Appends a blank line to the current section's content.
+    /// Used to preserve paragraph breaks in multiline content.
+    /// </summary>
+    private static string AppendBlankLine(string? existing)
+    {
+        if (string.IsNullOrEmpty(existing))
+            return "";
+        return existing + "\n";
+    }
+
+    /// <summary>
+    /// Trims leading and trailing blank lines from text while preserving internal blank lines.
+    /// </summary>
+    private static string TrimBlankLines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var lines = text.Split('\n');
+        var startIndex = 0;
+        var endIndex = lines.Length - 1;
+
+        // Find first non-empty line
+        while (startIndex <= endIndex && string.IsNullOrWhiteSpace(lines[startIndex]))
+            startIndex++;
+
+        // Find last non-empty line
+        while (endIndex >= startIndex && string.IsNullOrWhiteSpace(lines[endIndex]))
+            endIndex--;
+
+        if (startIndex > endIndex)
+            return string.Empty;
+
+        return string.Join("\n", lines.Skip(startIndex).Take(endIndex - startIndex + 1));
     }
 }

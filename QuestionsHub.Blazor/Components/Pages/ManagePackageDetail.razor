@@ -715,22 +715,22 @@
                             <label class="col-form-label">Відповідь <span class="text-danger">*</span></label>
                         </div>
                         <div class="col-md-10">
-                            <input type="text" class="form-control @(_isAnswerEmpty ? "field-required-empty" : "")"
-                                   @bind="_editingQuestion.Answer" @onblur="OnAnswerBlurAsync" />
+                            <textarea class="form-control auto-expand @(_isAnswerEmpty ? "field-required-empty" : "")"
+                                      @bind="_editingQuestion.Answer" @onblur="OnAnswerBlurAsync"></textarea>
                         </div>
                         <div class="col-md-2">
                             <label class="col-form-label">Залік</label>
                         </div>
                         <div class="col-md-5">
-                            <input type="text" class="form-control" placeholder="альтернативні відповіді"
-                                   @bind="_editingQuestion.AcceptedAnswers" @onblur="SaveEditingQuestionAsync" />
+                            <textarea class="form-control auto-expand" placeholder="альтернативні відповіді"
+                                      @bind="_editingQuestion.AcceptedAnswers" @onblur="SaveEditingQuestionAsync"></textarea>
                         </div>
                         <div class="col-md-2 text-end">
                             <label class="col-form-label">Незалік</label>
                         </div>
                         <div class="col-md-3">
-                            <input type="text" class="form-control"
-                                   @bind="_editingQuestion.RejectedAnswers" @onblur="SaveEditingQuestionAsync" />
+                            <textarea class="form-control auto-expand"
+                                      @bind="_editingQuestion.RejectedAnswers" @onblur="SaveEditingQuestionAsync"></textarea>
                         </div>
                         <div class="col-md-2">
                             <label class="col-form-label">Коментар</label>

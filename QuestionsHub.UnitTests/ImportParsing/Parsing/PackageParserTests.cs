@@ -3527,6 +3527,377 @@ public class PackageParserTests
         q.Authors.Should().Contain("Автор тексту");
     }
 
+    #endregion
+
+    #region Multiline Content and Blank Lines
+
+    /// <summary>
+    /// Tests that question text with internal blank lines preserves them.
+    /// </summary>
+    [Fact]
+    public void Parse_QuestionTextWithBlankLines_PreservesInternalBlankLines()
+    {
+        // Arrange - question text has a blank line between paragraphs
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Перший абзац тексту.\n\nДругий абзац після порожнього рядка."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().Contain("\n\n");
+        q.Text.Should().StartWith("Перший абзац тексту.");
+        q.Text.Should().EndWith("Другий абзац після порожнього рядка.");
+    }
+
+    /// <summary>
+    /// Tests that multiline answers from separate blocks are preserved.
+    /// </summary>
+    [Fact]
+    public void Parse_MultilineAnswer_PreservesAllLines()
+    {
+        // Arrange - answer spans multiple blocks
+        // Note: Don't use "2." "3." as they look like question numbers
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь:"),
+            Block("перша частина відповіді"),
+            Block("друга частина відповіді"),
+            Block("третя частина відповіді"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Contain("перша частина відповіді");
+        q.Answer.Should().Contain("друга частина відповіді");
+        q.Answer.Should().Contain("третя частина відповіді");
+    }
+
+    /// <summary>
+    /// Tests that comment with internal blank lines preserves them.
+    /// </summary>
+    [Fact]
+    public void Parse_CommentWithBlankLines_PreservesInternalBlankLines()
+    {
+        // Arrange - comment has a blank line between paragraphs
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Коментар: Перший абзац коментаря.\n\nДругий абзац коментаря.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Comment.Should().Contain("\n\n");
+        q.Comment.Should().StartWith("Перший абзац коментаря.");
+        q.Comment.Should().EndWith("Другий абзац коментаря.");
+    }
+
+    /// <summary>
+    /// Tests that multiline accepted answers from separate blocks are preserved.
+    /// </summary>
+    [Fact]
+    public void Parse_MultilineAcceptedAnswers_PreservesAllLines()
+    {
+        // Arrange - accepted answers span multiple blocks
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Залік:"),
+            Block("варіант перший"),
+            Block("варіант другий"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.AcceptedAnswers.Should().Contain("варіант перший");
+        q.AcceptedAnswers.Should().Contain("варіант другий");
+    }
+
+    /// <summary>
+    /// Tests that leading and trailing blank lines are trimmed while internal ones are preserved.
+    /// </summary>
+    [Fact]
+    public void Parse_TextWithLeadingTrailingBlankLines_TrimsEdgesOnly()
+    {
+        // Arrange - text has leading/trailing blank lines but internal ones should stay
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1.\n\nПерший рядок.\n\nДругий рядок.\n\n"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().StartWith("Перший");
+        q.Text.Should().EndWith("рядок.");
+        q.Text.Should().Contain("\n\n"); // Internal blank line preserved
+    }
+
+    /// <summary>
+    /// Tests that handout text with blank lines preserves internal structure.
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutTextWithBlankLines_PreservesInternalBlankLines()
+    {
+        // Arrange - handout has blank line between paragraphs
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. [Роздатка: Перший рядок роздатки.\n\nДругий рядок роздатки.] Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.HandoutText.Should().Contain("\n\n");
+    }
+
+    /// <summary>
+    /// Tests source field with multiline content from separate blocks.
+    /// </summary>
+    [Fact]
+    public void Parse_MultilineSource_PreservesAllLines()
+    {
+        // Arrange - source spans multiple blocks (typical for multiple URLs)
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Джерело:"),
+            Block("https://example1.com"),
+            Block("https://example2.com"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Source.Should().Contain("https://example1.com");
+        q.Source.Should().Contain("https://example2.com");
+    }
+
+    /// <summary>
+    /// Tests that blank lines between different sections don't bleed into adjacent sections.
+    /// </summary>
+    [Fact]
+    public void Parse_BlankLinesBetweenSections_DoNotBleedIntoContent()
+    {
+        // Arrange - blank lines appear between different sections
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Текст питання"),
+            Block(""),  // Blank block between text and answer
+            Block("Відповідь: Відповідь тексту"),
+            Block(""),  // Blank block between answer and comment
+            Block("Коментар: Коментар тексту")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().Be("Текст питання");
+        q.Answer.Should().Be("Відповідь тексту");
+        q.Comment.Should().Be("Коментар тексту");
+    }
+
+    /// <summary>
+    /// Tests that rejected answers can span multiple lines.
+    /// </summary>
+    [Fact]
+    public void Parse_MultilineRejectedAnswers_PreservesAllLines()
+    {
+        // Arrange - rejected answers span multiple blocks
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Незалік:"),
+            Block("неправильний варіант 1"),
+            Block("неправильний варіант 2"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.RejectedAnswers.Should().Contain("неправильний варіант 1");
+        q.RejectedAnswers.Should().Contain("неправильний варіант 2");
+    }
+
+    /// <summary>
+    /// Tests that empty paragraph blocks between question text blocks are preserved as blank lines.
+    /// This simulates DOCX structure where each paragraph is a separate block.
+    /// </summary>
+    [Fact]
+    public void Parse_EmptyParagraphBlocksInQuestionText_PreservedAsBlankLines()
+    {
+        // Arrange - question text spread across blocks with empty block in between
+        // This simulates: "Intro paragraph" + empty paragraph + "1. First item" + "2. Second item"
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Увага, тетрабліц. Чотири запитання."),
+            Block(""),  // Empty paragraph in DOCX = blank line
+            Block("перше підпитання"),
+            Block("друге підпитання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().Contain("Увага, тетрабліц");
+        q.Text.Should().Contain("\n\n"); // Blank line should be preserved
+        q.Text.Should().Contain("перше підпитання");
+        q.Text.Should().Contain("друге підпитання");
+    }
+
+    /// <summary>
+    /// Tests that multiple empty paragraph blocks between question text create multiple blank lines.
+    /// </summary>
+    [Fact]
+    public void Parse_MultipleEmptyParagraphBlocks_PreservedAsMultipleBlankLines()
+    {
+        // Arrange - two empty paragraphs in a row
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Перший абзац."),
+            Block(""),  // First empty paragraph
+            Block(""),  // Second empty paragraph
+            Block("Другий абзац."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        // Should have 3 newlines (two blank lines = \n\n\n between paragraphs)
+        q.Text.Should().Contain("\n\n\n");
+    }
+
+    /// <summary>
+    /// Tests that empty paragraph blocks in comment section are preserved as blank lines.
+    /// </summary>
+    [Fact]
+    public void Parse_EmptyParagraphBlocksInComment_PreservedAsBlankLines()
+    {
+        // Arrange - comment with empty paragraph block between content
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Коментар: Перший абзац коментаря."),
+            Block(""),  // Empty paragraph
+            Block("Другий абзац коментаря."),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Comment.Should().Contain("Перший абзац коментаря.");
+        q.Comment.Should().Contain("\n\n"); // Blank line preserved
+        q.Comment.Should().Contain("Другий абзац коментаря.");
+    }
+
+    /// <summary>
+    /// Tests that empty paragraph blocks in answer section are preserved as blank lines.
+    /// </summary>
+    [Fact]
+    public void Parse_EmptyParagraphBlocksInAnswer_PreservedAsBlankLines()
+    {
+        // Arrange - multiline answer with empty paragraph block
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь:"),
+            Block("перша частина"),
+            Block(""),  // Empty paragraph
+            Block("друга частина"),
+            Block("Автор: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Contain("перша частина");
+        q.Answer.Should().Contain("\n\n"); // Blank line preserved
+        q.Answer.Should().Contain("друга частина");
+    }
+
+    /// <summary>
+    /// Tests that empty paragraph blocks at the end of content are trimmed.
+    /// </summary>
+    [Fact]
+    public void Parse_EmptyParagraphBlocksAtEndOfContent_AreTrimmed()
+    {
+        // Arrange - empty blocks at the end of question text before answer
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Текст питання"),
+            Block(""),  // Empty block before answer - should be trimmed
+            Block(""),  // Another empty block - should be trimmed
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Text.Should().Be("Текст питання"); // No trailing blank lines
+    }
 
     #endregion
 
