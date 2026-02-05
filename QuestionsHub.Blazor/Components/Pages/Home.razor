@@ -1,197 +1,329 @@
 @page "/"
-@page "/{Page:int}"
 @attribute [StreamRendering]
-@using Microsoft.EntityFrameworkCore
-@using QuestionsHub.Blazor.Data
+@using Microsoft.AspNetCore.WebUtilities
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @using QuestionsHub.Blazor.Utils
-@inject QuestionsHubDbContext DbContext
+@inject PackageListService PackageListService
 @inject AccessControlService AccessControl
+@inject NavigationManager NavigationManager
+
 <PageTitle>База українських запитань Що?Де?Коли?</PageTitle>
+
+@* Hidden state for JavaScript *@
+<div id="page-state" 
+     data-search="@_searchTerm" 
+     data-editor-id="@_editorId" 
+     data-editor-name="@_selectedEditorName"
+     data-sort="@_sortField"
+     data-dir="@_sortDir"
+     data-page="@CurrentPage"
+     data-total-pages="@_totalPages"
+     data-total-count="@_totalCount"
+     data-has-filters="@((!string.IsNullOrEmpty(_searchTerm) || _editorId.HasValue).ToString().ToLowerInvariant())"
+     style="display:none;"></div>
+
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Пакетів на сайті <strong>@_totalCount</strong></h4>
+    @* Filter toggle for mobile *@
+    <div class="d-md-none mb-3">
+        <button type="button" class="btn btn-outline-secondary w-100" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
+            <Icon Name="funnel" Class="me-2" /> Фільтри та сортування
+        </button>
     </div>
-    @if (_packages == null)
-    {
-        <p><em>Завантаження...</em></p>
-    }
-    else if (!_packages.Any())
-    {
-        <p>Поки немає пакетів. Слідкуйте за оновленнями.</p>
-    }
-    else
-    {
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            @foreach (var package in _packages)
+
+    @* Filter panel - collapsible on mobile, always visible on desktop *@
+    <div id="filter-panel" class="filter-panel mb-4">
+        <div class="row g-3 align-items-end">
+            @* Package search *@
+            <div class="col-12 col-md-4 col-lg-4">
+                <label for="package-search" class="form-label small text-muted mb-1">Пошук пакетів</label>
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <Icon Name="search" />
+                    </span>
+                    <input type="text"
+                           class="form-control"
+                           id="package-search"
+                           name="package-search"
+                           placeholder="Назва пакету..."
+                           value="@_searchTerm"
+                           autocomplete="off">
+                </div>
+            </div>
+
+            @* Editor filter dropdown *@
+            <div class="col-12 col-md-4 col-lg-4">
+                <label for="editor-dropdown-btn" class="form-label small text-muted mb-1">Редактор</label>
+                <div class="dropdown" id="editor-dropdown">
+                    <button type="button"
+                            id="editor-dropdown-btn"
+                            class="form-select text-start dropdown-toggle"
+                            data-editor-id="@_editorId"
+                            data-editor-name="@_selectedEditorName">
+                        <span class="text-truncate">@_selectedEditorName</span>
+                    </button>
+                    <div class="dropdown-menu w-100">
+                        <div class="px-2 pb-2">
+                            <input type="text"
+                                   class="form-control form-control-sm"
+                                   id="editor-search"
+                                   name="editor-search"
+                                   placeholder="Пошук редактора..."
+                                   autocomplete="off">
+                        </div>
+                        <div id="editor-list" class="editor-list">
+                            @* Populated by JavaScript *@
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Sort options *@
+            <div class="col-12 col-md-4 col-lg-4">
+                <label for="sort-select" class="form-label small text-muted mb-1">Сортування</label>
+                <div class="input-group">
+                    <select class="form-select" id="sort-select">
+                        <option value="PublicationDate" selected="@(_sortField == PackageSortField.PublicationDate)">За датою публікації</option>
+                        <option value="PlayedFrom" selected="@(_sortField == PackageSortField.PlayedFrom)">За датою гри</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary" id="sort-dir-btn" title="@(_sortDir == SortDirection.Desc ? "Спадання" : "Зростання")">
+                        @if (_sortDir == SortDirection.Desc)
+                        {
+                            <Icon Name="sort-down" />
+                        }
+                        else
+                        {
+                            <Icon Name="sort-up" />
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+    @* Results header *@
+    <div id="results-header" class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">
+            @if (!string.IsNullOrEmpty(_searchTerm) || _editorId.HasValue)
             {
-                <div class="col">
-                    <a href="/package/@package.Id" class="text-decoration-none text-reset">
-                        <div class="card h-100 package-card">
-                            <div class="card-body">
-                                <h5 class="card-title">@package.Title</h5>
-                                <p class="card-text text-muted mb-2">
-                                    <small>
-                                        <strong>@package.QuestionsCount</strong> запитань
-                                        @{ var playedPeriod = PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo); }
-                                        @if (!string.IsNullOrEmpty(playedPeriod))
-                                        {
-                                            <span> · @playedPeriod</span>
-                                        }
-                                    </small>
-                                </p>
-                                @if (package.PublicationDate.HasValue)
-                                {
+                <span>Знайдено <strong id="packages-count">@_totalCount</strong> пакетів</span>
+            }
+            else
+            {
+                <span>Пакетів на сайті <strong id="packages-count">@_totalCount</strong></span>
+            }
+        </h4>
+    </div>
+
+    @* Package list *@
+    <div id="packages-section">
+        @if (_packages == null)
+        {
+            <div id="loading-indicator"><em>Завантаження...</em></div>
+        }
+        else if (!_packages.Any())
+        {
+            <div id="no-results">
+                @if (!string.IsNullOrEmpty(_searchTerm) || _editorId.HasValue)
+                {
+                    <div class="alert alert-info">
+                        <p class="mb-2">За вашим запитом нічого не знайдено.</p>
+                        <a href="/" class="btn btn-sm btn-outline-primary" id="reset-filters-btn">Скинути фільтри</a>
+                    </div>
+                }
+                else
+                {
+                    <p>Поки немає пакетів. Слідкуйте за оновленнями.</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div id="packages-container" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                @foreach (var package in _packages)
+                {
+                    <div class="col">
+                        <a href="/package/@package.Id" class="text-decoration-none text-reset">
+                            <div class="card h-100 package-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">@package.Title</h5>
                                     <p class="card-text text-muted mb-2">
                                         <small>
-                                            <strong>Опубліковано:</strong> <span data-utc="@package.PublicationDate.Value.ToString("o")"></span>
-                                        </small>
-                                    </p>
-                                }
-                                @if (!string.IsNullOrEmpty(package.Description))
-                                {
-                                    <p class="card-text small">@package.Description</p>
-                                }
-                                @if (package.Editors.Any())
-                                {
-                                    <p class="card-text">
-                                        <small class="text-muted">
-                                            <strong>Редактори:</strong>
-                                            @for (var i = 0; i < package.Editors.Count; i++)
+                                            <strong>@package.QuestionsCount</strong> запитань
+                                            @{ var playedPeriod = PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo); }
+                                            @if (!string.IsNullOrEmpty(playedPeriod))
                                             {
-                                                var editor = package.Editors[i];
-                                                @(" ")<a href="/editor/@editor.Id" class="text-muted">@editor.FullName</a>@(i < package.Editors.Count - 1 ? " ·" : "")
+                                                <span> · @playedPeriod</span>
                                             }
                                         </small>
                                     </p>
-                                }
+                                    @if (package.PublicationDate.HasValue)
+                                    {
+                                        <p class="card-text text-muted mb-2">
+                                            <small>
+                                                <strong>Опубліковано:</strong> <span data-utc="@package.PublicationDate.Value.ToString("o")"></span>
+                                            </small>
+                                        </p>
+                                    }
+                                    @if (!string.IsNullOrEmpty(package.Description))
+                                    {
+                                        <p class="card-text small">@package.Description</p>
+                                    }
+                                    @if (package.Editors.Any())
+                                    {
+                                        <p class="card-text">
+                                            <small class="text-muted">
+                                                <strong>Редактори:</strong>
+                                                @for (var i = 0; i < package.Editors.Count; i++)
+                                                {
+                                                    var editor = package.Editors[i];
+                                                    @(" ")<a href="/editor/@editor.Id" class="text-muted">@editor.FullName</a>@(i < package.Editors.Count - 1 ? " ·" : "")
+                                                }
+                                            </small>
+                                        </p>
+                                    }
+                                </div>
                             </div>
-                        </div>
-                    </a>
-                </div>
-            }
-        </div>
+                        </a>
+                    </div>
+                }
+            </div>
 
-        <Pagination CurrentPage="CurrentPage" TotalPages="_totalPages" BaseUrl="" />
-    }
+            <div id="pagination-container">
+                <Pagination CurrentPage="CurrentPage" TotalPages="_totalPages" BaseUrl="@_paginationBaseUrl" JsIntercepted="true" />
+            </div>
+        }
+    </div>
 </div>
+
+<script src="/home-filters.js"></script>
+
 @code {
     private const int PageSize = 24;
 
-    [Parameter]
-    public int Page { get; set; } = 1;
+    // Query parameters - page is handled by JS now, not route parameter
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? SearchParam { get; set; }
 
+    [SupplyParameterFromQuery(Name = "editor")]
+    public int? EditorParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sort")]
+    public string? SortParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "dir")]
+    public string? DirParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? PageParam { get; set; }
+
+    // State
     private List<PackageCardDto>? _packages;
     private int _totalCount;
     private int _totalPages;
+    private string? _searchTerm;
+    private int? _editorId;
+    private string _selectedEditorName = "Всі редактори";
+    private PackageSortField _sortField = PackageSortField.PublicationDate;
+    private SortDirection _sortDir = SortDirection.Desc;
+    private string _paginationBaseUrl = "";
 
-    private int CurrentPage => Page < 1 ? 1 : Page;
-
-    private record PackageCardDto(
-        int Id,
-        string Title,
-        string? Description,
-        DateTime? PublicationDate,
-        DateOnly? PlayedFrom,
-        DateOnly? PlayedTo,
-        int QuestionsCount,
-        List<EditorDto> Editors);
-
-    private record EditorDto(int Id, string FirstName, string LastName)
-    {
-        public string FullName => $"{FirstName} {LastName}";
-    }
+    private int CurrentPage => PageParam.HasValue && PageParam.Value >= 1 ? PageParam.Value : 1;
 
     protected override async Task OnInitializedAsync()
     {
+        ParseQueryParameters();
+        await LoadSelectedEditorName();
+        BuildPaginationBaseUrl();
         await LoadPackages();
+    }
+
+    private void ParseQueryParameters()
+    {
+        _searchTerm = SearchParam;
+        _editorId = EditorParam;
+
+        // Parse sort field
+        if (!string.IsNullOrEmpty(SortParam) &&
+            Enum.TryParse<PackageSortField>(SortParam, ignoreCase: true, out var sortField))
+        {
+            _sortField = sortField;
+        }
+
+        // Parse sort direction
+        if (!string.IsNullOrEmpty(DirParam) &&
+            Enum.TryParse<SortDirection>(DirParam, ignoreCase: true, out var sortDir))
+        {
+            _sortDir = sortDir;
+        }
+    }
+
+    private async Task LoadSelectedEditorName()
+    {
+        if (_editorId.HasValue)
+        {
+            var editor = await PackageListService.GetEditorById(_editorId.Value);
+            _selectedEditorName = editor?.FullName ?? "Всі редактори";
+        }
+    }
+
+    private void BuildPaginationBaseUrl()
+    {
+        var queryParams = new List<string>();
+
+        if (!string.IsNullOrEmpty(_searchTerm))
+            queryParams.Add($"search={Uri.EscapeDataString(_searchTerm)}");
+
+        if (_editorId.HasValue)
+            queryParams.Add($"editor={_editorId.Value}");
+
+        if (_sortField != PackageSortField.PublicationDate)
+            queryParams.Add($"sort={_sortField}");
+
+        if (_sortDir != SortDirection.Desc)
+            queryParams.Add($"dir={_sortDir}");
+
+        _paginationBaseUrl = queryParams.Count > 0 ? $"?{string.Join("&", queryParams)}" : "";
+    }
+
+    private string GetUrlWithoutParam(string paramToRemove)
+    {
+        var queryParams = new List<string>();
+
+        if (paramToRemove != "search" && !string.IsNullOrEmpty(_searchTerm))
+            queryParams.Add($"search={Uri.EscapeDataString(_searchTerm)}");
+
+        if (paramToRemove != "editor" && _editorId.HasValue)
+            queryParams.Add($"editor={_editorId.Value}");
+
+        if (_sortField != PackageSortField.PublicationDate)
+            queryParams.Add($"sort={_sortField}");
+
+        if (_sortDir != SortDirection.Desc)
+            queryParams.Add($"dir={_sortDir}");
+
+        return queryParams.Count > 0 ? $"/?{string.Join("&", queryParams)}" : "/";
     }
 
     private async Task LoadPackages()
     {
         var accessContext = await AccessControl.GetPackageAccessContext();
-        var accessFilter = accessContext.GetAccessFilter();
 
-        var baseQuery = DbContext.Packages
-            .AsNoTracking()
-            .Where(p => p.Status == PackageStatus.Published)
-            .Where(accessFilter);
+        var filter = new PackageListFilter(
+            TitleSearch: _searchTerm,
+            EditorId: _editorId,
+            SortField: _sortField,
+            SortDir: _sortDir,
+            Page: CurrentPage,
+            PageSize: PageSize
+        );
 
-        _totalCount = await baseQuery.CountAsync();
-        _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
+        var result = await PackageListService.SearchPackages(filter, accessContext);
 
-        // First query: Get basic package data and questions count
-        var packageData = await baseQuery
-            .OrderByDescending(p => p.Id)
-            .Skip((CurrentPage - 1) * PageSize)
-            .Take(PageSize)
-            .Select(p => new
-            {
-                p.Id,
-                p.Title,
-                p.Description,
-                p.PublicationDate,
-                p.PlayedFrom,
-                p.PlayedTo,
-                QuestionsCount = p.Tours.SelectMany(t => t.Questions).Count()
-            })
-            .ToListAsync();
-
-        var packageIds = packageData.Select(p => p.Id).ToList();
-
-        // Second query: Get editors for these packages using Include (simpler, EF Core handles it)
-        var packagesWithEditors = await DbContext.Packages
-            .AsNoTracking()
-            .Where(p => packageIds.Contains(p.Id))
-            .Include(p => p.PackageEditors)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Editors)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Blocks)
-                    .ThenInclude(b => b.Editors)
-            .ToDictionaryAsync(p => p.Id);
-
-        // Map to DTOs in memory
-        _packages = packageData
-            .Select(p =>
-            {
-                var pkg = packagesWithEditors.GetValueOrDefault(p.Id);
-
-                // Explicitly gather editors from all sources
-                var allEditors = new List<Author>();
-                if (pkg != null)
-                {
-                    // Add package-level editors
-                    allEditors.AddRange(pkg.PackageEditors);
-
-                    // Add tour and block editors
-                    foreach (var tour in pkg.Tours)
-                    {
-                        allEditors.AddRange(tour.Editors);
-                        foreach (var block in tour.Blocks)
-                        {
-                            allEditors.AddRange(block.Editors);
-                        }
-                    }
-                }
-
-                var editors = allEditors
-                    .DistinctBy(e => e.Id)
-                    .Select(e => new EditorDto(e.Id, e.FirstName, e.LastName))
-                    .ToList();
-
-                return new PackageCardDto(
-                    p.Id,
-                    p.Title,
-                    p.Description,
-                    p.PublicationDate,
-                    p.PlayedFrom,
-                    p.PlayedTo,
-                    p.QuestionsCount,
-                    editors
-                );
-            })
-            .ToList();
+        _packages = result.Packages;
+        _totalCount = result.TotalCount;
+        _totalPages = result.TotalPages;
     }
 }

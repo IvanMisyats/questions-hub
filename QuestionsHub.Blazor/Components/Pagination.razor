@@ -2,6 +2,7 @@
     Reusable pagination component with icon-based navigation.
     Usage with callbacks: <Pagination CurrentPage="1" HasNextPage="true" OnPageChanged="HandlePageChange" />
     Usage with links (SSR): <Pagination CurrentPage="1" TotalPages="5" BaseUrl="/packages" />
+    Usage with JS interception: <Pagination CurrentPage="1" TotalPages="5" BaseUrl="/packages" JsIntercepted="true" />
 *@
 
 @if (CurrentPage > 1 || HasNextPage || (TotalPages.HasValue && TotalPages.Value > 1))
@@ -10,17 +11,19 @@
         <div class="pagination-container">
             @if (UseLinks)
             {
-                @* Link-based navigation for SSR *@
+                @* Link-based navigation for SSR (or JS-intercepted) *@
                 @* First page *@
                 <a class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
-                   href="@(CurrentPage <= 1 ? null : GetPageUrl(1))"
+                   href="@GetLinkHref(1, CurrentPage <= 1)"
+                   data-page="@(JsIntercepted ? 1 : null)"
                    title="Перша сторінка">
                     <Icon Name="chevron-double-left" Size="16" />
                 </a>
 
                 @* Previous page *@
                 <a class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
-                   href="@(CurrentPage <= 1 ? null : GetPageUrl(CurrentPage - 1))"
+                   href="@GetLinkHref(CurrentPage - 1, CurrentPage <= 1)"
+                   data-page="@(JsIntercepted ? CurrentPage - 1 : null)"
                    title="Попередня сторінка">
                     <Icon Name="chevron-left" Size="16" />
                 </a>
@@ -30,7 +33,8 @@
                     @foreach (var pageNumber in GetVisiblePages())
                     {
                         <a class="pagination-btn pagination-number @(pageNumber == CurrentPage ? "active" : "")"
-                           href="@(pageNumber == CurrentPage ? null : GetPageUrl(pageNumber))">
+                           href="@GetLinkHref(pageNumber, pageNumber == CurrentPage)"
+                           data-page="@(JsIntercepted ? pageNumber : null)">
                             @pageNumber
                         </a>
                     }
@@ -38,14 +42,16 @@
 
                 @* Next page *@
                 <a class="pagination-btn @(!HasNext ? "disabled" : "")"
-                   href="@(!HasNext ? null : GetPageUrl(CurrentPage + 1))"
+                   href="@GetLinkHref(CurrentPage + 1, !HasNext)"
+                   data-page="@(JsIntercepted ? CurrentPage + 1 : null)"
                    title="Наступна сторінка">
                     <Icon Name="chevron-right" Size="16" />
                 </a>
 
                 @* Last page *@
                 <a class="pagination-btn @(!HasLast ? "disabled" : "")"
-                   href="@(!HasLast ? null : GetPageUrl(TotalPages ?? CurrentPage))"
+                   href="@GetLinkHref(TotalPages ?? CurrentPage, !HasLast)"
+                   data-page="@(JsIntercepted ? TotalPages ?? CurrentPage : null)"
                    title="Остання сторінка">
                     <Icon Name="chevron-double-right" Size="16" />
                 </a>
@@ -137,9 +143,22 @@
     [Parameter]
     public string? BaseUrl { get; set; }
 
+    /// <summary>
+    /// When true, links use href="#" with data-page attributes for JS interception.
+    /// The actual page URL is still available in data-page for JS to construct the URL.
+    /// </summary>
+    [Parameter]
+    public bool JsIntercepted { get; set; }
+
     private bool UseLinks => BaseUrl != null;
     private bool HasNext => TotalPages.HasValue ? CurrentPage < TotalPages.Value : HasNextPage;
     private bool HasLast => TotalPages.HasValue && CurrentPage < TotalPages.Value;
+
+    private string? GetLinkHref(int page, bool isDisabled)
+    {
+        if (isDisabled) return null;
+        return JsIntercepted ? "#" : GetPageUrl(page);
+    }
 
     private string GetPageUrl(int page)
     {

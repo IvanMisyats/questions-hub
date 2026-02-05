@@ -57,7 +57,15 @@ public class AccessControlService
     public async Task<PackageAccessContext> GetPackageAccessContext()
     {
         var authState = await GetAuthenticationState();
-        var user = authState.User;
+        return await GetPackageAccessContext(authState.User);
+    }
+
+    /// <summary>
+    /// Gets the package access context for a given ClaimsPrincipal.
+    /// Use this in API controllers where you have User directly.
+    /// </summary>
+    public async Task<PackageAccessContext> GetPackageAccessContext(ClaimsPrincipal user)
+    {
         var isAuthenticated = user.Identity?.IsAuthenticated ?? false;
         var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 

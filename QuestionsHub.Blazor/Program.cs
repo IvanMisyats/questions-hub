@@ -65,12 +65,15 @@ internal static class ServiceCollectionExtensions
         services.AddDbContextFactory<QuestionsHubDbContext>(options =>
             options.UseNpgsql(connectionString), ServiceLifetime.Scoped);
 
+        services.AddMemoryCache();
+
         services.AddScoped<SearchService>();
         services.AddScoped<AuthorService>();
         services.AddScoped<PackageService>();
         services.AddScoped<PackageRenumberingService>();
         services.AddScoped<PackageManagementService>();
         services.AddScoped<AccessControlService>();
+        services.AddScoped<PackageListService>();
 
         return services;
     }

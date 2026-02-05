@@ -12,6 +12,7 @@
 @inject AuthorService AuthorService
 @inject PackageRenumberingService RenumberingService
 @inject AccessControlService AccessControl
+@inject PackageListService PackageListService
 @inject IJSRuntime JS
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - База українських запитань</PageTitle>
@@ -1672,6 +1673,7 @@
         if (Enum.TryParse<PackageStatus>(e.Value?.ToString(), out var newStatus))
         {
             var wasPublished = _package.Status == PackageStatus.Published;
+            var willBePublished = newStatus == PackageStatus.Published;
             _package.Status = newStatus;
 
             // Auto-set publication date when publishing for the first time
@@ -1681,6 +1683,12 @@
             }
 
             await SavePackageWithPublicationDateAsync();
+
+            // Invalidate cache when package is published or unpublished
+            if (wasPublished != willBePublished)
+            {
+                PackageListService.InvalidateCache();
+            }
         }
     }
 
