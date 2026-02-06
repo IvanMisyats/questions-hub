@@ -2577,6 +2577,9 @@
                 }
 
                 await context.SaveChangesAsync();
+
+                // Tag counts may have changed — invalidate popular tags cache
+                TagService.InvalidatePopularTagsCache();
             }
             _saveStatus = "Збережено";
         }
