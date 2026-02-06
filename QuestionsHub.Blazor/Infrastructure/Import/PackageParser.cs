@@ -763,6 +763,39 @@ public class PackageParser
             return;
         }
 
+        // Handle '[content...' that opens a multiline bracket scope in handout section
+        // This handles format like:
+        // Роздатковий матеріал:
+        // [Розчулена музикою спiлкування...
+        // ...ще рядок тексту...
+        // ...яку я купувала в шкiльному буфетi.]
+        // Question text
+        if (ctx.CurrentSection == ParserSection.Handout &&
+            line.StartsWith('[') && !line.EndsWith(']'))
+        {
+            ctx.InsideMultilineHandoutBracket = true;
+            var content = line[1..].Trim();
+            if (!string.IsNullOrWhiteSpace(content) && ctx.HasCurrentQuestion)
+            {
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(content)!);
+            }
+            return;
+        }
+
+        // Handle '...content]' that closes a bracket scope in handout section
+        // This handles lines ending with ']' when we're in Handout section
+        // (the InsideMultilineHandoutBracket case is handled earlier in ProcessLine)
+        if (ctx.CurrentSection == ParserSection.Handout && line.EndsWith(']'))
+        {
+            var content = line[..^1].Trim();
+            if (!string.IsNullOrWhiteSpace(content) && ctx.HasCurrentQuestion)
+            {
+                ctx.CurrentQuestion!.HandoutText = AppendText(ctx.CurrentQuestion.HandoutText, TextNormalizer.NormalizeApostrophes(content)!);
+            }
+            ctx.CurrentSection = ParserSection.QuestionText;
+            return;
+        }
+
         // Check if there's another label inline (e.g., "answer text. Залік: accepted")
         var inlineLabelIndex = FindInlineLabelStart(line);
         if (inlineLabelIndex > 0)

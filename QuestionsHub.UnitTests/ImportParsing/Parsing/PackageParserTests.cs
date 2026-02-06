@@ -1884,6 +1884,111 @@ public class PackageParserTests
         question.Answer.Should().Be("Оскар Вайлд і Волт Вітмен");
     }
 
+    [Fact]
+    public void Parse_HandoutLabelThenBracketedMultilineContent_SeparatesHandoutAndQuestionText()
+    {
+        // Arrange - Bug reproduction: "Роздатковий матеріал:" on its own line,
+        // then multiline content in [brackets], then question text after closing bracket.
+        // Only the bracketed text should be handout; the rest is question text.
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1"),
+            Block("Роздатковий матеріал:"),
+            Block("[Розчулена музикою спілкування, вона всіма фібрами відчула кілька фальшивих нот.\n<...>\nЩоранку мама давала мені двадцять копійок.]"),
+            Block("Пацьорки довгий час потрапляли до українок з Венеції. Заповніть пропуск двома короткими словами."),
+            Block("Відповідь: Гра в.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Contain("Розчулена музикою");
+        question.HandoutText.Should().Contain("двадцять копійок");
+        question.HandoutText.Should().NotContain("[");
+        question.HandoutText.Should().NotContain("]");
+        question.Text.Should().Contain("Пацьорки довгий час");
+        question.Text.Should().Contain("Заповніть пропуск");
+        question.Text.Should().NotContain("Розчулена");
+        question.Answer.Should().Be("Гра в.");
+    }
+
+    [Fact]
+    public void Parse_HandoutLabelThenSingleLineBracketedContent_SeparatesHandoutAndQuestionText()
+    {
+        // Arrange - "Роздатковий матеріал:" then single-line [content] then question text
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1"),
+            Block("Роздатковий матеріал:"),
+            Block("[Текст роздатки на одному рядку]"),
+            Block("Текст запитання після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Текст роздатки на одному рядку");
+        question.Text.Should().Be("Текст запитання після роздатки.");
+        question.Answer.Should().Be("Тест");
+    }
+
+    [Fact]
+    public void Parse_HandoutLabelThenBracketedMultilineInSameBlock_SeparatesCorrectly()
+    {
+        // Arrange - All handout content in single block with newlines, closing ] at end of line
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Питання номер один"),
+            Block("Роздатковий матеріал:\n[Перший рядок роздатки.\nДругий рядок роздатки.]"),
+            Block("Текст запитання."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Contain("Перший рядок роздатки");
+        question.HandoutText.Should().Contain("Другий рядок роздатки");
+        question.HandoutText.Should().NotContain("[");
+        question.HandoutText.Should().NotContain("]");
+        question.Text.Should().Contain("Текст запитання.");
+    }
+
+    [Fact]
+    public void Parse_HandoutLabelThenBracketedMultilineClosingOnOwnLine_SeparatesCorrectly()
+    {
+        // Arrange - Closing bracket on its own line after content
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1"),
+            Block("Роздатковий матеріал:"),
+            Block("[Рядок роздатки один.\nРядок роздатки два."),
+            Block("]"),
+            Block("Текст запитання після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Contain("Рядок роздатки один");
+        question.HandoutText.Should().Contain("Рядок роздатки два");
+        question.Text.Should().Be("Текст запитання після роздатки.");
+    }
+
     #endregion
 
     #region Package Header
