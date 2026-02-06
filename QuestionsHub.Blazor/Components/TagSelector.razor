@@ -1,0 +1,320 @@
+@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
+
+@inject TagService TagService
+
+<div class="tag-selector @(_isReadOnly ? "readonly" : "")">
+    @if (_isReadOnly)
+    {
+        @* Read-only mode: just show tag badges *@
+        <div class="d-flex flex-wrap gap-1">
+            @foreach (var tag in SelectedTags)
+            {
+                <span class="badge rounded-pill bg-primary text-white tag-badge">@tag.Name</span>
+            }
+        </div>
+    }
+    else
+    {
+        @* Edit mode: tags + input in same container, using Bootstrap dropdown *@
+        <div class="dropdown" @onfocusout="OnDropdownFocusOut" @onfocusin="OnDropdownFocusIn">
+            <div class="form-control tag-input-container d-flex flex-wrap align-items-center gap-1 p-1"
+                 style="min-height: 38px; cursor: text;"
+                 @onclick="FocusInput">
+                @foreach (var tag in SelectedTags)
+                {
+                    <span class="badge rounded-pill bg-primary text-white tag-badge d-flex align-items-center">
+                        @tag.Name
+                        <button type="button" class="btn-close btn-close-white ms-1"
+                                style="font-size: 0.6rem;"
+                                @onclick="() => RemoveTag(tag)"
+                                @onclick:preventDefault
+                                @onclick:stopPropagation></button>
+                    </span>
+                }
+
+                @if (SelectedTags.Count < MaxTags)
+                {
+                    <input type="text"
+                           @ref="_inputRef"
+                           class="tag-input border-0 flex-grow-1"
+                           style="outline: none; min-width: 120px;"
+                           placeholder="@(SelectedTags.Any() ? "" : Placeholder)"
+                           value="@_searchQuery"
+                           @oninput="OnInput"
+                           @onfocus="OnFocus"
+                           @onkeydown="OnKeyDown" />
+                }
+            </div>
+
+            @* Bootstrap dropdown menu *@
+            <ul class="dropdown-menu w-100 @(_showDropdown ? "show" : "")" style="max-height: 250px; overflow-y: auto;">
+                @if (_isSearching)
+                {
+                    <li>
+                        <span class="dropdown-item text-muted">
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            Пошук...
+                        </span>
+                    </li>
+                }
+                else if (_searchResults.Any())
+                {
+                    @foreach (var tag in _searchResults)
+                    {
+                        var isSelected = SelectedTags.Any(t => t.Id == tag.Id);
+                        <li>
+                            <button type="button"
+                                    class="dropdown-item @(isSelected ? "disabled" : "")"
+                                    @onclick="() => SelectTag(tag)"
+                                    disabled="@isSelected">
+                                @tag.Name
+                                @if (isSelected)
+                                {
+                                    <Icon Name="check" Class="ms-2" />
+                                }
+                            </button>
+                        </li>
+                    }
+
+                    @if (_canCreateNew)
+                    {
+                        <li><hr class="dropdown-divider" /></li>
+                        <li>
+                            <button type="button" class="dropdown-item text-primary"
+                                    @onclick="CreateAndSelectTag">
+                                Створити «@_searchQuery.Trim()»
+                            </button>
+                        </li>
+                    }
+                }
+                else if (!string.IsNullOrEmpty(_searchQuery))
+                {
+                    <li>
+                        <button type="button" class="dropdown-item text-primary"
+                                @onclick="CreateAndSelectTag">
+                            Створити «@_searchQuery.Trim()»
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        @if (SelectedTags.Count >= MaxTags)
+        {
+            <small class="text-muted">Максимум @MaxTags тегів</small>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<Tag> SelectedTags { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<List<Tag>> SelectedTagsChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnSelectionChanged { get; set; }
+
+    /// <summary>
+    /// Called when a tag is removed from the selection.
+    /// Can be used to clean up orphaned tags.
+    /// </summary>
+    [Parameter]
+    public EventCallback<Tag> OnTagRemoved { get; set; }
+
+    [Parameter]
+    public bool IsReadOnly { get => _isReadOnly; set => _isReadOnly = value; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "Введіть тег...";
+
+    [Parameter]
+    public int MaxTags { get; set; } = 20;
+
+    private bool _isReadOnly;
+    private string _searchQuery = string.Empty;
+    private List<Tag> _searchResults = [];
+    private bool _showDropdown;
+    private bool _isSearching;
+    private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _focusOutCts;
+    private ElementReference _inputRef;
+
+    /// <summary>
+    /// Whether the "create new" option should appear —
+    /// true when typed text doesn't exactly match any existing result.
+    /// </summary>
+    private bool _canCreateNew =>
+        !string.IsNullOrWhiteSpace(_searchQuery) &&
+        !_searchResults.Any(t => t.Name.Equals(_searchQuery.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private async Task FocusInput()
+    {
+        await _inputRef.FocusAsync();
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _searchQuery = e.Value?.ToString() ?? string.Empty;
+        await SearchTags();
+    }
+
+    private async Task OnFocus()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await LoadPopularTags();
+        }
+        else
+        {
+            _showDropdown = true;
+            await SearchTags();
+        }
+    }
+
+    private void OnDropdownFocusIn()
+    {
+        _focusOutCts?.Cancel();
+    }
+
+    private async Task OnDropdownFocusOut()
+    {
+        _focusOutCts?.Cancel();
+        _focusOutCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(150, _focusOutCts.Token);
+            _showDropdown = false;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+            // Focus moved to another element within the dropdown - keep it open
+        }
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _showDropdown = false;
+        }
+    }
+
+    private async Task SearchTags()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await LoadPopularTags();
+            return;
+        }
+
+        // Cancel previous search
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+
+        _showDropdown = true;
+        _isSearching = true;
+        StateHasChanged();
+
+        try
+        {
+            // Debounce
+            await Task.Delay(200, _searchCts.Token);
+
+            _searchResults = await TagService.Search(_searchQuery, 10, _searchCts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            // Search was cancelled, ignore
+        }
+        catch (Exception)
+        {
+            _searchResults = [];
+        }
+        finally
+        {
+            _isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPopularTags()
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+
+        _isSearching = true;
+        _showDropdown = true;
+        StateHasChanged();
+
+        try
+        {
+            _searchResults = await TagService.GetPopular(10, _searchCts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            // Cancelled, ignore
+        }
+        catch (Exception)
+        {
+            _searchResults = [];
+        }
+        finally
+        {
+            _isSearching = false;
+            // Hide dropdown if no popular tags exist
+            if (_searchResults.Count == 0)
+                _showDropdown = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectTag(Tag tag)
+    {
+        if (SelectedTags.Any(t => t.Id == tag.Id))
+            return;
+        if (SelectedTags.Count >= MaxTags)
+            return;
+
+        SelectedTags.Add(tag);
+        _searchQuery = string.Empty;
+        _searchResults = [];
+        _showDropdown = false;
+
+        await SelectedTagsChanged.InvokeAsync(SelectedTags);
+        await OnSelectionChanged.InvokeAsync();
+    }
+
+    private async Task RemoveTag(Tag tag)
+    {
+        SelectedTags.Remove(tag);
+        await SelectedTagsChanged.InvokeAsync(SelectedTags);
+        await OnSelectionChanged.InvokeAsync();
+        await OnTagRemoved.InvokeAsync(tag);
+    }
+
+    private async Task CreateAndSelectTag()
+    {
+        var trimmedName = _searchQuery.Trim();
+        if (string.IsNullOrWhiteSpace(trimmedName))
+            return;
+        if (SelectedTags.Count >= MaxTags)
+            return;
+
+        var tag = await TagService.GetOrCreate(trimmedName);
+
+        if (!SelectedTags.Any(t => t.Id == tag.Id))
+        {
+            SelectedTags.Add(tag);
+            await SelectedTagsChanged.InvokeAsync(SelectedTags);
+            await OnSelectionChanged.InvokeAsync();
+        }
+
+        _searchQuery = string.Empty;
+        _searchResults = [];
+        _showDropdown = false;
+    }
+}

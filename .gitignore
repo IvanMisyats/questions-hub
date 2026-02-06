@@ -496,3 +496,4 @@ $RECYCLE.BIN/
 
 # Copilot / LLM
 .github/upgrades/
+.playwright-mcp/

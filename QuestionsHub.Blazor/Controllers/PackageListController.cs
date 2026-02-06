@@ -14,13 +14,16 @@ public class PackageListController : ControllerBase
 {
     private readonly PackageListService _packageListService;
     private readonly AccessControlService _accessControlService;
+    private readonly TagService _tagService;
 
     public PackageListController(
         PackageListService packageListService,
-        AccessControlService accessControlService)
+        AccessControlService accessControlService,
+        TagService tagService)
     {
         _packageListService = packageListService;
         _accessControlService = accessControlService;
+        _tagService = tagService;
     }
 
     /// <summary>
@@ -31,6 +34,7 @@ public class PackageListController : ControllerBase
     public async Task<ActionResult<PackageListResult>> SearchPackages(
         [FromQuery] string? search = null,
         [FromQuery] int? editor = null,
+        [FromQuery] int? tag = null,
         [FromQuery] PackageSortField sort = PackageSortField.PublicationDate,
         [FromQuery] SortDirection dir = SortDirection.Desc,
         [FromQuery] int page = 1,
@@ -42,6 +46,7 @@ public class PackageListController : ControllerBase
         var filter = new PackageListFilter(
             TitleSearch: search,
             EditorId: editor,
+            TagId: tag,
             SortField: sort,
             SortDir: dir,
             Page: page,
@@ -64,5 +69,18 @@ public class PackageListController : ControllerBase
     {
         var editors = await _packageListService.GetEditorsForFilter(search);
         return Ok(editors);
+    }
+
+    /// <summary>
+    /// Gets the most popular tags across published packages.
+    /// Results are cached for 1 hour.
+    /// </summary>
+    /// <param name="count">Maximum number of tags to return (default 10).</param>
+    [HttpGet("popular-tags")]
+    public async Task<ActionResult<List<TagBriefDto>>> GetPopularTags([FromQuery] int count = 10)
+    {
+        count = Math.Clamp(count, 1, 50);
+        var tags = await _tagService.GetPopularPublished(count);
+        return Ok(tags);
     }
 }

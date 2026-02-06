@@ -50,6 +50,9 @@ dotnet_analyzer_diagnostic.severity = warning
 dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1873.severity = none
 
+# "Expression value is never used" - acceptable for EF Add/Remove/SaveChanges and cache Set
+dotnet_diagnostic.IDE0058.severity = none
+
 # Generated EF migrations: don't nag
 [**/Migrations/*.cs]
 generated_code = true

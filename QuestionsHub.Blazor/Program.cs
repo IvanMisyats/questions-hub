@@ -69,6 +69,7 @@ internal static class ServiceCollectionExtensions
 
         services.AddScoped<SearchService>();
         services.AddScoped<AuthorService>();
+        services.AddScoped<TagService>();
         services.AddScoped<PackageService>();
         services.AddScoped<PackageRenumberingService>();
         services.AddScoped<PackageManagementService>();

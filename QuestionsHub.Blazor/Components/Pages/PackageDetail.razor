@@ -73,6 +73,16 @@ else
                         </p>
                     }
 
+                    @if (_package.Tags.Any())
+                    {
+                        <div class="d-flex flex-wrap gap-1 mb-3">
+                            @foreach (var tag in _package.Tags)
+                            {
+                                <a href="/?tag=@tag.Id" class="badge rounded-pill bg-primary text-decoration-none">@tag.Name</a>
+                            }
+                        </div>
+                    }
+
                     @{ var playedPeriod = PlayedPeriodFormatter.Format(_package.PlayedFrom, _package.PlayedTo); }
                     @if (!string.IsNullOrEmpty(playedPeriod))
                     {
@@ -212,6 +222,7 @@ else
         _package = await DbContext.Packages
             .AsNoTracking()
             .Include(p => p.PackageEditors)
+            .Include(p => p.Tags)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)

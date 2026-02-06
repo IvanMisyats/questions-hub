@@ -12,6 +12,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<Author> Authors => Set<Author>();
+    public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<PackageImportJob> PackageImportJobs => Set<PackageImportJob>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -133,6 +134,22 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(q => q.SearchVector)
                 .HasColumnType("tsvector")
                 .ValueGeneratedOnAddOrUpdate();
+        });
+
+        builder.Entity<Tag>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
+
+            // Case-insensitive unique index on tag name
+            entity.HasIndex(t => t.Name)
+                .IsUnique()
+                .HasDatabaseName("IX_Tags_Name_CI")
+                .UseCollation("und-x-icu");
+
+            entity.HasMany(t => t.Packages)
+                .WithMany(p => p.Tags)
+                .UsingEntity("PackageTags");
         });
 
         builder.Entity<PackageImportJob>(entity =>

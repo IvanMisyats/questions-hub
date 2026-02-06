@@ -1,0 +1,40 @@
+.tag-selector {
+    position: relative;
+}
+
+.tag-selector .badge.tag-badge {
+    font-weight: normal;
+    font-size: 0.85rem;
+}
+
+.tag-selector .badge.tag-badge .btn-close {
+    padding: 0;
+    margin: 0;
+    opacity: 0.7;
+}
+
+.tag-selector .badge.tag-badge .btn-close:hover {
+    opacity: 1;
+}
+
+.tag-selector .tag-input-container {
+    cursor: text;
+}
+
+.tag-selector .tag-input-container:focus-within {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.tag-selector .tag-input {
+    background: transparent;
+}
+
+.tag-selector .tag-input::placeholder {
+    color: var(--app-text-muted);
+}
+
+.tag-selector .dropdown-item.disabled {
+    color: var(--app-text-muted);
+    background-color: var(--app-bg-secondary);
+}

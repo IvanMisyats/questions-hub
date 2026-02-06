@@ -897,4 +897,110 @@ public class PackageListServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Tag Filter Tests
+
+    private async Task<Tag> CreateTag(string name)
+    {
+        using var context = _dbFactory.CreateDbContext();
+        var tag = new Tag { Name = name };
+        context.Tags.Add(tag);
+        await context.SaveChangesAsync();
+        return tag;
+    }
+
+    private async Task AddPackageTag(int packageId, int tagId)
+    {
+        using var context = _dbFactory.CreateDbContext();
+        var package = await context.Packages
+            .Include(p => p.Tags)
+            .FirstAsync(p => p.Id == packageId);
+        var tag = await context.Tags.FindAsync(tagId);
+        package.Tags.Add(tag!);
+        await context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task SearchPackages_TagFilter_ReturnsOnlyMatchingPackages()
+    {
+        var tag = await CreateTag("кубок");
+        var pkg1 = await CreatePackage("Кубок України");
+        var pkg2 = await CreatePackage("Ліга");
+        await AddPackageTag(pkg1.Id, tag.Id);
+
+        var filter = new PackageListFilter(TagId: tag.Id);
+        var result = await _service.SearchPackages(filter, CreateAnonymousAccessContext());
+
+        result.TotalCount.Should().Be(1);
+        result.Packages.Should().ContainSingle(p => p.Title == "Кубок України");
+    }
+
+    [Fact]
+    public async Task SearchPackages_TagFilter_CombinesWithTitleFilter()
+    {
+        var tag = await CreateTag("2024");
+        var pkg1 = await CreatePackage("Кубок 2024");
+        var pkg2 = await CreatePackage("Ліга 2024");
+        var pkg3 = await CreatePackage("Кубок 2023");
+        await AddPackageTag(pkg1.Id, tag.Id);
+        await AddPackageTag(pkg2.Id, tag.Id);
+
+        var filter = new PackageListFilter(TitleSearch: "Кубок", TagId: tag.Id);
+        var result = await _service.SearchPackages(filter, CreateAnonymousAccessContext());
+
+        result.TotalCount.Should().Be(1);
+        result.Packages.Should().ContainSingle(p => p.Title == "Кубок 2024");
+    }
+
+    [Fact]
+    public async Task SearchPackages_TagFilter_CombinesWithEditorFilter()
+    {
+        var tag = await CreateTag("фінал");
+        var author = await CreateAuthor("Іван", "Петренко");
+        var pkg1 = await CreatePackage("Package A");
+        var pkg2 = await CreatePackage("Package B");
+        await AddPackageTag(pkg1.Id, tag.Id);
+        await AddPackageTag(pkg2.Id, tag.Id);
+        await AddPackageEditor(pkg1.Id, author.Id);
+
+        var filter = new PackageListFilter(EditorId: author.Id, TagId: tag.Id);
+        var result = await _service.SearchPackages(filter, CreateAnonymousAccessContext());
+
+        result.TotalCount.Should().Be(1);
+        result.Packages.Should().ContainSingle(p => p.Title == "Package A");
+    }
+
+    [Fact]
+    public async Task SearchPackages_TagFilter_ReturnsTagsInDto()
+    {
+        var tag1 = await CreateTag("кубок");
+        var tag2 = await CreateTag("2024");
+        var pkg = await CreatePackage("Кубок 2024");
+        await AddPackageTag(pkg.Id, tag1.Id);
+        await AddPackageTag(pkg.Id, tag2.Id);
+
+        var filter = new PackageListFilter();
+        var result = await _service.SearchPackages(filter, CreateAnonymousAccessContext());
+
+        var card = result.Packages.First();
+        card.Tags.Should().HaveCount(2);
+        card.Tags.Select(t => t.Name).Should().Contain("кубок");
+        card.Tags.Select(t => t.Name).Should().Contain("2024");
+    }
+
+    [Fact]
+    public async Task SearchPackages_NoTagFilter_ReturnsAllPackages()
+    {
+        var tag = await CreateTag("кубок");
+        await CreatePackage("Package A");
+        var pkg2 = await CreatePackage("Package B");
+        await AddPackageTag(pkg2.Id, tag.Id);
+
+        var filter = new PackageListFilter(TagId: null);
+        var result = await _service.SearchPackages(filter, CreateAnonymousAccessContext());
+
+        result.TotalCount.Should().Be(2);
+    }
+
+    #endregion
 }

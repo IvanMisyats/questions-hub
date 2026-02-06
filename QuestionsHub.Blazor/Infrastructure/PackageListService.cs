@@ -97,6 +97,13 @@ public class PackageListService
                     t.Blocks.Any(b => b.Editors.Any(a => a.Id == editorId))));
         }
 
+        // Apply tag filter
+        if (filter.TagId.HasValue)
+        {
+            var tagId = filter.TagId.Value;
+            query = query.Where(p => p.Tags.Any(t => t.Id == tagId));
+        }
+
         // Get total count before pagination
         var totalCount = await query.CountAsync();
         var totalPages = (int)Math.Ceiling((double)totalCount / filter.PageSize);
@@ -123,11 +130,12 @@ public class PackageListService
 
         var packageIds = packages.Select(p => p.Id).ToList();
 
-        // Load editors separately for efficiency
+        // Load editors and tags separately for efficiency
         var packagesWithEditors = await context.Packages
             .AsNoTracking()
             .Where(p => packageIds.Contains(p.Id))
             .Include(p => p.PackageEditors)
+            .Include(p => p.Tags)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)
@@ -160,6 +168,11 @@ public class PackageListService
                     .Select(e => new EditorBriefDto(e.Id, e.FirstName, e.LastName))
                     .ToList();
 
+                var tags = pkg?.Tags
+                    .Select(t => new TagBriefDto(t.Id, t.Name))
+                    .OrderBy(t => t.Name)
+                    .ToList() ?? [];
+
                 return new PackageCardDto(
                     p.Id,
                     p.Title,
@@ -168,7 +181,8 @@ public class PackageListService
                     p.PlayedFrom,
                     p.PlayedTo,
                     p.QuestionsCount,
-                    editors);
+                    editors,
+                    tags);
             })
             .ToList();
 

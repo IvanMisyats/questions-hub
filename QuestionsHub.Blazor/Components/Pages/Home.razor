@@ -5,6 +5,7 @@
 @using QuestionsHub.Blazor.Infrastructure
 @using QuestionsHub.Blazor.Utils
 @inject PackageListService PackageListService
+@inject TagService TagService
 @inject AccessControlService AccessControl
 @inject NavigationManager NavigationManager
 
@@ -15,15 +16,42 @@
      data-search="@_searchTerm" 
      data-editor-id="@_editorId" 
      data-editor-name="@_selectedEditorName"
+     data-tag-id="@_tagId"
+     data-tag-name="@_selectedTagName"
      data-sort="@_sortField"
      data-dir="@_sortDir"
      data-page="@CurrentPage"
      data-total-pages="@_totalPages"
      data-total-count="@_totalCount"
-     data-has-filters="@((!string.IsNullOrEmpty(_searchTerm) || _editorId.HasValue).ToString().ToLowerInvariant())"
+     data-has-filters="@((!string.IsNullOrEmpty(_searchTerm) || _editorId.HasValue || _tagId.HasValue).ToString().ToLowerInvariant())"
      style="display:none;"></div>
 
 <div class="container-fluid">
+    @* Popular tags *@
+    @if (_popularTags?.Count > 0)
+    {
+        <div id="popular-tags-section" class="mb-3">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="small text-muted">Популярні теги:</span>
+                @foreach (var tag in _popularTags)
+                {
+                    <button type="button"
+                            class="btn btn-sm rounded-pill tag-filter-btn @(_tagId == tag.Id ? "btn-primary" : "btn-outline-primary")"
+                            data-tag-id="@tag.Id"
+                            data-tag-name="@tag.Name">
+                        @tag.Name
+                    </button>
+                }
+                @if (_tagId.HasValue)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" id="clear-tag-btn">
+                        <Icon Name="close" Class="me-1" /> Скинути
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
     @* Filter toggle for mobile *@
     <div class="d-md-none mb-3">
         <button type="button" class="btn btn-outline-secondary w-100" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
@@ -183,8 +211,15 @@
                                                 }
                                             </small>
                                         </p>
-                                    }
-                                </div>
+                                    }                                    @if (package.Tags.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1 mt-2">
+                                            @foreach (var tag in package.Tags)
+                                            {
+                                                <span class="badge rounded-pill bg-primary">@tag.Name</span>
+                                            }
+                                        </div>
+                                    }                                </div>
                             </div>
                         </a>
                     </div>
@@ -210,6 +245,9 @@
     [SupplyParameterFromQuery(Name = "editor")]
     public int? EditorParam { get; set; }
 
+    [SupplyParameterFromQuery(Name = "tag")]
+    public int? TagParam { get; set; }
+
     [SupplyParameterFromQuery(Name = "sort")]
     public string? SortParam { get; set; }
 
@@ -226,6 +264,9 @@
     private string? _searchTerm;
     private int? _editorId;
     private string _selectedEditorName = "Всі редактори";
+    private int? _tagId;
+    private string _selectedTagName = "";
+    private List<TagBriefDto>? _popularTags;
     private PackageSortField _sortField = PackageSortField.PublicationDate;
     private SortDirection _sortDir = SortDirection.Desc;
     private string _paginationBaseUrl = "";
@@ -236,6 +277,7 @@
     {
         ParseQueryParameters();
         await LoadSelectedEditorName();
+        await LoadPopularTags();
         BuildPaginationBaseUrl();
         await LoadPackages();
     }
@@ -244,6 +286,7 @@
     {
         _searchTerm = SearchParam;
         _editorId = EditorParam;
+        _tagId = TagParam;
 
         // Parse sort field
         if (!string.IsNullOrEmpty(SortParam) &&
@@ -279,6 +322,9 @@
         if (_editorId.HasValue)
             queryParams.Add($"editor={_editorId.Value}");
 
+        if (_tagId.HasValue)
+            queryParams.Add($"tag={_tagId.Value}");
+
         if (_sortField != PackageSortField.PublicationDate)
             queryParams.Add($"sort={_sortField}");
 
@@ -298,6 +344,9 @@
         if (paramToRemove != "editor" && _editorId.HasValue)
             queryParams.Add($"editor={_editorId.Value}");
 
+        if (paramToRemove != "tag" && _tagId.HasValue)
+            queryParams.Add($"tag={_tagId.Value}");
+
         if (_sortField != PackageSortField.PublicationDate)
             queryParams.Add($"sort={_sortField}");
 
@@ -314,6 +363,7 @@
         var filter = new PackageListFilter(
             TitleSearch: _searchTerm,
             EditorId: _editorId,
+            TagId: _tagId,
             SortField: _sortField,
             SortDir: _sortDir,
             Page: CurrentPage,
@@ -325,5 +375,17 @@
         _packages = result.Packages;
         _totalCount = result.TotalCount;
         _totalPages = result.TotalPages;
+    }
+
+    private async Task LoadPopularTags()
+    {
+        _popularTags = await TagService.GetPopularPublished();
+
+        // Resolve selected tag name from popular tags or DB
+        if (_tagId.HasValue && _popularTags != null)
+        {
+            var selectedTag = _popularTags.FirstOrDefault(t => t.Id == _tagId.Value);
+            _selectedTagName = selectedTag?.Name ?? "";
+        }
     }
 }

@@ -186,6 +186,9 @@ public class Package
     /// <summary>Editors assigned directly to the package (used when SharedEditors is true).</summary>
     public List<Author> PackageEditors { get; set; } = [];
 
+    /// <summary>Tags associated with this package.</summary>
+    public List<Tag> Tags { get; set; } = [];
+
     /// <summary>
     /// Gets the effective editors for the package.
     /// When SharedEditors is true, returns PackageEditors.

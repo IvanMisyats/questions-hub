@@ -9,12 +9,15 @@
     const DEBOUNCE_MS = 300;
     const API_URL = '/api/packages/search';
     const EDITORS_API_URL = '/api/packages/editors';
+    const POPULAR_TAGS_API_URL = '/api/packages/popular-tags';
 
     // State
     let state = {
         search: null,
         editorId: null,
         editorName: 'Всі редактори',
+        tagId: null,
+        tagName: '',
         sort: 'PublicationDate',
         dir: 'Desc',
         page: 1,
@@ -50,6 +53,7 @@
         setupMobileToggle();
         setupPaginationLinks();
         setupResetFiltersButton();
+        setupTagButtons();
 
         // Handle browser back/forward (only add once)
         if (!window._homeFiltersPopstateAdded) {
@@ -69,6 +73,8 @@
             state.search = pageState.dataset.search || null;
             state.editorId = pageState.dataset.editorId ? parseInt(pageState.dataset.editorId) : null;
             state.editorName = pageState.dataset.editorName || 'Всі редактори';
+            state.tagId = pageState.dataset.tagId ? parseInt(pageState.dataset.tagId) : null;
+            state.tagName = pageState.dataset.tagName || '';
             state.sort = pageState.dataset.sort || 'PublicationDate';
             state.dir = pageState.dataset.dir || 'Desc';
             state.page = parseInt(pageState.dataset.page) || 1;
@@ -279,11 +285,14 @@
                 state.search = null;
                 state.editorId = null;
                 state.editorName = 'Всі редактори';
+                state.tagId = null;
+                state.tagName = '';
                 state.page = 1;
                 
                 const searchInput = document.getElementById('package-search');
                 if (searchInput) searchInput.value = '';
                 updateEditorDropdownButton();
+                updateTagButtons();
                 
                 fetchAndRenderPackages();
             }
@@ -314,6 +323,7 @@
             const params = new URLSearchParams();
             if (state.search) params.set('search', state.search);
             if (state.editorId) params.set('editor', state.editorId);
+            if (state.tagId) params.set('tag', state.tagId);
             if (state.sort && state.sort !== 'PublicationDate') params.set('sort', state.sort);
             if (state.dir && state.dir !== 'Desc') params.set('dir', state.dir);
             if (state.page > 1) params.set('page', state.page);
@@ -328,7 +338,7 @@
             state.totalCount = result.totalCount;
             state.totalPages = result.totalPages;
             state.page = result.currentPage;
-            state.hasFilters = !!(state.search || state.editorId);
+            state.hasFilters = !!(state.search || state.editorId || state.tagId);
 
             renderPackages(result.packages);
             renderPagination();
@@ -430,6 +440,14 @@
                </p>`
             : '';
 
+        const tagsHtml = pkg.tags && pkg.tags.length > 0
+            ? `<div class="d-flex flex-wrap gap-1 mt-2">
+                ${pkg.tags.map(tag => 
+                    `<span class="badge rounded-pill bg-primary">${escapeHtml(tag.name)}</span>`
+                ).join('')}
+               </div>`
+            : '';
+
         return `
             <div class="col">
                 <a href="/package/${pkg.id}" class="text-decoration-none text-reset">
@@ -444,6 +462,7 @@
                             ${publicationDateHtml}
                             ${descriptionHtml}
                             ${editorsHtml}
+                            ${tagsHtml}
                         </div>
                     </div>
                 </a>
@@ -639,6 +658,8 @@
         pageState.dataset.search = state.search || '';
         pageState.dataset.editorId = state.editorId || '';
         pageState.dataset.editorName = state.editorName;
+        pageState.dataset.tagId = state.tagId || '';
+        pageState.dataset.tagName = state.tagName;
         pageState.dataset.sort = state.sort;
         pageState.dataset.dir = state.dir;
         pageState.dataset.page = state.page;
@@ -663,6 +684,7 @@
         const params = new URLSearchParams();
         if (state.search) params.set('search', state.search);
         if (state.editorId) params.set('editor', state.editorId);
+        if (state.tagId) params.set('tag', state.tagId);
         if (state.sort && state.sort !== 'PublicationDate') params.set('sort', state.sort);
         if (state.dir && state.dir !== 'Desc') params.set('dir', state.dir);
         if (state.page > 1) params.set('page', state.page);
@@ -680,6 +702,7 @@
 
         updateEditorDropdownButton();
         updateSortDirButton();
+        updateTagButtons();
 
         const sortSelect = document.getElementById('sort-select');
         if (sortSelect) sortSelect.value = state.sort;
@@ -783,6 +806,85 @@
         });
 
         editorList.innerHTML = html;
+    }
+
+    /**
+     * Sets up tag filter button click handlers.
+     * Uses event delegation on the popular-tags-section container.
+     */
+    function setupTagButtons() {
+        const section = document.getElementById('popular-tags-section');
+        if (!section || section._hfTagInit) return;
+        section._hfTagInit = true;
+
+        section.addEventListener('click', function (e) {
+            const tagBtn = e.target.closest('.tag-filter-btn');
+            if (tagBtn) {
+                e.preventDefault();
+                const tagId = parseInt(tagBtn.dataset.tagId);
+                const tagName = tagBtn.dataset.tagName || '';
+
+                if (state.tagId === tagId) {
+                    // Deselect
+                    state.tagId = null;
+                    state.tagName = '';
+                } else {
+                    state.tagId = tagId;
+                    state.tagName = tagName;
+                }
+                state.page = 1;
+                updateTagButtons();
+                fetchAndRenderPackages();
+                return;
+            }
+
+            const clearBtn = e.target.closest('#clear-tag-btn');
+            if (clearBtn) {
+                e.preventDefault();
+                state.tagId = null;
+                state.tagName = '';
+                state.page = 1;
+                updateTagButtons();
+                fetchAndRenderPackages();
+            }
+        });
+    }
+
+    /**
+     * Updates tag button styles and clear button visibility based on state.
+     */
+    function updateTagButtons() {
+        const section = document.getElementById('popular-tags-section');
+        if (!section) return;
+
+        section.querySelectorAll('.tag-filter-btn').forEach(btn => {
+            const tagId = parseInt(btn.dataset.tagId);
+            if (state.tagId === tagId) {
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+            } else {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-primary');
+            }
+        });
+
+        // Show/hide clear button
+        let clearBtn = section.querySelector('#clear-tag-btn');
+        if (state.tagId) {
+            if (!clearBtn) {
+                const wrapper = section.querySelector('.d-flex');
+                if (wrapper) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-sm btn-outline-secondary rounded-pill';
+                    btn.id = 'clear-tag-btn';
+                    btn.innerHTML = '<svg class="icon me-1" width="16" height="16"><use href="/icons.svg#i-close"></use></svg> Скинути';
+                    wrapper.appendChild(btn);
+                }
+            }
+        } else {
+            clearBtn?.remove();
+        }
     }
 
     /**

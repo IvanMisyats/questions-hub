@@ -27,6 +27,7 @@ public enum SortDirection
 /// </summary>
 /// <param name="TitleSearch">Partial title match (case-insensitive). Null or empty means no filter.</param>
 /// <param name="EditorId">Filter by editor ID. Null means no filter (all editors).</param>
+/// <param name="TagId">Filter by tag ID. Null means no filter (all tags).</param>
 /// <param name="SortField">Field to sort by.</param>
 /// <param name="SortDir">Sort direction.</param>
 /// <param name="Page">1-based page number.</param>
@@ -34,6 +35,7 @@ public enum SortDirection
 public record PackageListFilter(
     string? TitleSearch = null,
     int? EditorId = null,
+    int? TagId = null,
     PackageSortField SortField = PackageSortField.PublicationDate,
     SortDirection SortDir = SortDirection.Desc,
     int Page = 1,
@@ -51,7 +53,8 @@ public record PackageCardDto(
     DateOnly? PlayedFrom,
     DateOnly? PlayedTo,
     int QuestionsCount,
-    List<EditorBriefDto> Editors
+    List<EditorBriefDto> Editors,
+    List<TagBriefDto> Tags
 );
 
 /// <summary>
@@ -66,6 +69,11 @@ public record EditorBriefDto(int Id, string FirstName, string LastName)
 /// Editor info for filter dropdown.
 /// </summary>
 public record EditorFilterDto(int Id, string FullName);
+
+/// <summary>
+/// Brief tag info for package cards and filters.
+/// </summary>
+public record TagBriefDto(int Id, string Name);
 
 /// <summary>
 /// Paginated result of package list query.

@@ -10,6 +10,7 @@
 @inject NavigationManager Navigation
 @inject MediaService MediaService
 @inject AuthorService AuthorService
+@inject TagService TagService
 @inject PackageRenumberingService RenumberingService
 @inject AccessControlService AccessControl
 @inject PackageListService PackageListService
@@ -178,6 +179,12 @@
                                 Спільні редактори для всіх турів
                             </label>
                         </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Теги</label>
+                        <TagSelector SelectedTags="_package.Tags"
+                                     OnSelectionChanged="SavePackageTagsAsync"
+                                     OnTagRemoved="TryDeleteOrphanedTagAsync" />
                     </div>
                 </div>
             </div>
@@ -1465,6 +1472,7 @@
                 await using var context = await DbContextFactory.CreateDbContextAsync();
                 _package = await context.Packages
                     .Include(p => p.PackageEditors)
+                    .Include(p => p.Tags)
                     .Include(p => p.Tours)
                         .ThenInclude(t => t.Editors)
                     .Include(p => p.Tours)
@@ -1688,6 +1696,7 @@
             if (wasPublished != willBePublished)
             {
                 PackageListService.InvalidateCache();
+                TagService.InvalidatePopularTagsCache();
             }
         }
     }
@@ -2539,6 +2548,51 @@
     private async Task TryDeleteOrphanedAuthorAsync(Author author)
     {
         await AuthorService.TryDeleteAuthorIfOrphaned(author.Id);
+    }
+
+    private async Task SavePackageTagsAsync()
+    {
+        if (_package == null) return;
+
+        _saveStatus = "Збереження тегів...";
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+            var dbPackage = await context.Packages
+                .Include(p => p.Tags)
+                .FirstOrDefaultAsync(p => p.Id == _package.Id);
+
+            if (dbPackage != null)
+            {
+                dbPackage.Tags.Clear();
+                foreach (var tag in _package.Tags)
+                {
+                    var dbTag = await context.Tags.FindAsync(tag.Id);
+                    if (dbTag != null)
+                    {
+                        dbPackage.Tags.Add(dbTag);
+                    }
+                }
+
+                await context.SaveChangesAsync();
+            }
+            _saveStatus = "Збережено";
+        }
+        catch
+        {
+            _saveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Attempts to delete a tag if no other packages reference it.
+    /// </summary>
+    private async Task TryDeleteOrphanedTagAsync(Tag tag)
+    {
+        await TagService.TryDeleteIfOrphaned(tag.Id);
     }
 
     private async Task OnNumberingModeChanged(ChangeEventArgs e)
