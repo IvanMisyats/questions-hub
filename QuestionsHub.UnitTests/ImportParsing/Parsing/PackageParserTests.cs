@@ -3081,6 +3081,7 @@ public class PackageParserTests
     [Theory]
     [InlineData("Комментарий: Це коментар російською", "Це коментар російською")]
     [InlineData("КОММЕНТАРИЙ: ВЕЛИКИМИ ЛІТЕРАМИ", "ВЕЛИКИМИ ЛІТЕРАМИ")]
+    [InlineData("Комментар: Змішаний варіант", "Змішаний варіант")]
     public void Parse_RussianCommentLabel_ShouldParseCorrectly(string line, string expectedComment)
     {
         // Arrange

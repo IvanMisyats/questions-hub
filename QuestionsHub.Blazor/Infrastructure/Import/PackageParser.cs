@@ -82,9 +82,9 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Незалік|Не\s*залік|Не\s*приймається)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex RejectedLabel();
 
-    // Matches: "Коментар: ...", "Коментарі: ..." (Ukrainian), "Комментарий: ..." (Russian)
+    // Matches: "Коментар: ...", "Коментарі: ..." (Ukrainian), "Комментарий: ...", "Комментар: ..." (Russian/mixed)
     // Separator can be colon (:) or dot with optional whitespace (.)
-    [GeneratedRegex(@"^\s*(?:Коментар|Коментарі|Комментарий)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:Коментар|Коментарі|Комментарий|Комментар)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex CommentLabel();
 
     // Matches: "Джерело: ...", "Джерела: ...", "Джерело(а): ...", "Джерел(а): ..." (Ukrainian)
