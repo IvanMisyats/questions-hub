@@ -83,6 +83,9 @@ public partial class PackageDbImporter
                 // If tour has blocks, import blocks with their questions
                 if (tourDto.Blocks.Count > 0)
                 {
+                    // Use a single counter across all blocks so OrderIndex is globally sequential within the tour
+                    var tourQuestionOrderIndex = 0;
+
                     foreach (var blockDto in tourDto.Blocks)
                     {
                         var block = new Block
@@ -98,11 +101,10 @@ public partial class PackageDbImporter
                         await _db.SaveChangesAsync(ct);
 
                         // Create questions for this block
-                        var blockQuestionOrderIndex = 0;
                         foreach (var questionDto in blockDto.Questions)
                         {
                             var question = await CreateQuestion(
-                                questionDto, blockQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, ct);
+                                questionDto, tourQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, ct);
                             _db.Questions.Add(question);
                         }
 

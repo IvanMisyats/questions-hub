@@ -758,6 +758,115 @@ public class PackageParserTests
         result.Preamble.Should().Contain("Блок 1");
     }
 
+    [Theory]
+    [InlineData("Блок Станіслава Мерляна", "Станіслав Мерлян")]
+    [InlineData("Блок Сергія Реви.", "Сергій Рева")]
+    [InlineData("Блок Антона Моісєєва", "Антон Моісєєв")]
+    [InlineData("Блок Антона Купермана", "Антон Куперман")]
+    [InlineData("Блок Олексія Сільвестрова", "Олексій Сільвестров")]
+    [InlineData("Блок Андрія Грищука.", "Андрій Грищук")]
+    public void Parse_BlockWithAuthorName_DetectsBlockAndConvertsToNominative(string blockLine, string expectedEditor)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block(blockLine),
+            Block("1. Питання блоку"),
+            Block("Відповідь: Відповідь тесту")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Editors.Should().Contain(expectedEditor);
+        result.Tours[0].Blocks[0].Questions.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Parse_MultipleNamedBlocks_ParsesAllWithEditors()
+    {
+        // Arrange — simulates real-world package with named blocks
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок Станіслава Мерляна"),
+            Block("1. Питання 1"),
+            Block("Відповідь: Відповідь 1"),
+            Block("Блок Сергія Реви."),
+            Block("2. Питання 2"),
+            Block("Відповідь: Відповідь 2"),
+            Block("Блок Антона Купермана"),
+            Block("3. Питання 3"),
+            Block("Відповідь: Відповідь 3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().HaveCount(3);
+
+        result.Tours[0].Blocks[0].Editors.Should().Contain("Станіслав Мерлян");
+        result.Tours[0].Blocks[0].Questions.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Questions[0].Number.Should().Be("1");
+
+        result.Tours[0].Blocks[1].Editors.Should().Contain("Сергій Рева");
+        result.Tours[0].Blocks[1].Questions.Should().HaveCount(1);
+        result.Tours[0].Blocks[1].Questions[0].Number.Should().Be("2");
+
+        result.Tours[0].Blocks[2].Editors.Should().Contain("Антон Куперман");
+        result.Tours[0].Blocks[2].Questions.Should().HaveCount(1);
+        result.Tours[0].Blocks[2].Questions[0].Number.Should().Be("3");
+    }
+
+    [Fact]
+    public void Parse_NamedBlockWithPreamble_ParsesPreambleCorrectly()
+    {
+        // Arrange — block with author name followed by preamble text
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Блок Станіслава Мерляна"),
+            Block("Редактор дякує за тестування та цінні зауваження Едуарду Голубу."),
+            Block("1. Питання тесту"),
+            Block("Відповідь: Відповідь тесту")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        result.Tours[0].Blocks[0].Editors.Should().Contain("Станіслав Мерлян");
+        result.Tours[0].Blocks[0].Preamble.Should().Contain("Редактор дякує за тестування");
+    }
+
+    [Fact]
+    public void Parse_NamedBlockOutsideTour_IsIgnored()
+    {
+        // Arrange — named block before any tour should not create a block
+        var blocks = new List<DocBlock>
+        {
+            Block("Заголовок пакету"),
+            Block("Блок Станіслава Мерляна"),
+            Block("Тур 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Blocks.Should().BeEmpty();
+    }
+
     #endregion
 
     #region Question Detection
@@ -1005,7 +1114,7 @@ public class PackageParserTests
         question1.Source.Should().Contain("paleontologyworld.com");
         question1.Source.Should().Contain("wikipedia.org");
         question1.Source.Should().Contain("youtube.com");
-        question1.Authors.Should().Contain("Костянтин Ільїн (Одеса)");
+        question1.Authors.Should().Contain("Костянтин Ільїн");
 
         var question2 = result.Tours[0].Questions[1];
         question2.Number.Should().Be("2");
@@ -1337,7 +1446,7 @@ public class PackageParserTests
     [InlineData("Автори: Іван, Марія", new[] { "Іван", "Марія" })]
     [InlineData("Автор: Іван та Марія", new[] { "Іван", "Марія" })]
     [InlineData("Автори: Іван; Марія; Петро", new[] { "Іван", "Марія", "Петро" })]
-    [InlineData("Авторка: Галина Синєока (Львів)", new[] { "Галина Синєока (Львів)" })]
+    [InlineData("Авторка: Галина Синєока (Львів)", new[] { "Галина Синєока" })]
     [InlineData("Авторки: Марія, Олена", new[] { "Марія", "Олена" })]
     [InlineData("Автор(и): Петро Сидоренко", new[] { "Петро Сидоренко" })]
     [InlineData("Автор(и): Іван, Марія, Петро", new[] { "Іван", "Марія", "Петро" })]
@@ -1446,6 +1555,197 @@ public class PackageParserTests
         {
             question.Authors.Should().Contain("Іван Петренко");
         }
+    }
+
+    [Fact]
+    public void Parse_AuthorWithRedakciya_SplitsIntoTwoAuthors()
+    {
+        // Arrange — "у редакції" pattern should split into two authors
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Станіслав Мерлян (Одеса) у редакції Едуарда Голуба (Київ)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().Contain("Станіслав Мерлян");
+        result.Tours[0].Questions[0].Authors.Should().Contain("Едуард Голуб");
+    }
+
+    [Fact]
+    public void Parse_AuthorWithVRedakciya_SplitsIntoTwoAuthors()
+    {
+        // Arrange — "в редакції" variant
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Антон Куперман (Одеса) в редакції Сергія Реви (Харків)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().Contain("Антон Куперман");
+        result.Tours[0].Questions[0].Authors.Should().Contain("Сергій Рева");
+    }
+
+    [Fact]
+    public void Parse_AuthorWithZaIdeyeyu_SplitsIntoTwoAuthors()
+    {
+        // Arrange — "за ідеєю" variant
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Олексій Сільвестров (Київ) за ідеєю Андрія Грищука (Львів)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().Contain("Олексій Сільвестров");
+        result.Tours[0].Questions[0].Authors.Should().Contain("Андрій Грищук");
+    }
+
+    [Fact]
+    public void Parse_AuthorWithCityButNoRedakciya_StripsCityReturnsOne()
+    {
+        // Arrange — simple author with city
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Едуард Голуб (Київ)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(1);
+        result.Tours[0].Questions[0].Authors[0].Should().Be("Едуард Голуб");
+    }
+
+    [Fact]
+    public void Parse_AuthorWithCityDash_StripsCityReturnsOne()
+    {
+        // Arrange — author with hyphenated city
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Антон Моісєєв (Харків - Берлін)")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(1);
+        result.Tours[0].Questions[0].Authors[0].Should().Be("Антон Моісєєв");
+    }
+
+    [Fact]
+    public void Parse_AuthorFollowedByBlankBlockAndEpilogue_StopsAtBlankLine()
+    {
+        // Arrange — epilogue after blank paragraph should NOT be parsed as authors
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Станіслав Мерлян (Одеса) у редакції Едуарда Голуба (Київ)"),
+            Block(""),  // Blank paragraph ends the author section
+            Block("Замість епілогу: Усі запитання блоку стосуються літературних творів та різних історій.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert — only the two real authors, no epilogue text
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().Contain("Станіслав Мерлян");
+        result.Tours[0].Questions[0].Authors.Should().Contain("Едуард Голуб");
+    }
+
+    [Fact]
+    public void Parse_AuthorFollowedByBlankLineInSameBlock_StopsAtBlankLine()
+    {
+        // Arrange — blank line within the same DOCX paragraph should stop author parsing
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Едуард Голуб (Київ)\n\nЗамість епілогу: текст що не є автором")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert — only the author, not the epilogue
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(1);
+        result.Tours[0].Questions[0].Authors[0].Should().Be("Едуард Голуб");
+    }
+
+    [Fact]
+    public void Parse_AuthorFollowedByBlankBlock_EpilogueLandsInComment()
+    {
+        // Arrange — text after blank line should go to comment, not authors
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Едуард Голуб"),
+            Block(""),  // Blank paragraph
+            Block("Замість епілогу: цікавий текст")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(1);
+        result.Tours[0].Questions[0].Authors[0].Should().Be("Едуард Голуб");
+        result.Tours[0].Questions[0].Comment.Should().Contain("Замість епілогу");
+    }
+
+    [Fact]
+    public void Parse_AuthorWithoutBlankLine_ContinuesParsingAuthors()
+    {
+        // Arrange — without a blank line, subsequent text IS parsed as authors (multi-line author list)
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: Тест"),
+            Block("Автор: Едуард Голуб"),
+            Block("Станіслав Мерлян")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert — both should be parsed as authors since there's no blank line between them
+        result.Tours[0].Questions[0].Authors.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Authors.Should().Contain("Едуард Голуб");
+        result.Tours[0].Questions[0].Authors.Should().Contain("Станіслав Мерлян");
     }
 
     #endregion
@@ -2095,8 +2395,8 @@ public class PackageParserTests
 
         // Assert
         result.Title.Should().Be("Благодійний турнір: «Синхрон синів маминої подруги»");
-        result.Editors.Should().Contain("Антон Куперман (Одеса)");
-        result.Editors.Should().Contain("Марков Владислав (Львів-Запоріжжя)");
+        result.Editors.Should().Contain("Антон Куперман");
+        result.Editors.Should().Contain("Марков Владислав");
     }
 
     [Fact]
@@ -3192,7 +3492,7 @@ public class PackageParserTests
     /// </summary>
     [Theory]
     [InlineData("Авторы: Іван Іванов", "Іван Іванов")]
-    [InlineData("Авторы: Богдана Романцова (Київ), Олександр Мерзликін (Кривий Ріг)", "Богдана Романцова (Київ)")]
+    [InlineData("Авторы: Богдана Романцова (Київ), Олександр Мерзликін (Кривий Ріг)", "Богдана Романцова")]
     public void Parse_RussianAuthorsLabel_ShouldParseCorrectly(string line, string expectedAuthor)
     {
         // Arrange

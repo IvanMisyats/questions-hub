@@ -138,6 +138,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*Блок(?:\s+(\d+))?[\.:]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex BlockStart();
 
+    // Block detection with author name: "Блок Станіслава Мерляна", "Блок Сергія Реви."
+    // Matches "Блок" followed by one or more Cyrillic words (author name in genitive case).
+    // The name is captured in group 1. Trailing period is optional.
+    [GeneratedRegex(@"^\s*Блок\s+([А-ЯІЇЄҐа-яіїєґʼ'']+(?:\s+[А-ЯІЇЄҐа-яіїєґʼ'']+)*)\s*\.?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex BlockStartWithName();
+
     // Block editors: "Редактор блоку:", "Редакторка блоку:", "Редактори блоку:", "Редакторки блоку:"
     // Also matches: "Редактор - Name", "Редакторка - Name" (with dash instead of colon)
     [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*блоку)?)\s*[-–—:]\s*(.+)$", RegexOptions.IgnoreCase)]
@@ -317,9 +323,18 @@ public class PackageParser
         // Handle empty blocks (blank paragraphs in DOCX) - append blank line to content sections
         if (string.IsNullOrWhiteSpace(text) && block.Assets.Count == 0)
         {
-            if (ctx.CurrentQuestion != null && IsContentSection(ctx.CurrentSection))
+            if (ctx.CurrentQuestion != null)
             {
-                AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
+                if (IsContentSection(ctx.CurrentSection))
+                {
+                    AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
+                }
+                else if (ctx.CurrentSection == ParserSection.Authors)
+                {
+                    // A blank line after authors ends the author section to prevent
+                    // subsequent text (epilogues, preambles) from being parsed as authors.
+                    ctx.CurrentSection = ParserSection.Comment;
+                }
             }
             return;
         }
@@ -338,9 +353,18 @@ public class PackageParser
             // Handle blank lines - append to content sections to preserve paragraph structure
             if (string.IsNullOrWhiteSpace(line))
             {
-                if (ctx.CurrentQuestion != null && IsContentSection(ctx.CurrentSection))
+                if (ctx.CurrentQuestion != null)
                 {
-                    AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
+                    if (IsContentSection(ctx.CurrentSection))
+                    {
+                        AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
+                    }
+                    else if (ctx.CurrentSection == ParserSection.Authors)
+                    {
+                        // A blank line after authors ends the author section to prevent
+                        // subsequent text (epilogues, preambles) from being parsed as authors.
+                        ctx.CurrentSection = ParserSection.Comment;
+                    }
                 }
                 continue;
             }
@@ -494,13 +518,30 @@ public class PackageParser
 
     /// <summary>
     /// Attempts to parse and handle a block start line (e.g., "Блок 1", "Блок").
+    /// Also handles named blocks like "Блок Станіслава Мерляна" where the author name
+    /// is in genitive case and gets converted to nominative for the block editor.
     /// Blocks are optional subdivisions within a tour.
     /// </summary>
     private bool TryProcessBlockStart(string line, ParserContext ctx)
     {
+        string? blockName = null;
+        string? editorNameGenitive = null;
+
+        // Try numbered/unnamed block first: "Блок 1", "Блок"
         var match = ParserPatterns.BlockStart().Match(line);
-        if (!match.Success)
-            return false;
+        if (match.Success)
+        {
+            blockName = match.Groups[1].Success ? match.Groups[1].Value : null;
+        }
+        else
+        {
+            // Try named block: "Блок Станіслава Мерляна", "Блок Сергія Реви."
+            var namedMatch = ParserPatterns.BlockStartWithName().Match(line);
+            if (!namedMatch.Success)
+                return false;
+
+            editorNameGenitive = namedMatch.Groups[1].Value.Trim();
+        }
 
         // Blocks only make sense within a tour
         if (!ctx.HasCurrentTour)
@@ -509,7 +550,6 @@ public class PackageParser
         SaveCurrentQuestion(ctx);
         SaveCurrentBlock(ctx);
 
-        var blockName = match.Groups[1].Success ? match.Groups[1].Value : null;
         var orderIndex = ctx.CurrentTour!.Blocks.Count;
 
         ctx.CurrentBlockDto = new BlockDto
@@ -517,11 +557,22 @@ public class PackageParser
             Name = blockName,
             OrderIndex = orderIndex
         };
+
+        // For named blocks, convert the genitive author name to nominative and set as editor
+        if (editorNameGenitive != null)
+        {
+            var nominativeName = UkrainianNameHelper.ConvertFullNameToNominative(editorNameGenitive);
+            ctx.CurrentBlockDto.Editors.Add(StripAccents(TextNormalizer.NormalizeApostrophes(nominativeName)!));
+        }
+
         ctx.CurrentTour.Blocks.Add(ctx.CurrentBlockDto);
         ctx.CurrentQuestion = null;
         ctx.CurrentSection = ParserSection.BlockHeader;
 
-        _logger.LogDebug("Found block: {BlockName} in tour {TourNumber}", blockName ?? "(unnamed)", ctx.CurrentTour.Number);
+        _logger.LogDebug("Found block: {BlockName} (editor: {Editor}) in tour {TourNumber}",
+            blockName ?? editorNameGenitive ?? "(unnamed)",
+            editorNameGenitive != null ? UkrainianNameHelper.ConvertFullNameToNominative(editorNameGenitive) : "(none)",
+            ctx.CurrentTour.Number);
         return true;
     }
 
@@ -1967,7 +2018,20 @@ public class PackageParser
             .Select(s => StripAccents(s.Trim().TrimEnd('.', ',', ';')))
             .Select(s => TextNormalizer.NormalizeApostrophes(s)!)
             .Where(s => !string.IsNullOrWhiteSpace(s))
+            .SelectMany(SplitAuthorOnRedakciya)
             .ToList();
+    }
+
+    /// <summary>
+    /// Splits a single author entry on "у редакції" / "в редакції" / "за ідеєю" patterns,
+    /// converts genitive names to nominative, and strips city parentheses.
+    /// E.g., "Станіслав Мерлян (Одеса) у редакції Едуарда Голуба (Київ)"
+    /// → ["Станіслав Мерлян", "Едуард Голуб"]
+    /// </summary>
+    private static IEnumerable<string> SplitAuthorOnRedakciya(string author)
+    {
+        var parts = UkrainianNameHelper.SplitAndNormalizeAuthors(author);
+        return parts.Where(p => !string.IsNullOrWhiteSpace(p));
     }
 
     /// <summary>

@@ -2135,7 +2135,7 @@
     {
         if (_editingQuestion == null || _editingTour == null || _package == null) return false;
 
-        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var orderedQuestions = GetVisuallyOrderedQuestions(_editingTour);
         var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
 
         // Can navigate prev if not first question, or if there's a previous tour
@@ -2150,7 +2150,7 @@
     {
         if (_editingQuestion == null || _editingTour == null || _package == null) return false;
 
-        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var orderedQuestions = GetVisuallyOrderedQuestions(_editingTour);
         var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
 
         // Can navigate next if not last question, or if there's a next tour
@@ -2168,7 +2168,7 @@
         // Save current question first
         await SaveEditingQuestionAsync();
 
-        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var orderedQuestions = GetVisuallyOrderedQuestions(_editingTour);
         var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
 
         if (currentIndex > 0)
@@ -2200,7 +2200,7 @@
         // Save current question first
         await SaveEditingQuestionAsync();
 
-        var orderedQuestions = _editingTour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        var orderedQuestions = GetVisuallyOrderedQuestions(_editingTour);
         var currentIndex = orderedQuestions.IndexOf(_editingQuestion);
 
         if (currentIndex < orderedQuestions.Count - 1)
@@ -2253,6 +2253,26 @@
             ValidateMandatoryFields();
         }
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Gets questions ordered the same way they appear visually on the page.
+    /// When a tour has blocks, orders by block OrderIndex first, then by question OrderIndex within each block.
+    /// Orphan questions (no block) appear after all block questions.
+    /// </summary>
+    private static List<Question> GetVisuallyOrderedQuestions(Tour tour)
+    {
+        if (tour.Blocks.Count == 0)
+        {
+            return tour.Questions.OrderBy(q => q.OrderIndex).ToList();
+        }
+
+        var blockOrderDict = tour.Blocks.ToDictionary(b => b.Id, b => b.OrderIndex);
+
+        return tour.Questions
+            .OrderBy(q => q.BlockId.HasValue ? blockOrderDict.GetValueOrDefault(q.BlockId.Value, int.MaxValue) : int.MaxValue)
+            .ThenBy(q => q.OrderIndex)
+            .ToList();
     }
 
     private bool IsExpanded(int tourId) => _expandedTours.Contains(tourId);
