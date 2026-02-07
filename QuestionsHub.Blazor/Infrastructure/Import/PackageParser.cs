@@ -35,6 +35,14 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*[Тт][Уу][Рр]\s+([ПпДдТтЧчШшСсВв][''ʼА-яі]+)\s*$")]
     public static partial Regex TourOrdinalStart();
 
+    // Matches: "1 Тур", "2 тур", "3 ТУР" (number before word "Тур")
+    [GeneratedRegex(@"^\s*(\d+)\s+(?:ТУР|Тур|тур|Tour)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex NumberTourStart();
+
+    // Matches: "Тур №1", "ТУР №2", "Тур № 3" (with № sign)
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s*№\s*(\d+)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourNumberSignStart();
+
     // Warmup tour detection: "Розминка", "Warmup", "Тур 0", "Розминковий тур"
     [GeneratedRegex(@"^\s*(?:Розминка|Warmup|Розминковий\s+тур)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex WarmupTourStart();
@@ -1396,7 +1404,7 @@ public class PackageParser
         preamble = null;
 
         // Try numeric patterns first (without preamble)
-        if (TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartWithColon(), ParserPatterns.TourStartDashed()))
+        if (TryMatchFirst(text, out var match, ParserPatterns.TourStart(), ParserPatterns.TourStartWithColon(), ParserPatterns.TourStartDashed(), ParserPatterns.NumberTourStart(), ParserPatterns.TourNumberSignStart()))
         {
             tourNumber = match.Groups[1].Value;
             return true;

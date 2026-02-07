@@ -134,6 +134,95 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Tests "N Тур" format where the number precedes the word "Тур".
+    /// </summary>
+    [Theory]
+    [InlineData("1 Тур", "1")]
+    [InlineData("2 тур", "2")]
+    [InlineData("3 ТУР", "3")]
+    [InlineData("  1 Тур  ", "1")]
+    [InlineData("1 Tour", "1")]
+    public void Parse_NumberTourStart_DetectsTour(string tourLine, string expectedNumber)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+    }
+
+    /// <summary>
+    /// Tests "Тур №N" format with the number sign (№).
+    /// </summary>
+    [Theory]
+    [InlineData("Тур №1", "1")]
+    [InlineData("ТУР №2", "2")]
+    [InlineData("Тур № 3", "3")]
+    [InlineData("Тур №1.", "1")]
+    [InlineData("ТУР №4:", "4")]
+    [InlineData("  Тур №1  ", "1")]
+    [InlineData("Tour №2", "2")]
+    public void Parse_TourNumberSignStart_DetectsTour(string tourLine, string expectedNumber)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+    }
+
+    /// <summary>
+    /// Tests multiple tours using "N Тур" format.
+    /// </summary>
+    [Fact]
+    public void Parse_MultipleNumberTourStart_ParsesAllTours()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("1 Тур"),
+            Block("1. Питання туру 1"),
+            Block("Відповідь: В1"),
+            Block("2 Тур"),
+            Block("1. Питання туру 2"),
+            Block("Відповідь: В2"),
+            Block("3 Тур"),
+            Block("1. Питання туру 3"),
+            Block("Відповідь: В3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Number.Should().Be("1");
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+        result.Tours[2].Number.Should().Be("3");
+        result.Tours[2].Questions.Should().HaveCount(1);
+    }
+
+    /// <summary>
     /// Tests that ordinal tours work correctly with multiple tours in a package.
     /// </summary>
     [Fact]
