@@ -525,6 +525,32 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Verifies that tour editor declared with a dash separator ("Редактор – Name (City)")
+    /// is parsed as editor, not as preamble.
+    /// </summary>
+    [Fact]
+    public void Parse_TourEditorWithDashSeparator_ParsedAsEditor()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Редактор – Олександр Мудрий (Чернівці)"),
+            Block("Запитання 1"),
+            Block("Текст питання"),
+            Block("Відповідь: Відповідь 1")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Editors.Should().Contain("Олександр Мудрий");
+        result.Tours[0].Preamble.Should().BeNullOrEmpty();
+    }
+
+    /// <summary>
     /// Verifies the reverse case: Tour 1 uses "N." format, Tour 2 uses "Запитання N" format.
     /// </summary>
     [Fact]

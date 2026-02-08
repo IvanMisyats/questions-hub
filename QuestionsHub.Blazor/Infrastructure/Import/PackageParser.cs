@@ -139,7 +139,8 @@ public static partial class ParserPatterns
     public static partial Regex HandoutMarkerBracketClose();
 
     // Editors in header: "Редактор:", "Редактори:", "Редактор туру:", "Редакторка:", "Редакторки:"
-    [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*туру)?)\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    // Also matches dash separators: "Редактор – Name", "Редактор - Name"
+    [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*туру)?)\s*[-–—:]\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex EditorsLabel();
 
     // Block detection: "Блок 1", "Блок", "Блок 2:", etc.
