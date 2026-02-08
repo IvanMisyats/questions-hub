@@ -63,7 +63,7 @@ else
                     @if (_package.Editors.Any())
                     {
                         <p>
-                            <strong>Редактори пакету:</strong>
+                            <strong>Редактори:</strong>
                             @{ var packageEditors = _package.Editors.ToList(); }
                             @for (var i = 0; i < packageEditors.Count; i++)
                             {
