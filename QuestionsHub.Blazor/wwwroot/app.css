@@ -217,6 +217,17 @@ h1:focus {
 .answer-hidden {
     display: none !important;
 }
+/* Home page: expandable popular tags */
+.tag-filter-btn.tag-hidden {
+    display: none !important;
+}
+
+#tag-expand-btn:focus,
+#tag-expand-btn:focus-visible {
+    box-shadow: none;
+    outline: none;
+}
+
 /* Home page filter panel */
 .filter-panel {
     background-color: var(--app-bg-secondary);

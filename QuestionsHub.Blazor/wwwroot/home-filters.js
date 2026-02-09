@@ -10,6 +10,7 @@
     const API_URL = '/api/packages/search';
     const EDITORS_API_URL = '/api/packages/editors';
     const POPULAR_TAGS_API_URL = '/api/packages/popular-tags';
+    const TAG_PAGE_SIZE = 10;
 
     // State
     let state = {
@@ -25,6 +26,9 @@
         totalCount: 0,
         hasFilters: false
     };
+
+    let visibleTagCount = TAG_PAGE_SIZE;
+    let totalTags = 0;
 
     let searchDebounceTimer = null;
     let editorSearchDebounceTimer = null;
@@ -54,6 +58,8 @@
         setupPaginationLinks();
         setupResetFiltersButton();
         setupTagButtons();
+        setupTagExpandButton();
+        updateTagVisibility();
 
         // Handle browser back/forward (only add once)
         if (!window._homeFiltersPopstateAdded) {
@@ -75,6 +81,9 @@
             state.editorName = pageState.dataset.editorName || 'Всі редактори';
             state.tagId = pageState.dataset.tagId ? parseInt(pageState.dataset.tagId) : null;
             state.tagName = pageState.dataset.tagName || '';
+            const section = document.getElementById('popular-tags-section');
+            totalTags = section ? parseInt(section.dataset.totalTags) || 0 : 0;
+            visibleTagCount = TAG_PAGE_SIZE;
             state.sort = pageState.dataset.sort || 'PublicationDate';
             state.dir = pageState.dataset.dir || 'Desc';
             state.page = parseInt(pageState.dataset.page) || 1;
@@ -703,6 +712,7 @@
         updateEditorDropdownButton();
         updateSortDirButton();
         updateTagButtons();
+        updateTagVisibility();
 
         const sortSelect = document.getElementById('sort-select');
         if (sortSelect) sortSelect.value = state.sort;
@@ -884,6 +894,72 @@
             }
         } else {
             clearBtn?.remove();
+        }
+
+        updateTagVisibility();
+    }
+
+    /**
+     * Sets up the tag expand/collapse button click handler.
+     */
+    function setupTagExpandButton() {
+        const section = document.getElementById('popular-tags-section');
+        if (!section || section._hfExpandInit) return;
+        section._hfExpandInit = true;
+
+        section.addEventListener('click', function (e) {
+            const expandBtn = e.target.closest('#tag-expand-btn');
+            if (!expandBtn) return;
+            e.preventDefault();
+
+            if (visibleTagCount >= totalTags) {
+                // Collapse back to first page
+                visibleTagCount = TAG_PAGE_SIZE;
+            } else {
+                // Show next batch
+                visibleTagCount = Math.min(visibleTagCount + TAG_PAGE_SIZE, totalTags);
+            }
+            updateTagVisibility();
+        });
+    }
+
+    /**
+     * Updates tag button visibility based on visibleTagCount.
+     * Tags beyond the visible count get the 'tag-hidden' class.
+     * The expand button text is updated accordingly.
+     * A selected tag is always kept visible regardless of its index.
+     */
+    function updateTagVisibility() {
+        const section = document.getElementById('popular-tags-section');
+        if (!section) return;
+
+        const tagBtns = section.querySelectorAll('.tag-filter-btn');
+        tagBtns.forEach(btn => {
+            const index = parseInt(btn.dataset.tagIndex);
+            const isSelected = state.tagId && parseInt(btn.dataset.tagId) === state.tagId;
+            if (index >= visibleTagCount && !isSelected) {
+                btn.classList.add('tag-hidden');
+            } else {
+                btn.classList.remove('tag-hidden');
+            }
+        });
+
+        // Update expand button
+        const expandBtn = section.querySelector('#tag-expand-btn');
+        if (!expandBtn) return;
+
+        if (totalTags <= TAG_PAGE_SIZE) {
+            // Not enough tags to need expand button
+            expandBtn.style.display = 'none';
+        } else if (visibleTagCount >= totalTags) {
+            // All tags visible — show collapse button
+            expandBtn.style.display = '';
+            expandBtn.textContent = '\u2191 \u0417\u0433\u043e\u0440\u043d\u0443\u0442\u0438';
+        } else {
+            // More tags to show
+            const remaining = totalTags - visibleTagCount;
+            expandBtn.style.display = '';
+            expandBtn.textContent = `+${remaining} \u0449\u0435`;
         }
     }
 

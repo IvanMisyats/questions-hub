@@ -48,7 +48,7 @@ public class TagService
     /// <param name="limit">Maximum number of results to return.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of popular tags with their IDs and names.</returns>
-    public async Task<List<TagBriefDto>> GetPopularPublished(int limit = 10, CancellationToken ct = default)
+    public async Task<List<TagBriefDto>> GetPopularPublished(int limit = 100, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(PopularTagsCacheKey, out List<TagBriefDto>? cached) && cached != null)
         {
