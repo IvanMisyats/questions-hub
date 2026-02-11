@@ -53,6 +53,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
         {
             entity.HasKey(p => p.Id);
             entity.Property(p => p.Title).IsRequired().HasMaxLength(500);
+            entity.Property(p => p.SourceUrl).HasMaxLength(2000);
             entity.Property(p => p.Description).HasMaxLength(2000);
             entity.Property(p => p.Status).HasDefaultValue(PackageStatus.Draft);
             entity.Property(p => p.NumberingMode).HasDefaultValue(QuestionNumberingMode.Global);

@@ -16,7 +16,7 @@ public class PackageImportOptions
     /// <summary>
     /// Allowed file extensions for upload.
     /// </summary>
-    public string[] AllowedExtensions { get; set; } = [".docx"];
+    public string[] AllowedExtensions { get; set; } = [".docx", ".qhub"];
 
     /// <summary>
     /// Maximum time allowed for a single job in minutes.

@@ -14,9 +14,9 @@
         <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Імпортувати пакет (експериментальна функція)</h5>
     </div>
     <div class="card-body">
-        <InputFile OnChange="OnFileSelected" accept=".doc,.docx" class="form-control" disabled="@_isUploading" />
+        <InputFile OnChange="OnFileSelected" accept=".doc,.docx,.qhub" class="form-control" disabled="@_isUploading" />
         <small class="text-muted">
-            Підтримувані формати: .doc, .docx (до @PackageImportOptions.FormatFileSize(ImportOptions.MaxFileSizeBytes))
+            Підтримувані формати: .docx, .qhub (до @PackageImportOptions.FormatFileSize(ImportOptions.MaxFileSizeBytes))
         </small>
 
         @if (_uploadError != null)
@@ -64,6 +64,7 @@
                                 <a href="/manage/package/@job.PackageId" class="btn btn-sm btn-success">
                                     Відкрити пакет
                                 </a>
+                                <ImportWarnings WarningsJson="@job.WarningsJson" />
                                 break;
                             case ImportJobStatus.Failed:
                                 <div class="d-flex align-items-center gap-2">

@@ -13,17 +13,20 @@ public partial class PackageDbImporter
     private readonly QuestionsHubDbContext _db;
     private readonly MediaUploadOptions _mediaOptions;
     private readonly AuthorService _authorService;
+    private readonly TagService _tagService;
     private readonly ILogger<PackageDbImporter> _logger;
 
     public PackageDbImporter(
         QuestionsHubDbContext db,
         MediaUploadOptions mediaOptions,
         AuthorService authorService,
+        TagService tagService,
         ILogger<PackageDbImporter> logger)
     {
         _db = db;
         _mediaOptions = mediaOptions;
         _authorService = authorService;
+        _tagService = tagService;
         _logger = logger;
     }
 
@@ -55,14 +58,44 @@ public partial class PackageDbImporter
                 Title = parseResult.Title ?? "Імпортований пакет",
                 Description = parseResult.Description,
                 Preamble = parseResult.Preamble,
+                SourceUrl = parseResult.SourceUrl,
                 Status = PackageStatus.Draft,
                 OwnerId = ownerId,
                 TotalQuestions = parseResult.TotalQuestions,
-                NumberingMode = parseResult.NumberingMode
+                NumberingMode = parseResult.NumberingMode,
+                PlayedFrom = parseResult.PlayedFrom,
+                PlayedTo = parseResult.PlayedTo,
+                SharedEditors = parseResult.SharedEditors
             };
 
             _db.Packages.Add(package);
             await _db.SaveChangesAsync(ct);
+
+            // Create package-level editors (when SharedEditors is true)
+            if (parseResult.SharedEditors && parseResult.PackageEditors.Count > 0)
+            {
+                package.PackageEditors = await ResolveAuthors(parseResult.PackageEditors, ct);
+                await _db.SaveChangesAsync(ct);
+            }
+
+            // Create tags
+            if (parseResult.Tags.Count > 0)
+            {
+                foreach (var tagName in parseResult.Tags.Distinct())
+                {
+                    if (string.IsNullOrWhiteSpace(tagName)) continue;
+                    try
+                    {
+                        var tag = await _tagService.GetOrCreate(_db, tagName);
+                        package.Tags.Add(tag);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to create tag: {TagName}", tagName);
+                    }
+                }
+                await _db.SaveChangesAsync(ct);
+            }
 
             // Create tours
             foreach (var tourDto in parseResult.Tours)
@@ -150,6 +183,14 @@ public partial class PackageDbImporter
         string jobAssetsPath,
         CancellationToken ct)
     {
+        // Resolve handout: prefer local file, fall back to external URL stored on DTO
+        var handoutUrl = await ResolveAssetUrl(questionDto.HandoutAssetFileName, jobAssetsPath, ct)
+                         ?? NullIfEmpty(questionDto.HandoutAssetUrl);
+
+        // Resolve comment attachment: prefer local file, fall back to external URL stored on DTO
+        var commentUrl = await ResolveAssetUrl(questionDto.CommentAssetFileName, jobAssetsPath, ct)
+                         ?? NullIfEmpty(questionDto.CommentAssetUrl);
+
         return new Question
         {
             OrderIndex = orderIndex,
@@ -157,12 +198,12 @@ public partial class PackageDbImporter
             HostInstructions = TruncateIfNeeded(questionDto.HostInstructions, 1000),
             Text = questionDto.Text,
             HandoutText = questionDto.HandoutText,
-            HandoutUrl = await ResolveAssetUrl(questionDto.HandoutAssetFileName, jobAssetsPath, ct),
+            HandoutUrl = handoutUrl,
             Answer = TruncateIfNeeded(questionDto.Answer, 1000) ?? "",
             AcceptedAnswers = TruncateIfNeeded(questionDto.AcceptedAnswers, 1000),
             RejectedAnswers = TruncateIfNeeded(questionDto.RejectedAnswers, 1000),
             Comment = questionDto.Comment,
-            CommentAttachmentUrl = await ResolveAssetUrl(questionDto.CommentAssetFileName, jobAssetsPath, ct),
+            CommentAttachmentUrl = commentUrl,
             Source = questionDto.Source,
             TourId = tourId,
             BlockId = blockId,
@@ -292,5 +333,8 @@ public partial class PackageDbImporter
         if (string.IsNullOrEmpty(text)) return text;
         return text.Length <= maxLength ? text : text[..maxLength];
     }
+
+    private static string? NullIfEmpty(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
 }
 

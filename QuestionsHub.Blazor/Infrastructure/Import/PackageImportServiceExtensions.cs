@@ -21,7 +21,15 @@ public static class PackageImportServiceExtensions
         services.AddScoped<DocxExtractor>();
         services.AddScoped<PackageParser>();
         services.AddScoped<PackageDbImporter>();
+        services.AddScoped<QhubExtractor>();
         services.AddScoped<PackageImportService>();
+
+        // HttpClient for downloading external assets in .qhub imports
+        services.AddHttpClient("QhubAssetDownloader", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("QuestionsHub/1.0");
+        });
 
 
         // Register background services

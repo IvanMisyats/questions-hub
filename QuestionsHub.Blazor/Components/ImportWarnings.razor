@@ -1,0 +1,71 @@
+@* Reusable component to display import warnings as a collapsible alert. *@
+@using System.Text.Json
+
+@if (_warnings.Count > 0)
+{
+    <div class="alert alert-warning mt-2 mb-0 py-2 px-3">
+        <div class="d-flex align-items-center gap-2" role="button" @onclick="ToggleExpanded" style="cursor: pointer;">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>@_warnings.Count @GetWarningsWord(_warnings.Count)</span>
+            <i class="bi @(_isExpanded ? "bi-chevron-up" : "bi-chevron-down") ms-auto"></i>
+        </div>
+        @if (_isExpanded)
+        {
+            <ul class="mb-0 mt-2 ps-3 small">
+                @foreach (var warning in _warnings)
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// Pass warnings as a JSON string (from ImportJob.WarningsJson).
+    /// </summary>
+    [Parameter]
+    public string? WarningsJson { get; set; }
+
+    /// <summary>
+    /// Pass warnings as a list directly.
+    /// </summary>
+    [Parameter]
+    public List<string>? Warnings { get; set; }
+
+    private List<string> _warnings = [];
+    private bool _isExpanded;
+
+    protected override void OnParametersSet()
+    {
+        if (Warnings is { Count: > 0 })
+        {
+            _warnings = Warnings;
+        }
+        else if (!string.IsNullOrEmpty(WarningsJson))
+        {
+            try
+            {
+                _warnings = JsonSerializer.Deserialize<List<string>>(WarningsJson) ?? [];
+            }
+            catch
+            {
+                _warnings = [];
+            }
+        }
+        else
+        {
+            _warnings = [];
+        }
+    }
+
+    private void ToggleExpanded() => _isExpanded = !_isExpanded;
+
+    private static string GetWarningsWord(int count) => count switch
+    {
+        1 => "попередження",
+        >= 2 and <= 4 => "попередження",
+        _ => "попереджень"
+    };
+}

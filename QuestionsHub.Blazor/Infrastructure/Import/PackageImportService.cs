@@ -105,8 +105,6 @@ public class PackageImportService
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
-        var extractor = scope.ServiceProvider.GetRequiredService<DocxExtractor>();
-        var parser = scope.ServiceProvider.GetRequiredService<PackageParser>();
         var importer = scope.ServiceProvider.GetRequiredService<PackageDbImporter>();
 
         var job = await db.PackageImportJobs.FindAsync([jobId], ct);
@@ -128,25 +126,19 @@ public class PackageImportService
             Directory.CreateDirectory(outputFolder);
 
             var inputPath = Path.Combine(_mediaOptions.UploadsPath, job.InputFilePath);
-            var docxPath = inputPath;
 
-            // Step 1: Extract content from DOCX
-            await UpdateProgress(db, job, "Extracting", 20, ct);
+            var extension = Path.GetExtension(job.InputFileName).ToLowerInvariant();
 
-            var extractionResult = await extractor.Extract(docxPath, assetsFolder, ct);
+            ParseResult parseResult;
 
-            // Save extraction result for debugging
-            var extractedJsonPath = Path.Combine(workingFolder, "extracted.json");
-            await File.WriteAllTextAsync(extractedJsonPath, JsonSerializer.Serialize(extractionResult, JsonOptions), ct);
-
-            // Step 3: Parse structure
-            await UpdateProgress(db, job, "Parsing", 50, ct);
-
-            var parseResult = parser.Parse(extractionResult.Blocks, extractionResult.Assets);
-
-            // Save parse result for debugging
-            var outputJsonPath = Path.Combine(outputFolder, "package_import.json");
-            await File.WriteAllTextAsync(outputJsonPath, JsonSerializer.Serialize(parseResult, JsonOptions), ct);
+            if (extension == ".qhub")
+            {
+                parseResult = await ProcessQhub(scope, inputPath, assetsFolder, outputFolder, db, job, ct);
+            }
+            else
+            {
+                parseResult = await ProcessDocx(scope, inputPath, assetsFolder, workingFolder, outputFolder, db, job, ct);
+            }
 
             // Check if we got valid structure
             if (parseResult.Tours.Count == 0 || parseResult.TotalQuestions == 0)
@@ -154,15 +146,12 @@ public class PackageImportService
                 throw new ParsingException("Не вдалося визначити структуру пакету. Перевірте формат документа.");
             }
 
-            // Step 4: LLM normalization (skip in MVP, use rules-only)
-            // TODO: Implement LLM fallback when confidence is low
-
-            // Step 5: Import to database
+            // Import to database
             await UpdateProgress(db, job, "Importing", 70, ct);
 
             var package = await importer.Import(parseResult, job.OwnerId, jobId, assetsFolder, ct);
 
-            // Step 6: Finalize
+            // Finalize
             await UpdateProgress(db, job, "Finalizing", 90, ct);
 
             // Save original file to packages folder
@@ -198,6 +187,68 @@ public class PackageImportService
             _logger.LogError(ex, "Unexpected error processing job: {JobId}", jobId);
             await HandleJobError(db, job, "Неочікувана помилка при обробці", ex.ToString(), false, ct);
         }
+    }
+
+    private async Task<ParseResult> ProcessQhub(
+        IServiceScope scope,
+        string inputPath,
+        string assetsFolder,
+        string outputFolder,
+        QuestionsHubDbContext db,
+        PackageImportJob job,
+        CancellationToken ct)
+    {
+        var qhubExtractor = scope.ServiceProvider.GetRequiredService<QhubExtractor>();
+
+        await UpdateProgress(db, job, "Extracting", 30, ct);
+
+        var parseResult = await qhubExtractor.Extract(inputPath, assetsFolder, ct);
+
+        // Save parse result for debugging
+        var outputJsonPath = Path.Combine(outputFolder, "package_import.json");
+        await File.WriteAllTextAsync(outputJsonPath, JsonSerializer.Serialize(parseResult, JsonOptions), ct);
+
+        return parseResult;
+    }
+
+    private async Task<ParseResult> ProcessDocx(
+        IServiceScope scope,
+        string inputPath,
+        string assetsFolder,
+        string workingFolder,
+        string outputFolder,
+        QuestionsHubDbContext db,
+        PackageImportJob job,
+        CancellationToken ct)
+    {
+        var extractor = scope.ServiceProvider.GetRequiredService<DocxExtractor>();
+        var parser = scope.ServiceProvider.GetRequiredService<PackageParser>();
+
+        // Step 1: Extract content from DOCX
+        await UpdateProgress(db, job, "Extracting", 20, ct);
+
+        var extractionResult = await extractor.Extract(inputPath, assetsFolder, ct);
+
+        // Save extraction result for debugging
+        var extractedJsonPath = Path.Combine(workingFolder, "extracted.json");
+        await File.WriteAllTextAsync(extractedJsonPath, JsonSerializer.Serialize(extractionResult, JsonOptions), ct);
+
+        // Step 2: Parse structure
+        await UpdateProgress(db, job, "Parsing", 50, ct);
+
+        var parseResult = parser.Parse(extractionResult.Blocks, extractionResult.Assets);
+
+        // Merge extraction warnings into parse result (so they're saved with the job)
+        if (extractionResult.Warnings.Count > 0)
+        {
+            parseResult.Warnings.InsertRange(0, extractionResult.Warnings);
+        }
+
+        // Save parse result for debugging
+        var outputJsonPath = Path.Combine(outputFolder, "package_import.json");
+        await File.WriteAllTextAsync(outputJsonPath, JsonSerializer.Serialize(parseResult, JsonOptions), ct);
+
+        return parseResult;
     }
 
     private async Task UpdateProgress(

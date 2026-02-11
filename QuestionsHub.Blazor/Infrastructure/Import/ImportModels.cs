@@ -62,9 +62,25 @@ public class ParseResult
     public string? Title { get; set; }
     public string? Description { get; set; }
     public string? Preamble { get; set; }
+    public string? SourceUrl { get; set; }
     public List<string> Editors { get; set; } = [];
     public List<TourDto> Tours { get; set; } = [];
     public List<string> Warnings { get; set; } = [];
+
+    /// <summary>Start date when the package was played.</summary>
+    public DateOnly? PlayedFrom { get; set; }
+
+    /// <summary>End date when the package was played.</summary>
+    public DateOnly? PlayedTo { get; set; }
+
+    /// <summary>When true, editors are defined at package level and shared across all tours.</summary>
+    public bool SharedEditors { get; set; }
+
+    /// <summary>Package-level editors (when SharedEditors is true).</summary>
+    public List<string> PackageEditors { get; set; } = [];
+
+    /// <summary>Tag labels associated with the package.</summary>
+    public List<string> Tags { get; set; } = [];
 
     /// <summary>Parser confidence score (0.0 - 1.0).</summary>
     public double Confidence { get; set; } = 1.0;
@@ -125,12 +141,14 @@ public class QuestionDto
     public string? HostInstructions { get; set; }
     public string? HandoutText { get; set; }
     public string? HandoutAssetFileName { get; set; }
+    public string? HandoutAssetUrl { get; set; }
     public string Text { get; set; } = "";
     public string Answer { get; set; } = "";
     public string? AcceptedAnswers { get; set; }
     public string? RejectedAnswers { get; set; }
     public string? Comment { get; set; }
     public string? CommentAssetFileName { get; set; }
+    public string? CommentAssetUrl { get; set; }
     public string? Source { get; set; }
     public List<string> Authors { get; set; } = [];
 

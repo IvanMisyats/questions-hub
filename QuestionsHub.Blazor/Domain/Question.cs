@@ -150,6 +150,9 @@ public class Package
     /// <summary>End date when the package was played (null for single-day events).</summary>
     public DateOnly? PlayedTo { get; set; }
 
+    /// <summary>URL where the package was originally obtained (e.g., from .qhub import).</summary>
+    public string? SourceUrl { get; set; }
+
     /// <summary>Package description or notes.</summary>
     public string? Description { get; set; }
 
