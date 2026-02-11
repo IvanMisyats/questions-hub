@@ -47,6 +47,7 @@ internal static class ServiceCollectionExtensions
     {
         services.AddRazorComponents().AddInteractiveServerComponents();
         services.AddControllers();
+        services.AddSingleton<IconSpriteVersionService>();
         services.AddHttpContextAccessor();
         services.AddHttpClient();
         services.AddLocalization();

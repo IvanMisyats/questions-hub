@@ -8,6 +8,7 @@
 
     const DEBOUNCE_MS = 300;
     const API_URL = '/api/packages/search';
+    const ICONS_SVG = window.__iconsSvgUrl || '/icons.svg';
     const EDITORS_API_URL = '/api/packages/editors';
     const POPULAR_TAGS_API_URL = '/api/packages/popular-tags';
     const TAG_PAGE_SIZE = 10;
@@ -547,13 +548,13 @@
                        href="${firstDisabled ? '#' : getPageUrl(1, baseUrl)}"
                        data-page="1"
                        title="Перша сторінка">
-                        <svg class="icon" width="16" height="16"><use href="/icons.svg#i-chevron-double-left"></use></svg>
+                        <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-double-left"></use></svg>
                     </a>
                     <a class="pagination-btn ${firstDisabled ? 'disabled' : ''}"
                        href="${firstDisabled ? '#' : getPageUrl(state.page - 1, baseUrl)}"
                        data-page="${state.page - 1}"
                        title="Попередня сторінка">
-                        <svg class="icon" width="16" height="16"><use href="/icons.svg#i-chevron-left"></use></svg>
+                        <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-left"></use></svg>
                     </a>
                     <div class="pagination-numbers">
                         ${pages.map(p => `
@@ -568,13 +569,13 @@
                        href="${lastDisabled ? '#' : getPageUrl(state.page + 1, baseUrl)}"
                        data-page="${state.page + 1}"
                        title="Наступна сторінка">
-                        <svg class="icon" width="16" height="16"><use href="/icons.svg#i-chevron-right"></use></svg>
+                        <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-right"></use></svg>
                     </a>
                     <a class="pagination-btn ${lastDisabled ? 'disabled' : ''}"
                        href="${lastDisabled ? '#' : getPageUrl(state.totalPages, baseUrl)}"
                        data-page="${state.totalPages}"
                        title="Остання сторінка">
-                        <svg class="icon" width="16" height="16"><use href="/icons.svg#i-chevron-double-right"></use></svg>
+                        <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-double-right"></use></svg>
                     </a>
                 </div>
             </nav>
@@ -736,7 +737,7 @@
 
         const isDesc = state.dir === 'Desc';
         btn.title = isDesc ? 'Спадання' : 'Зростання';
-        btn.innerHTML = `<svg class="icon" width="16" height="16"><use href="/icons.svg#i-sort-${isDesc ? 'down' : 'up'}"></use></svg>`;
+        btn.innerHTML = `<svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-sort-${isDesc ? 'down' : 'up'}"></use></svg>`;
     }
 
     /**
@@ -799,7 +800,7 @@
             <button type="button" class="dropdown-item ${!state.editorId ? 'active' : ''}" 
                     data-editor-id="" data-editor-name="Всі редактори">
                 <svg class="icon me-2" width="16" height="16">
-                    <use href="/icons.svg#i-check"></use>
+                    <use href="${ICONS_SVG}#i-check"></use>
                 </svg>
                 Всі редактори
             </button>
@@ -888,7 +889,7 @@
                     btn.type = 'button';
                     btn.className = 'btn btn-sm btn-outline-secondary rounded-pill';
                     btn.id = 'clear-tag-btn';
-                    btn.innerHTML = '<svg class="icon me-1" width="16" height="16"><use href="/icons.svg#i-close"></use></svg> Скинути';
+                    btn.innerHTML = `<svg class="icon me-1" width="16" height="16"><use href="${ICONS_SVG}#i-close"></use></svg> Скинути`;
                     wrapper.appendChild(btn);
                 }
             }

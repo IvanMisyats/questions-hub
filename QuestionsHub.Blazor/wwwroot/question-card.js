@@ -36,8 +36,10 @@ window.copyQuestionLink = function(button, questionId) {
             const useElement = icon.querySelector('use');
             if (useElement) {
                 const originalHref = useElement.getAttribute('href');
+                // Extract base sprite URL (with version query) from the original href
+                var spriteBase = (window.__iconsSvgUrl || '/icons.svg');
                 // Show check icon
-                useElement.setAttribute('href', '/icons.svg#i-check');
+                useElement.setAttribute('href', spriteBase + '#i-check');
                 icon.classList.add('copied');
 
                 setTimeout(function() {

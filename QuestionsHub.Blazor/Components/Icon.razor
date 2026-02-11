@@ -3,22 +3,25 @@
     Usage: <Icon Name="search" Class="text-muted me-2" Size="20" />
 *@
 
+@inject QuestionsHub.Blazor.Infrastructure.IconSpriteVersionService SpriteVersion
+
 @{
     var symbolId = GetSymbolId(Name);
     var cssClass = string.IsNullOrEmpty(Class) ? "icon" : $"icon {Class}";
+    var spriteUrl = SpriteVersion.SpriteUrl;
 }
 
 @if (!string.IsNullOrEmpty(Title))
 {
     <svg class="@cssClass" width="@Size" height="@Size" role="img" focusable="false">
         <title>@Title</title>
-        <use href="/icons.svg#@symbolId"></use>
+        <use href="@($"{spriteUrl}#{symbolId}")"></use>
     </svg>
 }
 else
 {
     <svg class="@cssClass" width="@Size" height="@Size" aria-hidden="true" focusable="false">
-        <use href="/icons.svg#@symbolId"></use>
+        <use href="@($"{spriteUrl}#{symbolId}")"></use>
     </svg>
 }
 
@@ -71,6 +74,7 @@ else
             "sort-down" or "sort-desc" or "arrow-down" => "i-sort-down",
             "funnel" or "filter" => "i-funnel",
             "chevron-up-down" or "sort" or "selector" => "i-chevron-up-down",
+            "download" or "export" => "i-download",
             _ => $"i-{name.ToLowerInvariant()}"
         };
     }

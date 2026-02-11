@@ -1,6 +1,8 @@
 ﻿<!DOCTYPE html>
 <html lang="uk">
 
+@inject QuestionsHub.Blazor.Infrastructure.IconSpriteVersionService SpriteVersion
+
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -24,6 +26,10 @@
 
 <body>
 <Routes/>
+@{
+    var iconsSvgUrl = SpriteVersion.SpriteUrl;
+}
+<script>window.__iconsSvgUrl = '@iconsSvgUrl';</script>
 <script src="lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script src="sortable-interop.js"></script>

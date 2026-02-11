@@ -1,4 +1,6 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure.Import;
+﻿using QuestionsHub.Blazor.Infrastructure.Export;
+
+namespace QuestionsHub.Blazor.Infrastructure.Import;
 
 /// <summary>
 /// Extension methods for registering package import services.
@@ -23,6 +25,9 @@ public static class PackageImportServiceExtensions
         services.AddScoped<PackageDbImporter>();
         services.AddScoped<QhubExtractor>();
         services.AddScoped<PackageImportService>();
+
+        // Register export service
+        services.AddScoped<QhubExporter>();
 
         // HttpClient for downloading external assets in .qhub imports
         services.AddHttpClient("QhubAssetDownloader", client =>

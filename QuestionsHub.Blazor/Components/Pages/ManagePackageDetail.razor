@@ -43,10 +43,16 @@
                     <li class="breadcrumb-item active" aria-current="page">@_package.Title</li>
                 </ol>
             </nav>
-            <div>
+            <div class="d-flex align-items-center">
+                @if (Id != null)
+                {
+                    <button class="btn btn-outline-secondary btn-sm me-3" title="Завантажити .qhub" @onclick="ExportPackageAsync" disabled="@_isExporting">
+                        <Icon Name="download" />
+                    </button>
+                }
                 @if (_saveStatus != null)
                 {
-                    <span class="text-muted me-3">
+                    <span class="text-muted">
                         <i class="bi @(_isSaving ? "bi-arrow-repeat" : "bi-check-circle") me-1"></i>
                         @_saveStatus
                     </span>
@@ -856,6 +862,7 @@
     private string? _userId;
     private bool _isSaving;
     private string? _saveStatus;
+    private bool _isExporting;
 
     // Accordion state
     private HashSet<int> _expandedTours = new();
@@ -1551,6 +1558,24 @@
         finally
         {
             _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportPackageAsync()
+    {
+        if (Id == null) return;
+
+        _isExporting = true;
+        StateHasChanged();
+
+        try
+        {
+            Navigation.NavigateTo($"/api/packages/{Id}/export", forceLoad: true);
+        }
+        finally
+        {
+            _isExporting = false;
             StateHasChanged();
         }
     }

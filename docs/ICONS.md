@@ -32,6 +32,7 @@ The following icons are available in the sprite file:
 | `i-chevron-double-right` | chevron-double-right, chevrons-right | Double right arrow for last page |
 | `i-sun` | sun, light | Sun icon for light theme indicator |
 | `i-moon` | moon, dark | Moon icon for dark theme indicator |
+| `i-download` | download, export | Download / export file |
 
 ## Usage
 
