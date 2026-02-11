@@ -321,6 +321,107 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Tests Roman numeral tour names: "ТУР I", "Тур III", "ТУР ІІІ" (Cyrillic І).
+    /// Supports both Latin I/V/X and Cyrillic І/Х lookalikes.
+    /// </summary>
+    [Theory]
+    [InlineData("ТУР I", "1")]
+    [InlineData("ТУР II", "2")]
+    [InlineData("Тур III", "3")]
+    [InlineData("ТУР IV", "4")]
+    [InlineData("Тур V", "5")]
+    [InlineData("Tour VI", "6")]
+    [InlineData("ТУР VII", "7")]
+    [InlineData("ТУР VIII", "8")]
+    [InlineData("Тур IX", "9")]
+    [InlineData("ТУР X", "10")]
+    [InlineData("Тур XI", "11")]
+    [InlineData("ТУР XII", "12")]
+    [InlineData("ТУР ІІ", "2")]       // Cyrillic І (U+0406)
+    [InlineData("ТУР ІІІ", "3")]      // Cyrillic І (U+0406)
+    [InlineData("Тур ІV", "4")]        // Mixed: Cyrillic І + Latin V
+    [InlineData("  Тур ІІ  ", "2")]    // With whitespace
+    [InlineData("ТУР III.", "3")]      // With trailing dot
+    [InlineData("Тур IV:", "4")]       // With trailing colon
+    public void Parse_RomanTourStart_DetectsTour(string tourLine, string expectedNumber)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+    }
+
+    /// <summary>
+    /// Tests Roman numeral tour with inline preamble: "Тур III. Фізики".
+    /// </summary>
+    [Theory]
+    [InlineData("Тур III. Фізики", "3", "Фізики")]
+    [InlineData("ТУР ІІ. Лірики", "2", "Лірики")]
+    [InlineData("Тур IV: Фізлірики", "4", "Фізлірики")]
+    [InlineData("ТУР I. НАЗВА ТУРУ", "1", "НАЗВА ТУРУ")]
+    public void Parse_RomanTourStartWithPreamble_DetectsTourAndPreamble(string tourLine, string expectedNumber, string expectedPreamble)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+        result.Tours[0].Preamble.Should().Be(expectedPreamble);
+    }
+
+    /// <summary>
+    /// Tests multiple tours using Roman numeral format with Cyrillic І.
+    /// </summary>
+    [Fact]
+    public void Parse_MultipleRomanTours_ParsesAllTours()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР І"),
+            Block("1. Питання туру 1"),
+            Block("Відповідь: В1"),
+            Block("ТУР ІІ"),
+            Block("1. Питання туру 2"),
+            Block("Відповідь: В2"),
+            Block("ТУР ІІІ"),
+            Block("1. Питання туру 3"),
+            Block("Відповідь: В3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Number.Should().Be("1");
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+        result.Tours[2].Number.Should().Be("3");
+        result.Tours[2].Questions.Should().HaveCount(1);
+    }
+
+    /// <summary>
     /// Tests that tours without inline preamble (just "Тур N") don't have the inline preamble,
     /// but still collect subsequent tour header text.
     /// </summary>

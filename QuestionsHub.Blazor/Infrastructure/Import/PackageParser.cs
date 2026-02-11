@@ -43,6 +43,15 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s*№\s*(\d+)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourNumberSignStart();
 
+    // Matches: "ТУР III", "Тур ІІ", "ТУР ІІІ" (Roman numerals, including Cyrillic І/Х lookalikes)
+    // Character class includes both Latin (I, V, X, L, C, D, M) and Cyrillic lookalikes (І/і U+0456, Х/х U+0425/0445)
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+([IІVXХLCDMіivxхlcdm]+)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourRomanStart();
+
+    // Matches: "ТУР III. Назва туру", "Тур ІІ: Лірики" (Roman numeral followed by name/preamble)
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+([IІVXХLCDMіivxхlcdm]+)[\.:,]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourRomanStartWithPreamble();
+
     // Warmup tour detection: "Розминка", "Warmup", "Тур 0", "Розминковий тур"
     [GeneratedRegex(@"^\s*(?:Розминка|Warmup|Розминковий\s+тур)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex WarmupTourStart();
@@ -1420,6 +1429,31 @@ public class PackageParser
             return true;
         }
 
+        // Try Roman numeral patterns: "ТУР III", "Тур ІІ", "ТУР ІІІ"
+        var romanMatch = ParserPatterns.TourRomanStart().Match(text);
+        if (romanMatch.Success)
+        {
+            var romanNumber = RomanToNumber(romanMatch.Groups[1].Value);
+            if (romanNumber != null)
+            {
+                tourNumber = romanNumber;
+                return true;
+            }
+        }
+
+        // Try Roman numeral with preamble: "ТУР III. Назва"
+        var romanPreambleMatch = ParserPatterns.TourRomanStartWithPreamble().Match(text);
+        if (romanPreambleMatch.Success)
+        {
+            var romanNumber = RomanToNumber(romanPreambleMatch.Groups[1].Value);
+            if (romanNumber != null)
+            {
+                tourNumber = romanNumber;
+                preamble = romanPreambleMatch.Groups[2].Value.Trim();
+                return true;
+            }
+        }
+
         // Try ordinal patterns (normalize apostrophes for matching)
         var normalizedText = TextNormalizer.NormalizeApostrophes(text) ?? text;
 
@@ -1438,6 +1472,51 @@ public class PackageParser
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Converts a Roman numeral string to its decimal string representation.
+    /// Handles Cyrillic lookalike characters: І (U+0456) → I, Х (U+0425/0445) → X.
+    /// Returns null if the input is not a valid Roman numeral.
+    /// </summary>
+    private static string? RomanToNumber(string roman)
+    {
+        // Normalize Cyrillic lookalikes to Latin equivalents
+        var normalized = roman
+            .Replace('І', 'I')  // Cyrillic І (U+0406) → Latin I
+            .Replace('і', 'I')  // Cyrillic і (U+0456) → Latin I
+            .Replace('Х', 'X')  // Cyrillic Х (U+0425) → Latin X
+            .Replace('х', 'X')  // Cyrillic х (U+0445) → Latin X
+            .ToUpperInvariant();
+
+        var values = new Dictionary<char, int>
+        {
+            ['I'] = 1, ['V'] = 5, ['X'] = 10,
+            ['L'] = 50, ['C'] = 100, ['D'] = 500, ['M'] = 1000
+        };
+
+        var result = 0;
+        var prevValue = 0;
+
+        // Process right to left for subtractive notation (IV=4, IX=9, etc.)
+        for (var i = normalized.Length - 1; i >= 0; i--)
+        {
+            if (!values.TryGetValue(normalized[i], out var value))
+                return null; // Invalid character
+
+            if (value < prevValue)
+                result -= value;
+            else
+                result += value;
+
+            prevValue = value;
+        }
+
+        // Sanity check: must be positive and within reasonable range
+        if (result <= 0 || result > 50)
+            return null;
+
+        return result.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
