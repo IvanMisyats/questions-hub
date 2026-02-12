@@ -2157,6 +2157,75 @@ public class PackageParserTests
     }
 
     [Fact]
+    public void Parse_BracketedHandoutOnSameLineAsNumber_QuestionTextOnNextBlock()
+    {
+        // Arrange - Bug reproduction: bracketed handout on same line as question number,
+        // followed by a blank paragraph and question text on the next block.
+        // The bracketed handout is complete on the same line as question number,
+        // so section must reset to QuestionText and subsequent blocks go into Text.
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатковий матеріал: Текст роздатки]"),
+            Block(""),
+            Block("Текст питання після порожнього рядка."),
+            Block("Відповідь: Тестова відповідь. Залік: за змістом.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Текст роздатки");
+        question.Text.Should().Be("Текст питання після порожнього рядка.");
+        question.Answer.Should().Contain("Тестова відповідь");
+        question.AcceptedAnswers.Should().Contain("за змістом");
+    }
+
+    [Fact]
+    public void Parse_BracketedHandoutOnSameLineAsNumber_NoBlankLine_QuestionTextOnNextBlock()
+    {
+        // Arrange - Same as above but without a blank paragraph between handout and question text
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатка: Схема]"),
+            Block("Текст питання без порожнього рядка."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Схема");
+        question.Text.Should().Be("Текст питання без порожнього рядка.");
+    }
+
+    [Fact]
+    public void Parse_BracketedHandoutOnSameLineAsNumber_WithAfterText_StillWorks()
+    {
+        // Arrange - Bracketed handout with question text after closing bracket on same line
+        // e.g., "1. [Роздатка: Table] What is shown?"
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. [Роздатка: Таблиця] Текст питання на тому ж рядку."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Таблиця");
+        question.Text.Should().Be("Текст питання на тому ж рядку.");
+    }
+
+    [Fact]
     public void Parse_MultilineBracketedHandoutSimple_ExtractsQuestionText()
     {
         // Arrange - Simplest multiline case: opening and closing in separate blocks

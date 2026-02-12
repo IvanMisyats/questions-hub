@@ -961,16 +961,16 @@ public class PackageParser
         if (TryExtractBracketedHandout(remainingText, out var handout, out var afterHandout))
         {
             ctx.HandoutMarkerDetectedInCurrentBlock = true;
-            ctx.CurrentSection = ParserSection.Handout;
+
+            // A complete single-line bracket [Роздатка: text] means handout is done,
+            // so section resets to QuestionText. This matches TryProcessBracketedHandout behavior.
+            ctx.CurrentSection = ParserSection.QuestionText;
 
             if (!string.IsNullOrWhiteSpace(handout))
                 question.HandoutText = AppendText(question.HandoutText, TextNormalizer.NormalizeApostrophes(handout)!);
 
             if (!string.IsNullOrWhiteSpace(afterHandout))
-            {
                 question.Text = AppendText(question.Text, TextNormalizer.NormalizeApostrophes(afterHandout)!);
-                ctx.CurrentSection = ParserSection.QuestionText;
-            }
 
             return;
         }
