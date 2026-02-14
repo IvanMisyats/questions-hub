@@ -1461,6 +1461,8 @@ public class PackageParserTests
     [InlineData("Залік: варіант1, варіант2", "варіант1, варіант2")]
     [InlineData("Залік: варіант1 [частина]; варіант2", "варіант1 [частина]; варіант2")]
     [InlineData("Залік:прийнятна відповідь", "прийнятна відповідь")]
+    [InlineData("Зараховується: залік.", "залік.")]
+    [InlineData("Зараховується:прийнятна відповідь", "прийнятна відповідь")]
     public void Parse_AcceptedLabel_ExtractsAcceptedAnswers(string line, string expected)
     {
         // Arrange
@@ -1504,6 +1506,7 @@ public class PackageParserTests
     [Theory]
     [InlineData("Заліки: Симиренки", "Симиренки")]
     [InlineData("Залік (не оголошувати): за прізвищем", "за прізвищем")]
+    [InlineData("Зараховується (не оголошувати): примітка", "примітка")]
     public void Parse_AcceptedLabel_Variants_AreDetected(string line, string expected)
     {
         var blocks = new List<DocBlock>
@@ -1555,6 +1558,26 @@ public class PackageParserTests
         var q = result.Tours[0].Questions[0];
         q.Answer.Should().Be("«Сяйво».");
         q.AcceptedAnswers.Should().Be("The Shining.");
+    }
+
+    [Fact]
+    public void Parse_InlineZarakhovuyetsyaOnSameLineAsAnswer_ExtractsBoth()
+    {
+        // Arrange - "Зараховується:" appears on the same line as the answer
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання"),
+            Block("Відповідь: менора. Зараховується: тримати менору.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("менора.");
+        q.AcceptedAnswers.Should().Be("тримати менору.");
     }
 
     [Fact]

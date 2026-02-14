@@ -91,8 +91,9 @@ public static partial class ParserPatterns
     public static partial Regex AnswerLabel();
 
     // Matches: "Залік: ...", "Заліки: ...", "Залік (не оголошувати): ...", "Залік. ..."
+    // Also matches: "Зараховується: ..." as a synonym
     // Separator can be colon (:) or dot with optional whitespace (.)
-    [GeneratedRegex(@"^\s*Залік(?:и)?(?:\s*\([^)]+\))?\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:Залік(?:и)?|Зараховується)(?:\s*\([^)]+\))?\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AcceptedLabel();
 
     // Separator can be colon (:) or dot with optional whitespace (.)
@@ -901,6 +902,7 @@ public class PackageParser
         [
             "Залік:",
             "Заліки:",
+            "Зараховується:",
             "Незалік:",
             "Не залік:",
             "Не приймається:"
