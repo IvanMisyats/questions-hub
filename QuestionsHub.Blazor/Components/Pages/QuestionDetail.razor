@@ -47,7 +47,19 @@ else
                         </a>
                     </div>
                     <div class="card-body">
-                        <QuestionContent Question="_question" />
+                        @if (_isAdult)
+                        {
+                            <div class="adult-blur-wrapper blurred" data-package-id="@_question.Tour.PackageId">
+                                <div class="adult-reveal-overlay" onclick="revealAdultContent(this)">
+                                    <span>🔞 Вміст 18+. Натисніть, щоб показати.</span>
+                                </div>
+                                <QuestionContent Question="_question" />
+                            </div>
+                        }
+                        else
+                        {
+                            <QuestionContent Question="_question" />
+                        }
                     </div>
                 </div>
             </div>
@@ -61,6 +73,7 @@ else
 
     private Question? _question;
     private bool _notFound;
+    private bool _isAdult;
 
     protected override async Task OnInitializedAsync()
     {
@@ -69,6 +82,7 @@ else
             .Include(q => q.Authors)
             .Include(q => q.Tour)
                 .ThenInclude(t => t.Package)
+                    .ThenInclude(p => p.Tags)
             .FirstOrDefaultAsync(q => q.Id == Id);
 
         if (_question == null)
@@ -83,6 +97,10 @@ else
         {
             _question = null;
             _notFound = true;
+            return;
         }
+
+        // Check if the package has 18+ content tag
+        _isAdult = TagService.IsAdultContent(_question.Tour.Package.Tags);
     }
 }

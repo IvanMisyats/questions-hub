@@ -76,76 +76,85 @@
                                 </a>
                             </div>
                             <div class="card-body">
-                                @* Handout if present *@
-                                @if (!string.IsNullOrEmpty(result.HandoutText))
-                                {
-                                    <div class="handout mb-3">
-                                        <strong>Роздатковий матеріал:</strong>
-                                        <div>@Sanitize(result.HandoutTextHighlighted, result.HandoutText, _searchedQuery)</div>
+                                <div class="@(result.IsAdult ? "adult-blur-wrapper blurred" : "")" data-package-id="@result.PackageId">
+                                    @if (result.IsAdult)
+                                    {
+                                        <div class="adult-reveal-overlay" onclick="revealAdultContent(this)">
+                                            <span>🔞 Вміст 18+. Натисніть, щоб показати.</span>
+                                        </div>
+                                    }
+
+                                    @* Handout if present *@
+                                    @if (!string.IsNullOrEmpty(result.HandoutText))
+                                    {
+                                        <div class="handout mb-3">
+                                            <strong>Роздатковий матеріал:</strong>
+                                            <div>@Sanitize(result.HandoutTextHighlighted, result.HandoutText, _searchedQuery)</div>
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(result.HandoutUrl))
+                                    {
+                                        <div class="handout mb-3">
+                                            <strong>Роздатковий матеріал:</strong>
+                                            <MediaDisplay Url="@result.HandoutUrl" Alt="Handout" />
+                                        </div>
+                                    }
+
+                                    @* Full question text *@
+                                    <div class="question-text mb-3">
+                                        @Sanitize(result.TextHighlighted, result.Text, _searchedQuery)
                                     </div>
-                                }
 
-                                @if (!string.IsNullOrEmpty(result.HandoutUrl))
-                                {
-                                    <div class="handout mb-3">
-                                        <strong>Роздатковий матеріал:</strong>
-                                        <MediaDisplay Url="@result.HandoutUrl" Alt="Handout" />
+                                    @* Answer section *@
+                                    <div class="answer-section">
+                                        <div class="answer-field">
+                                            <span class="answer-label">Відповідь:</span> @Sanitize(result.AnswerHighlighted, result.Answer, _searchedQuery)
+                                        </div>
+
+                                        @if (!string.IsNullOrEmpty(result.AcceptedAnswers))
+                                        {
+                                            <div class="answer-field">
+                                                <span class="answer-label">Залік:</span> @Sanitize(result.AcceptedAnswersHighlighted, result.AcceptedAnswers, _searchedQuery)
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(result.RejectedAnswers))
+                                        {
+                                            <div class="answer-field">
+                                                <span class="answer-label">Незалік:</span> @Sanitize(result.RejectedAnswersHighlighted, result.RejectedAnswers, _searchedQuery)
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(result.Comment))
+                                        {
+                                            <div class="answer-field">
+                                                <span class="answer-label">Коментар:</span> @Sanitize(result.CommentHighlighted, result.Comment, _searchedQuery)
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(result.CommentAttachmentUrl))
+                                        {
+                                            <div class="answer-field">
+                                                <span class="answer-label">Матеріал до коментаря:</span>
+                                                <MediaDisplay Url="@result.CommentAttachmentUrl" Alt="Comment attachment" />
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(result.Source))
+                                        {
+                                            <div class="answer-field source-field">
+                                                <span class="answer-label">Джерело:</span> @Linkify(Sanitize(result.SourceHighlighted, result.Source, _searchedQuery))
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(result.Authors))
+                                        {
+                                            <div class="answer-field">
+                                                <span class="answer-label">Автор(и):</span> <span class="authors-list">@foreach (var (authorId, authorName, isLast) in ParseAuthors(result.Authors)){<a href="/editor/@authorId">@authorName</a>@(isLast ? "" : ", ")}</span>
+                                            </div>
+                                        }
                                     </div>
-                                }
-
-                                @* Full question text *@
-                                <div class="question-text mb-3">
-                                    @Sanitize(result.TextHighlighted, result.Text, _searchedQuery)
-                                </div>
-
-                                @* Answer section *@
-                                <div class="answer-section">
-                                    <div class="answer-field">
-                                        <span class="answer-label">Відповідь:</span> @Sanitize(result.AnswerHighlighted, result.Answer, _searchedQuery)
-                                    </div>
-
-                                    @if (!string.IsNullOrEmpty(result.AcceptedAnswers))
-                                    {
-                                        <div class="answer-field">
-                                            <span class="answer-label">Залік:</span> @Sanitize(result.AcceptedAnswersHighlighted, result.AcceptedAnswers, _searchedQuery)
-                                        </div>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(result.RejectedAnswers))
-                                    {
-                                        <div class="answer-field">
-                                            <span class="answer-label">Незалік:</span> @Sanitize(result.RejectedAnswersHighlighted, result.RejectedAnswers, _searchedQuery)
-                                        </div>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(result.Comment))
-                                    {
-                                        <div class="answer-field">
-                                            <span class="answer-label">Коментар:</span> @Sanitize(result.CommentHighlighted, result.Comment, _searchedQuery)
-                                        </div>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(result.CommentAttachmentUrl))
-                                    {
-                                        <div class="answer-field">
-                                            <span class="answer-label">Матеріал до коментаря:</span>
-                                            <MediaDisplay Url="@result.CommentAttachmentUrl" Alt="Comment attachment" />
-                                        </div>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(result.Source))
-                                    {
-                                        <div class="answer-field source-field">
-                                            <span class="answer-label">Джерело:</span> @Linkify(Sanitize(result.SourceHighlighted, result.Source, _searchedQuery))
-                                        </div>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(result.Authors))
-                                    {
-                                        <div class="answer-field">
-                                            <span class="answer-label">Автор(и):</span> <span class="authors-list">@foreach (var (authorId, authorName, isLast) in ParseAuthors(result.Authors)){<a href="/editor/@authorId">@authorName</a>@(isLast ? "" : ", ")}</span>
-                                        </div>
-                                    }
                                 </div>
                             </div>
                         </div>

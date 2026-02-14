@@ -23,13 +23,31 @@
         </button>
     </div>
 
-    <QuestionContent Question="Question" ShowAnswer="false">
-        <div class="answer-toggle-section">
-            <button class="btn btn-link answer-toggle p-0" onclick="toggleAnswer(this)">
-                Показати відповідь
-            </button>
+    @if (IsBlurred)
+    {
+        <div class="adult-blur-wrapper blurred" data-package-id="@Question.Tour?.PackageId">
+            <div class="adult-reveal-overlay" onclick="revealAdultContent(this)">
+                <span>🔞 Вміст 18+. Натисніть, щоб показати.</span>
+            </div>
+            <QuestionContent Question="Question" ShowAnswer="false">
+                <div class="answer-toggle-section">
+                    <button class="btn btn-link answer-toggle p-0" onclick="toggleAnswer(this)">
+                        Показати відповідь
+                    </button>
+                </div>
+            </QuestionContent>
         </div>
-    </QuestionContent>
+    }
+    else
+    {
+        <QuestionContent Question="Question" ShowAnswer="false">
+            <div class="answer-toggle-section">
+                <button class="btn btn-link answer-toggle p-0" onclick="toggleAnswer(this)">
+                    Показати відповідь
+                </button>
+            </div>
+        </QuestionContent>
+    }
 </div>
 
 @code {
@@ -41,4 +59,10 @@
     /// </summary>
     [Parameter]
     public bool ShowFullHeader { get; set; }
+
+    /// <summary>
+    /// When true, blurs question content with a click-to-reveal overlay (for 18+ packages).
+    /// </summary>
+    [Parameter]
+    public bool IsBlurred { get; set; }
 }

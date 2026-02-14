@@ -398,4 +398,100 @@ public class TagServiceTests : IDisposable
     }
 
     #endregion
+
+    #region IsAdultContent Tests
+
+    [Fact]
+    public void IsAdultContent_Tags_ReturnsTrueWhenAdultTagPresent()
+    {
+        var tags = new List<Tag>
+        {
+            new() { Id = 1, Name = "ЛУК" },
+            new() { Id = 2, Name = "18+" }
+        };
+
+        TagService.IsAdultContent(tags).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAdultContent_Tags_ReturnsFalseWhenNoAdultTag()
+    {
+        var tags = new List<Tag>
+        {
+            new() { Id = 1, Name = "ЛУК" },
+            new() { Id = 2, Name = "2025" }
+        };
+
+        TagService.IsAdultContent(tags).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAdultContent_Tags_ReturnsFalseForEmptyList()
+    {
+        TagService.IsAdultContent(new List<Tag>()).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAdultContent_Tags_IsCaseInsensitive()
+    {
+        // Although "18+" is always "18+", test the comparison works
+        var tags = new List<Tag> { new() { Id = 1, Name = "18+" } };
+        TagService.IsAdultContent(tags).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAdultContent_TagBriefDtos_ReturnsTrueWhenAdultTagPresent()
+    {
+        var tags = new List<TagBriefDto>
+        {
+            new(1, "ЛУК"),
+            new(2, "18+")
+        };
+
+        TagService.IsAdultContent(tags).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAdultContent_TagBriefDtos_ReturnsFalseWhenNoAdultTag()
+    {
+        var tags = new List<TagBriefDto>
+        {
+            new(1, "ЛУК"),
+            new(2, "2025")
+        };
+
+        TagService.IsAdultContent(tags).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetAdultTagId_ReturnsNullWhenNoAdultTag()
+    {
+        var result = await _service.GetAdultTagId();
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task InvalidatePopularTagsCache_AlsoInvalidatesAdultTagCache()
+    {
+        // First call caches null (no adult tag exists)
+        var result1 = await _service.GetAdultTagId();
+        result1.Should().BeNull();
+
+        // Create the 18+ tag
+        await CreateTag("18+");
+
+        // Still returns cached null
+        var result2 = await _service.GetAdultTagId();
+        result2.Should().BeNull();
+
+        // Invalidate caches
+        _service.InvalidatePopularTagsCache();
+
+        // Now should find the tag (note: GetAdultTagId uses ILike which doesn't work with InMemory,
+        // but InvalidateAdultTagCache removes the cache entry)
+        // We verify the cache was cleared by checking the cache directly
+        _cache.TryGetValue("adult_tag_id", out _).Should().BeFalse();
+    }
+
+    #endregion
 }

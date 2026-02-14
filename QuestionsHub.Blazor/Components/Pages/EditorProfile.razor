@@ -171,7 +171,7 @@
                 {
                     @foreach (var question in _questionsList)
                     {
-                        <QuestionCard Question="@question" ShowFullHeader="true" />
+                        <QuestionCard Question="@question" ShowFullHeader="true" IsBlurred="TagService.IsAdultContent(question.Tour.Package.Tags)" />
                     }
                     @if (_hasMoreQuestions)
                     {
@@ -360,6 +360,7 @@
                 .Include(q => q.Authors)
                 .Include(q => q.Tour)
                     .ThenInclude(t => t.Package)
+                        .ThenInclude(p => p.Tags)
                 .OrderByDescending(q => q.Tour.PackageId)
                 .ThenBy(q => q.Tour.Number)
                 .ThenBy(q => q.OrderIndex)

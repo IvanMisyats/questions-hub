@@ -33,7 +33,8 @@ public record SearchResult(
     string? CommentHighlighted,
     string? SourceHighlighted,
     double Rank,
-    string? Authors
+    string? Authors,
+    bool IsAdult
 );
 
 /// <summary>
@@ -128,7 +129,13 @@ public class SearchService
                     (SELECT string_agg(a.""Id""::text || ':' || a.""FirstName"" || ' ' || a.""LastName"", '|' ORDER BY a.""LastName"", a.""FirstName"")
                      FROM ""QuestionAuthors"" qa
                      JOIN ""Authors"" a ON qa.""AuthorsId"" = a.""Id""
-                     WHERE qa.""QuestionsId"" = qu.""Id"") AS ""Authors""
+                     WHERE qa.""QuestionsId"" = qu.""Id"") AS ""Authors"",
+                    EXISTS (
+                        SELECT 1 FROM ""PackageTags"" pt
+                        JOIN ""Tags"" tg ON pt.""TagsId"" = tg.""Id""
+                        WHERE pt.""PackagesId"" = p.""Id""
+                          AND tg.""Name"" = '18+'
+                    ) AS ""IsAdult""
                 FROM ""Questions"" qu
                 JOIN ""Tours"" t ON qu.""TourId"" = t.""Id""
                 JOIN ""Packages"" p ON t.""PackageId"" = p.""Id""

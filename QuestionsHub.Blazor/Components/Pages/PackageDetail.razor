@@ -99,6 +99,16 @@ else
                     }
                 </div>
 
+                @if (_isAdult)
+                {
+                    <div class="adult-package-banner" id="adult-banner" data-package-id="@_package.Id">
+                        🔞 Цей пакет містить контент 18+.
+                        <button class="btn btn-outline-dark btn-sm" onclick="revealAllAdultContent()">
+                            Мені є 18 років, показати вміст
+                        </button>
+                    </div>
+                }
+
                 <hr class="my-4" />
 
                 @{
@@ -146,7 +156,7 @@ else
                                     @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" />
                                         </div>
                                     }
                                 </div>
@@ -160,7 +170,7 @@ else
                                     @foreach (var question in orphanQuestions)
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" />
                                         </div>
                                     }
                                 </div>
@@ -198,7 +208,7 @@ else
                             @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                             {
                                 <div id="question-@question.Id">
-                                    <QuestionCard Question="@question" />
+                                    <QuestionCard Question="@question" IsBlurred="_isAdult" />
                                 </div>
                             }
                         }
@@ -216,6 +226,7 @@ else
     private Package? _package;
     private bool _notFound;
     private bool _canEdit;
+    private bool _isAdult;
 
     protected override async Task OnInitializedAsync()
     {
@@ -250,6 +261,9 @@ else
 
         // Check if the current user can edit the package
         _canEdit = await AccessControl.CanEditPackage(_package);
+
+        // Check if the package has 18+ content tag
+        _isAdult = TagService.IsAdultContent(_package.Tags);
 
         // Sort tours by Number, blocks by OrderIndex, and questions by OrderIndex
         _package.Tours = _package.Tours

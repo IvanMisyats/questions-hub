@@ -15,12 +15,73 @@ public class TagService
     private readonly IMemoryCache _cache;
 
     private const string PopularTagsCacheKey = "popular_tags";
+    private const string AdultTagIdCacheKey = "adult_tag_id";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
+    private static readonly TimeSpan AdultTagCacheDuration = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// The canonical name of the adult content tag.
+    /// </summary>
+    public const string AdultTagName = "18+";
 
     public TagService(IDbContextFactory<QuestionsHubDbContext> dbContextFactory, IMemoryCache cache)
     {
         _dbContextFactory = dbContextFactory;
         _cache = cache;
+    }
+
+    /// <summary>
+    /// Returns the cached ID of the "18+" tag, or null if no such tag exists.
+    /// The result is cached for 24 hours. Call <see cref="InvalidateAdultTagCache"/> after tag modifications.
+    /// </summary>
+    public async Task<int?> GetAdultTagId(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(AdultTagIdCacheKey, out int? cached))
+        {
+            return cached;
+        }
+
+        await using var context = await _dbContextFactory.CreateDbContextAsync(ct);
+
+        var tagId = await context.Tags
+            .AsNoTracking()
+            .Where(t => EF.Functions.ILike(t.Name, AdultTagName))
+            .Select(t => (int?)t.Id)
+            .FirstOrDefaultAsync(ct);
+
+        _cache.Set(AdultTagIdCacheKey, tagId, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = AdultTagCacheDuration
+        });
+
+        return tagId;
+    }
+
+    /// <summary>
+    /// Checks whether a list of tags contains the adult content tag.
+    /// Uses name comparison (case-insensitive) for in-memory checks.
+    /// </summary>
+    public static bool IsAdultContent(IEnumerable<Tag> tags)
+    {
+        return tags.Any(t => t.Name.Equals(AdultTagName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Checks whether a list of tag DTOs contains the adult content tag.
+    /// Uses name comparison (case-insensitive) for in-memory checks.
+    /// </summary>
+    public static bool IsAdultContent(IEnumerable<TagBriefDto> tags)
+    {
+        return tags.Any(t => t.Name.Equals(AdultTagName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Invalidates the adult tag ID cache.
+    /// Should be called when tags are created, renamed, or deleted.
+    /// </summary>
+    public void InvalidateAdultTagCache()
+    {
+        _cache.Remove(AdultTagIdCacheKey);
     }
 
     /// <summary>
@@ -87,6 +148,7 @@ public class TagService
     public void InvalidatePopularTagsCache()
     {
         _cache.Remove(PopularTagsCacheKey);
+        _cache.Remove(AdultTagIdCacheKey);
     }
 
     /// <summary>
