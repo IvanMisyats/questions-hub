@@ -2742,6 +2742,8 @@
 
         await using var context = await DbContextFactory.CreateDbContextAsync();
         var reloadedPackage = await context.Packages
+            .Include(p => p.PackageEditors)
+            .Include(p => p.Tags)
             .Include(p => p.Tours)
                 .ThenInclude(t => t.Editors)
             .Include(p => p.Tours)
