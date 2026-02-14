@@ -1404,6 +1404,99 @@ public class PackageParserTests
         result.Tours[0].Questions[1].Number.Should().Be("2");
     }
 
+    [Fact]
+    public void Parse_QuestionAfterEmptySource_NotSwallowedIntoSource()
+    {
+        // Arrange - Empty "Джерело:" followed by next question should not
+        // cause the next question to be swallowed as source content.
+        // Regression test for the bug where Source-section guard blocked valid questions.
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("Джерело:"),
+            Block(""),
+            Block("2. Друге питання"),
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[0].Number.Should().Be("1");
+        result.Tours[0].Questions[0].Source.Should().BeEmpty();
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+        result.Tours[0].Questions[1].Text.Should().Contain("Друге питання");
+    }
+
+    [Fact]
+    public void Parse_QuestionAfterEmptySourceWithBlankLines_GlobalNumbering()
+    {
+        // Arrange - Global numbering across tours.
+        // Question 2 has empty source, question 3 should still be detected.
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Питання перше"),
+            Block("Відповідь: Перша"),
+            Block("Автор: Тест"),
+            Block("2. Питання друге"),
+            Block("Відповідь: Друга"),
+            Block("Коментар: Тестовий коментар"),
+            Block("Джерело:"),
+            Block(""),
+            Block(" "),
+            Block(""),
+            Block("3. Третє питання"),
+            Block("Відповідь: Третя")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var questions = result.Tours[0].Questions;
+        questions.Should().HaveCount(3);
+        questions[0].Number.Should().Be("1");
+        questions[1].Number.Should().Be("2");
+        questions[1].Source.Should().BeEmpty();
+        questions[2].Number.Should().Be("3");
+        questions[2].Text.Should().Contain("Третє питання");
+    }
+
+    [Fact]
+    public void Parse_NumberedSourceList_StillBlockedWhenNotExpectedNumber()
+    {
+        // Arrange - Numbered list items in source (1., 2., 3.) should still
+        // be rejected as question starts when they don't match expected next question.
+        // Here expected next is 2, but source uses 1. and 3. which don't match.
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Перше питання"),
+            Block("Відповідь: Перша"),
+            Block("Джерело:"),
+            Block("1. https://source-one.com"),
+            Block("3. https://source-three.com"),
+            Block("Автор: Тест"),
+            Block("2. Друге питання"),
+            Block("Відповідь: Друга")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+        var question1 = result.Tours[0].Questions[0];
+        question1.Source.Should().Contain("https://source-one.com");
+        question1.Source.Should().Contain("https://source-three.com");
+        result.Tours[0].Questions[1].Number.Should().Be("2");
+    }
+
     #endregion
 
     #region Answer Parsing

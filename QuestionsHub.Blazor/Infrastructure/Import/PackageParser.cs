@@ -643,9 +643,11 @@ public class PackageParser
 
         // Context-based validation: don't allow "N." pattern in Source section
         // This prevents numbered list items in sources from being parsed as questions
-        // But allow if it's in Authors section (which typically ends a question)
+        // But allow through if the number matches the expected next question
+        // (e.g., after an empty "Джерело:" label, the next question should still be detected)
         if (detectedFormat == QuestionFormat.Numbered &&
-            ctx.CurrentSection == ParserSection.Source)
+            ctx.CurrentSection == ParserSection.Source &&
+            !IsExpectedNextQuestionNumber(questionNumber, ctx))
         {
             ProcessAsRegularContent(line, ctx);
             return true;
@@ -1382,6 +1384,25 @@ public class PackageParser
         ctx.Mode = mode;
 
         return result;
+    }
+
+    /// <summary>
+    /// Non-mutating peek: checks if the question number would be accepted
+    /// by <see cref="IsValidNextQuestionNumber(string, ParserContext)"/>
+    /// without changing context state. Used for early guards that need to
+    /// distinguish genuine next-question numbers from numbered list items.
+    /// </summary>
+    private static bool IsExpectedNextQuestionNumber(string questionNumberStr, ParserContext ctx)
+    {
+        var expectedInTour = ctx.ExpectedNextQuestionInTour;
+        var expectedGlobal = ctx.ExpectedNextQuestionGlobal;
+        var mode = ctx.Mode;
+
+        return IsValidNextQuestionNumber(
+            questionNumberStr,
+            ref expectedInTour,
+            ref expectedGlobal,
+            ref mode);
     }
 
     /// <summary>
