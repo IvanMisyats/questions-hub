@@ -44,6 +44,10 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s*№\s*(\d+)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex TourNumberSignStart();
 
+    // Matches: "Тур №1 — Назва", "ТУР №2. Автори" (with № sign and preamble after separator)
+    [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s*№\s*(\d+)[\.:,]?\s+[-–—.]?\s*(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex TourNumberSignStartWithPreamble();
+
     // Matches: "ТУР III", "Тур ІІ", "ТУР ІІІ" (Roman numerals, including Cyrillic І/Х lookalikes)
     // Character class includes both Latin (I, V, X, L, C, D, M) and Cyrillic lookalikes (І/і U+0456, Х/х U+0425/0445)
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+([IІVXХLCDMіivxхlcdm]+)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
@@ -1462,6 +1466,15 @@ public class PackageParser
         {
             tourNumber = preambleMatch.Groups[1].Value;
             preamble = preambleMatch.Groups[2].Value.Trim();
+            return true;
+        }
+
+        // Try № sign with preamble: "Тур №1 — Автор", "ТУР №2. Назва"
+        var numberSignPreambleMatch = ParserPatterns.TourNumberSignStartWithPreamble().Match(text);
+        if (numberSignPreambleMatch.Success)
+        {
+            tourNumber = numberSignPreambleMatch.Groups[1].Value;
+            preamble = numberSignPreambleMatch.Groups[2].Value.Trim();
             return true;
         }
 

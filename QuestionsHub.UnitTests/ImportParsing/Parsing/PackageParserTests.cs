@@ -269,6 +269,10 @@ public class PackageParserTests
     [InlineData("Тур 3: Фізлірики", "3", "Фізлірики")]
     [InlineData("ТУР 1. НАЗВА ТУРУ", "1", "НАЗВА ТУРУ")]
     [InlineData("Tour 2. Physics", "2", "Physics")]
+    [InlineData("Тур №1 — Станіслав Мерлян, Сергій Рева", "1", "Станіслав Мерлян, Сергій Рева")]
+    [InlineData("ТУР №3 — Сергій Рева", "3", "Сергій Рева")]
+    [InlineData("Тур №2. Назва туру", "2", "Назва туру")]
+    [InlineData("Тур № 4 – Автори", "4", "Автори")]
     public void Parse_TourStartWithPreamble_DetectsTourAndPreamble(string tourLine, string expectedNumber, string expectedPreamble)
     {
         // Arrange
