@@ -222,6 +222,16 @@ h1:focus {
     display: none !important;
 }
 
+/* Clickable tag badges on package cards */
+.package-tag[data-tag-id] {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.package-tag[data-tag-id]:hover {
+    opacity: 0.8;
+}
+
 #tag-expand-btn:focus,
 #tag-expand-btn:focus-visible {
     box-shadow: none;

@@ -60,6 +60,7 @@
         setupResetFiltersButton();
         setupTagButtons();
         setupTagExpandButton();
+        setupPackageTagClicks();
         updateTagVisibility();
 
         // Handle browser back/forward (only add once)
@@ -453,7 +454,7 @@
         const tagsHtml = pkg.tags && pkg.tags.length > 0
             ? `<div class="d-flex flex-wrap gap-1 mt-2">
                 ${pkg.tags.map(tag => 
-                    `<span class="badge rounded-pill bg-primary">${escapeHtml(tag.name)}</span>`
+                    `<span class="badge rounded-pill bg-primary package-tag" data-tag-id="${tag.id}">${escapeHtml(tag.name)}</span>`
                 ).join('')}
                </div>`
             : '';
@@ -817,6 +818,33 @@
         });
 
         editorList.innerHTML = html;
+    }
+
+    /**
+     * Sets up click handlers on tag badges within package cards.
+     * Clicking a tag filters the package list by that tag.
+     */
+    function setupPackageTagClicks() {
+        const container = document.getElementById('packages-container') || document.getElementById('packages-section');
+        if (!container || container._hfPackageTagInit) return;
+        container._hfPackageTagInit = true;
+
+        container.addEventListener('click', function (e) {
+            const tagEl = e.target.closest('.package-tag[data-tag-id]');
+            if (!tagEl) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const tagId = parseInt(tagEl.dataset.tagId);
+            if (isNaN(tagId)) return;
+
+            state.tagId = tagId;
+            state.tagName = tagEl.textContent.trim();
+            state.page = 1;
+            updateTagButtons();
+            fetchAndRenderPackages();
+        });
     }
 
     /**

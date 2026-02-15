@@ -224,7 +224,7 @@
                                         <div class="d-flex flex-wrap gap-1 mt-2">
                                             @foreach (var tag in package.Tags)
                                             {
-                                                <span class="badge rounded-pill bg-primary">@tag.Name</span>
+                                                <span class="badge rounded-pill bg-primary package-tag" data-tag-id="@tag.Id">@tag.Name</span>
                                             }
                                         </div>
                                     }                                </div>
