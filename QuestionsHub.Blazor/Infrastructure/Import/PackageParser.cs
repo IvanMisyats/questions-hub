@@ -28,11 +28,12 @@ public static partial class ParserPatterns
     // Matches Ukrainian ordinal tour names: "Перший тур", "Другий тур", etc. (1-9)
     // Explicitly includes both cases since IgnoreCase may not work reliably with Cyrillic
     // Uses character class [''ʼ] to match different apostrophe variants (', ', ʼ)
-    [GeneratedRegex(@"^\s*([ПпДдТтЧчШшСсВв][''ʼА-яі]+)\s+[Тт][Уу][Рр]\s*$")]
+    // А-я covers standard Cyrillic; ІіЇїЄєҐґ adds Ukrainian-specific letters outside that range
+    [GeneratedRegex(@"^\s*([ПпДдТтЧчШшСсВв][''ʼА-яІіЇїЄєҐґ]+)\s+[Тт][Уу][Рр]\s*$")]
     public static partial Regex OrdinalTourStart();
 
     // Matches reversed format: "Тур перший", "Тур другий", etc. (1-9)
-    [GeneratedRegex(@"^\s*[Тт][Уу][Рр]\s+([ПпДдТтЧчШшСсВв][''ʼА-яі]+)\s*$")]
+    [GeneratedRegex(@"^\s*[Тт][Уу][Рр]\s+([ПпДдТтЧчШшСсВв][''ʼА-яІіЇїЄєҐґ]+)\s*$")]
     public static partial Regex TourOrdinalStart();
 
     // Matches: "1 Тур", "2 тур", "3 ТУР" (number before word "Тур")
@@ -406,6 +407,18 @@ public class PackageParser
 
         // Associate any remaining assets at the end of block processing
         AssociateBlockAssets(block.Assets, ctx);
+
+        // When in Handout section (entered via label, not brackets) and the block contained
+        // image assets that were associated as handout — the image IS the handout content.
+        // Transition to QuestionText so subsequent blocks become question text, not handout.
+        if (ctx.CurrentSection == ParserSection.Handout &&
+            !ctx.InsideMultilineHandoutBracket &&
+            block.Assets.Count > 0 &&
+            ctx.HasCurrentQuestion &&
+            ctx.CurrentQuestion!.HandoutAssetFileName != null)
+        {
+            ctx.CurrentSection = ParserSection.QuestionText;
+        }
     }
 
     /// <summary>

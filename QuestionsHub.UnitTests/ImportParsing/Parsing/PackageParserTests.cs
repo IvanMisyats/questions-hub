@@ -87,6 +87,9 @@ public class PackageParserTests
     [InlineData("Восьмий тур", "8")]
     [InlineData("Дев'ятий тур", "9")]
     [InlineData("ПЕРШИЙ ТУР", "1")]  // Case insensitive
+    [InlineData("ТРЕТІЙ ТУР", "3")]  // Uppercase with Ukrainian І (U+0406)
+    [InlineData("П'ЯТИЙ ТУР", "5")]  // Uppercase with apostrophe
+    [InlineData("ДЕВ'ЯТИЙ ТУР", "9")]  // Uppercase with apostrophe
     [InlineData("  Другий тур  ", "2")]  // With whitespace
     public void Parse_OrdinalTourStart_DetectsTour(string tourLine, string expectedNumber)
     {
@@ -114,6 +117,7 @@ public class PackageParserTests
     [InlineData("Тур другий", "2")]
     [InlineData("Тур третій", "3")]
     [InlineData("ТУР ЧЕТВЕРТИЙ", "4")]  // Case insensitive
+    [InlineData("ТУР ТРЕТІЙ", "3")]  // Uppercase with Ukrainian І (U+0406)
     [InlineData("тур п'ятий", "5")]
     public void Parse_TourOrdinalStart_DetectsTour(string tourLine, string expectedNumber)
     {
@@ -2688,6 +2692,158 @@ public class PackageParserTests
         question.HandoutText.Should().Contain("Рядок роздатки один");
         question.HandoutText.Should().Contain("Рядок роздатки два");
         question.Text.Should().Be("Текст запитання після роздатки.");
+    }
+
+    /// <summary>
+    /// Handout label on same line as question number, image asset in a separate block, then question text.
+    /// Format:
+    /// 1. Роздатковий матеріал:
+    /// [empty block with image asset]
+    /// Question text
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutLabelWithImageAssetInSeparateBlock_ShouldExtractAssetAndQuestionText()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "image001.png",
+            RelativeUrl = "/media/image001.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Роздатковий матеріал:"),
+            Block("", [imageAsset]),
+            Block("Текст запитання після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutAssetFileName.Should().Be("image001.png");
+        question.HandoutText.Should().BeNullOrEmpty();
+        question.Text.Should().Be("Текст запитання після роздатки.");
+        question.Answer.Should().Be("Тест");
+    }
+
+    /// <summary>
+    /// Handout label on its own block, image asset attached to the label block, then question text.
+    /// Format:
+    /// Запитання 1
+    /// Роздатковий матеріал: [block has image asset]
+    /// Question text
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutLabelWithImageAssetInSameBlock_ShouldExtractAssetAndQuestionText()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "image002.png",
+            RelativeUrl = "/media/image002.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1"),
+            Block("Роздатковий матеріал:", [imageAsset]),
+            Block("Текст запитання після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutAssetFileName.Should().Be("image002.png");
+        question.HandoutText.Should().BeNullOrEmpty();
+        question.Text.Should().Be("Текст запитання після роздатки.");
+        question.Answer.Should().Be("Тест");
+    }
+
+    /// <summary>
+    /// Handout label with text on same line as question number, image asset in next block, then question text.
+    /// Format:
+    /// 1. Роздатковий матеріал: Заповніть пропуски
+    /// [empty block with image asset]
+    /// Question text
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutLabelWithTextAndImageAsset_ShouldExtractBothAndQuestionText()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "image003.png",
+            RelativeUrl = "/media/image003.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Роздатковий матеріал: Заповніть пропуски"),
+            Block("", [imageAsset]),
+            Block("Чому саме так?"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutText.Should().Be("Заповніть пропуски");
+        question.HandoutAssetFileName.Should().Be("image003.png");
+        question.Text.Should().Be("Чому саме так?");
+        question.Answer.Should().Be("Тест");
+    }
+
+    /// <summary>
+    /// Short-form "Роздатка:" label with image asset in next block, then question text.
+    /// Format:
+    /// 1. Роздатка:
+    /// [empty block with image asset]
+    /// Question text
+    /// </summary>
+    [Fact]
+    public void Parse_RozdatkaLabelWithImageAsset_ShouldExtractAssetAndQuestionText()
+    {
+        // Arrange
+        var imageAsset = new AssetReference
+        {
+            FileName = "image004.png",
+            RelativeUrl = "/media/image004.png",
+            ContentType = "image/png"
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("1. Роздатка:"),
+            Block("", [imageAsset]),
+            Block("Текст запитання."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.HandoutAssetFileName.Should().Be("image004.png");
+        question.HandoutText.Should().BeNullOrEmpty();
+        question.Text.Should().Be("Текст запитання.");
+        question.Answer.Should().Be("Тест");
     }
 
     #endregion
