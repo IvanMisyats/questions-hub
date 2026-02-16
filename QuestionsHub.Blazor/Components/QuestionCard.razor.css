@@ -4,6 +4,7 @@
     border: 1px solid var(--app-border-light);
     border-radius: 0.5rem;
     background: var(--app-card-bg);
+    overflow-wrap: anywhere;
 }
 
 .question-header {
