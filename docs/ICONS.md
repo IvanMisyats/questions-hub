@@ -33,6 +33,8 @@ The following icons are available in the sprite file:
 | `i-sun` | sun, light | Sun icon for light theme indicator |
 | `i-moon` | moon, dark | Moon icon for dark theme indicator |
 | `i-download` | download, export | Download / export file |
+| `i-eye` | eye, show, visible | Eye icon for show/visible state |
+| `i-eye-slash` | eye-slash, hide, hidden | Eye with slash for hide/hidden state |
 
 ## Usage
 
