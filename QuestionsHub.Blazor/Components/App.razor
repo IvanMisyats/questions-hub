@@ -1,12 +1,11 @@
 ﻿<!DOCTYPE html>
 <html lang="uk">
 
-@inject QuestionsHub.Blazor.Infrastructure.IconSpriteVersionService SpriteVersion
-
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <base href="/"/>
+    <ImportMap />
     <script>
         (function() {
             const stored = localStorage.getItem('theme');
@@ -17,28 +16,25 @@
     </script>
     <HeadOutlet/>
     <title>База українських запитань</title>
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css"/>
-    <link rel="stylesheet" href="app.css"/>
-    <link rel="stylesheet" href="QuestionsHub.Blazor.styles.css"/>
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]"/>
+    <link rel="stylesheet" href="@Assets["app.css"]"/>
+    <link rel="stylesheet" href="@Assets["QuestionsHub.Blazor.styles.css"]"/>
     <link rel="icon" type="image/x-icon" href="favicon.ico"/>
     <link rel="apple-touch-icon" href="images/icon.png"/>
 </head>
 
 <body>
 <Routes/>
-@{
-    var iconsSvgUrl = SpriteVersion.SpriteUrl;
-}
-<script>window.__iconsSvgUrl = '@iconsSvgUrl';</script>
-<script src="lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script>window.__iconsSvgUrl = '@Assets["icons.svg"]';</script>
+<script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
-<script src="sortable-interop.js"></script>
-<script src="navigation.js"></script>
-<script src="question-card.js"></script>
-<script src="adult-content.js"></script>
+<script src="@Assets["sortable-interop.js"]"></script>
+<script src="@Assets["navigation.js"]"></script>
+<script src="@Assets["question-card.js"]"></script>
+<script src="@Assets["adult-content.js"]"></script>
 <script src="_framework/blazor.web.js"></script>
-<script src="theme.js"></script>
-<script src="date-formatter.js"></script>
+<script src="@Assets["theme.js"]"></script>
+<script src="@Assets["date-formatter.js"]"></script>
 </body>
 
 </html>

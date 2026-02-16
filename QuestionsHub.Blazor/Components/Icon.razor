@@ -3,12 +3,10 @@
     Usage: <Icon Name="search" Class="text-muted me-2" Size="20" />
 *@
 
-@inject QuestionsHub.Blazor.Infrastructure.IconSpriteVersionService SpriteVersion
-
 @{
     var symbolId = GetSymbolId(Name);
     var cssClass = string.IsNullOrEmpty(Class) ? "icon" : $"icon {Class}";
-    var spriteUrl = SpriteVersion.SpriteUrl;
+    var spriteUrl = Assets["icons.svg"];
 }
 
 @if (!string.IsNullOrEmpty(Title))

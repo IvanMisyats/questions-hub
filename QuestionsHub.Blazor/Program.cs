@@ -47,7 +47,7 @@ internal static class ServiceCollectionExtensions
     {
         services.AddRazorComponents().AddInteractiveServerComponents();
         services.AddControllers();
-        services.AddSingleton<IconSpriteVersionService>();
+
         services.AddHttpContextAccessor();
         services.AddHttpClient();
         services.AddLocalization();
@@ -226,7 +226,6 @@ internal static class ApplicationExtensions
             SupportedUICultures = supportedCultures
         });
 
-        app.UseStaticFiles();
         app.ConfigureMediaFileServing();
 
         app.UseRouting();
@@ -234,6 +233,7 @@ internal static class ApplicationExtensions
         app.UseAuthorization();
         app.UseAntiforgery();
 
+        app.MapStaticAssets();
         app.MapControllers();
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
