@@ -204,7 +204,9 @@ public class QhubExtractor
         {
             Number = qhubTour.Number ?? (index + 1).ToString(),
             OrderIndex = index,
-            IsWarmup = qhubTour.IsWarmup ?? false,
+            Type = qhubTour.IsShootout == true ? TourType.Shootout
+                 : qhubTour.IsWarmup == true ? TourType.Warmup
+                 : TourType.Regular,
             Editors = qhubTour.Editors ?? [],
             Preamble = qhubTour.Preamble
         };

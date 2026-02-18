@@ -90,6 +90,21 @@ public class Question
 }
 
 /// <summary>
+/// Defines the type of tour within a package.
+/// </summary>
+public enum TourType
+{
+    /// <summary>Regular (main) tour with sequentially numbered questions.</summary>
+    Regular = 0,
+
+    /// <summary>Warmup tour (Розминка). At most one per package. Always first.</summary>
+    Warmup = 1,
+
+    /// <summary>Shootout tour (Перестрілка). At most one per package. Always last.</summary>
+    Shootout = 2
+}
+
+/// <summary>
 /// Represents a tour (round) within a package.
 /// </summary>
 public class Tour
@@ -99,8 +114,20 @@ public class Tour
     /// <summary>Physical order of the tour within the package (0-based). Source of truth for ordering.</summary>
     public int OrderIndex { get; set; }
 
-    /// <summary>Whether this is a warmup tour. At most one warmup tour per package. If present, it must be the first tour (OrderIndex = 0).</summary>
-    public bool IsWarmup { get; set; }
+    /// <summary>Tour type: Regular, Warmup, or Shootout.</summary>
+    public TourType Type { get; set; } = TourType.Regular;
+
+    /// <summary>Whether this is a warmup tour.</summary>
+    [NotMapped]
+    public bool IsWarmup => Type == TourType.Warmup;
+
+    /// <summary>Whether this is a shootout (Перестрілка) tour.</summary>
+    [NotMapped]
+    public bool IsShootout => Type == TourType.Shootout;
+
+    /// <summary>Whether this is a special (non-regular) tour.</summary>
+    [NotMapped]
+    public bool IsSpecial => Type != TourType.Regular;
 
     /// <summary>Tour number for display (e.g., "1", "2"). For main tours, assigned sequentially. For warmup, may be "0" or empty.</summary>
     public required string Number { get; set; }

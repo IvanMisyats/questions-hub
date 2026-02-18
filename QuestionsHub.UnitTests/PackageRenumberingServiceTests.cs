@@ -26,14 +26,14 @@ public class PackageRenumberingServiceTests
         };
     }
 
-    private static Tour CreateTour(int id, int orderIndex, bool isWarmup = false)
+    private static Tour CreateTour(int id, int orderIndex, TourType type = TourType.Regular)
     {
         return new Tour
         {
             Id = id,
             OrderIndex = orderIndex,
             Number = (orderIndex + 1).ToString(CultureInfo.InvariantCulture),
-            IsWarmup = isWarmup,
+            Type = type,
             Questions = []
         };
     }
@@ -94,7 +94,7 @@ public class PackageRenumberingServiceTests
         var service = CreateService();
         var package = CreatePackage(QuestionNumberingMode.Global);
 
-        var warmupTour = CreateTour(1, 0, isWarmup: true);
+        var warmupTour = CreateTour(1, 0, type: TourType.Warmup);
         warmupTour.Questions.Add(CreateQuestion(1, 0));
         warmupTour.Questions.Add(CreateQuestion(2, 1));
 
@@ -163,7 +163,7 @@ public class PackageRenumberingServiceTests
         var service = CreateService();
         var package = CreatePackage(QuestionNumberingMode.PerTour);
 
-        var warmupTour = CreateTour(1, 0, isWarmup: true);
+        var warmupTour = CreateTour(1, 0, type: TourType.Warmup);
         warmupTour.Questions.Add(CreateQuestion(1, 0));
         warmupTour.Questions.Add(CreateQuestion(2, 1));
 
@@ -252,7 +252,7 @@ public class PackageRenumberingServiceTests
         var mainTour1 = CreateTour(1, 0);
         mainTour1.Questions.Add(CreateQuestion(1, 0));
 
-        var warmupTour = CreateTour(2, 1, isWarmup: true); // Warmup at index 1
+        var warmupTour = CreateTour(2, 1, type: TourType.Warmup); // Warmup at index 1
         warmupTour.Questions.Add(CreateQuestion(2, 0));
 
         var mainTour2 = CreateTour(3, 2);
@@ -288,7 +288,7 @@ public class PackageRenumberingServiceTests
         package.Tours.Add(mainTour2);
 
         // Act - Set mainTour2 as warmup
-        service.SetWarmupTour(package, 2, true);
+        service.SetTourType(package, 2, TourType.Warmup);
 
         // Assert
         Assert.False(mainTour1.IsWarmup);
@@ -304,7 +304,7 @@ public class PackageRenumberingServiceTests
         var service = CreateService();
         var package = CreatePackage(QuestionNumberingMode.Global);
 
-        var tour1 = CreateTour(1, 0, isWarmup: true);
+        var tour1 = CreateTour(1, 0, type: TourType.Warmup);
         var tour2 = CreateTour(2, 1);
         var tour3 = CreateTour(3, 2);
 
@@ -313,7 +313,7 @@ public class PackageRenumberingServiceTests
         package.Tours.Add(tour3);
 
         // Act - Set tour3 as warmup (should unset tour1)
-        service.SetWarmupTour(package, 3, true);
+        service.SetTourType(package, 3, TourType.Warmup);
 
         // Assert - Only tour3 should be warmup
         Assert.False(tour1.IsWarmup);
@@ -348,7 +348,7 @@ public class PackageRenumberingServiceTests
 
         // Simulate new warmup tour at first position with 1 question
         // The question was initially assigned number 32 (last question + 1)
-        var warmupTour = CreateTour(2, 0, isWarmup: true);
+        var warmupTour = CreateTour(2, 0, type: TourType.Warmup);
         warmupTour.Questions.Add(CreateQuestion(32, 0, "32"));
 
         package.Tours.Add(mainTour);
@@ -434,7 +434,7 @@ public class PackageRenumberingServiceTests
         var package = CreatePackage(QuestionNumberingMode.Global);
 
         // Warmup tour with questions (initially numbered incorrectly as 32, 33)
-        var warmupTour = CreateTour(1, 0, isWarmup: true);
+        var warmupTour = CreateTour(1, 0, type: TourType.Warmup);
         warmupTour.Questions.Add(CreateQuestion(32, 0, "32"));
         warmupTour.Questions.Add(CreateQuestion(33, 1, "33"));
 
@@ -474,7 +474,7 @@ public class PackageRenumberingServiceTests
         var package = CreatePackage(QuestionNumberingMode.Global);
 
         // Warmup tour with 2 questions
-        var warmupTour = CreateTour(1, 0, isWarmup: true);
+        var warmupTour = CreateTour(1, 0, type: TourType.Warmup);
         warmupTour.Questions.Add(CreateQuestion(100, 0, "100"));
         warmupTour.Questions.Add(CreateQuestion(101, 1, "101"));
 

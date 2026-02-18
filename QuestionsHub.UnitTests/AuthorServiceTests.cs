@@ -65,7 +65,6 @@ public class AuthorServiceTests : IDisposable
             {
                 Number = (t + 1).ToString(CultureInfo.InvariantCulture),
                 OrderIndex = t,
-                IsWarmup = false,
                 Questions = [],
                 Editors = [],
                 Blocks = []

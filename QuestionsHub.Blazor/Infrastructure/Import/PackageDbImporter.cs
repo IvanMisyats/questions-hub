@@ -104,7 +104,7 @@ public partial class PackageDbImporter
                 {
                     Number = tourDto.Number,
                     OrderIndex = tourDto.OrderIndex,
-                    IsWarmup = tourDto.IsWarmup,
+                    Type = tourDto.Type,
                     Preamble = tourDto.Preamble,
                     PackageId = package.Id,
                     Editors = await ResolveAuthors(tourDto.Editors, ct)

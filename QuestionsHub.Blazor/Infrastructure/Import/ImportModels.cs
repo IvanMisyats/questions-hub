@@ -102,8 +102,8 @@ public class TourDto
     /// <summary>Order index within the package (0-based).</summary>
     public int OrderIndex { get; set; }
 
-    /// <summary>Whether this tour is a warmup tour.</summary>
-    public bool IsWarmup { get; set; }
+    /// <summary>Tour type (Regular, Warmup, or Shootout).</summary>
+    public TourType Type { get; set; }
 
     public List<string> Editors { get; set; } = [];
     public string? Preamble { get; set; }

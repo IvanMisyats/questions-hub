@@ -113,6 +113,7 @@ public class QhubExporter
         {
             Number = tour.Number,
             IsWarmup = tour.IsWarmup ? true : null,
+            IsShootout = tour.IsShootout ? true : null,
             Editors = editors,
             Preamble = NullIfEmpty(tour.Preamble),
             Comment = NullIfEmpty(tour.Comment),

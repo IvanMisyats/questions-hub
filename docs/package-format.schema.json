@@ -93,6 +93,11 @@
           "default": false,
           "description": "Whether this is a warmup tour. At most one per package."
         },
+        "isShootout": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this is a shootout (Перестрілка) tour. At most one per package. Always last."
+        },
         "editors": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },

@@ -124,7 +124,18 @@ else
                 {
                     <div id="tour-@tour.Id" class="tour-section">
                         <h2>
-                            Тур @tour.Number
+                            @if (tour.IsWarmup)
+                            {
+                                <text>Розминка</text>
+                            }
+                            else if (tour.IsShootout)
+                            {
+                                <text>Перестрілка</text>
+                            }
+                            else
+                            {
+                                <text>Тур @tour.Number</text>
+                            }
                         </h2>
 
                         @if (tour.HasBlocks)

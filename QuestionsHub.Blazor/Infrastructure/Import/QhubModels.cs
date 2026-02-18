@@ -55,6 +55,9 @@ public class QhubTour
     [JsonPropertyName("isWarmup")]
     public bool? IsWarmup { get; set; }
 
+    [JsonPropertyName("isShootout")]
+    public bool? IsShootout { get; set; }
+
     [JsonPropertyName("editors")]
     public List<string>? Editors { get; set; }
 

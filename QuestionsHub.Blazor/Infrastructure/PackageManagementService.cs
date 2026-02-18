@@ -98,7 +98,7 @@ public class PackageManagementService(
                 : -1;
             var newOrderIndex = maxOrderIndex + 1;
 
-            var mainTourCount = existingTours.Count(t => !t.IsWarmup);
+            var mainTourCount = existingTours.Count(t => t.Type == TourType.Regular);
             var newNumber = (mainTourCount + 1).ToString(CultureInfo.InvariantCulture);
 
             var tour = new Tour
@@ -106,7 +106,7 @@ public class PackageManagementService(
                 PackageId = packageId,
                 Number = newNumber,
                 OrderIndex = newOrderIndex,
-                IsWarmup = false,
+                Type = TourType.Regular,
                 Editors = [],
                 Questions = [],
                 Blocks = []
@@ -162,9 +162,11 @@ public class PackageManagementService(
     }
 
     /// <summary>
-    /// Sets or unsets a tour as warmup, moving it to the first position if set.
+    /// Sets the tour type (Regular, Warmup, or Shootout).
+    /// Ensures at most one warmup and one shootout per package.
+    /// Warmup is moved to first position, shootout to last.
     /// </summary>
-    public async Task<OperationResult> SetWarmup(int tourId, bool isWarmup)
+    public async Task<OperationResult> SetTourType(int tourId, TourType newType)
     {
         try
         {
@@ -180,27 +182,33 @@ public class PackageManagementService(
                 .Where(t => t.PackageId == packageId)
                 .ToListAsync();
 
-            // Unset warmup on all tours first
-            foreach (var t in allTours)
+            // Clear the same type from other tours (at most one warmup, one shootout)
+            if (newType != TourType.Regular)
             {
-                t.IsWarmup = false;
+                foreach (var t in allTours.Where(t => t.Type == newType && t.Id != tourId))
+                {
+                    t.Type = TourType.Regular;
+                }
             }
 
-            if (isWarmup)
+            tour.Type = newType;
+
+            // Reorder: warmup first, regular in middle, shootout last
+            var warmup = allTours.FirstOrDefault(t => t.Type == TourType.Warmup);
+            var shootout = allTours.FirstOrDefault(t => t.Type == TourType.Shootout);
+            var regularTours = allTours
+                .Where(t => t.Type == TourType.Regular)
+                .OrderBy(t => t.OrderIndex)
+                .ToList();
+
+            var orderedTours = new List<Tour>();
+            if (warmup != null) orderedTours.Add(warmup);
+            orderedTours.AddRange(regularTours);
+            if (shootout != null) orderedTours.Add(shootout);
+
+            for (int i = 0; i < orderedTours.Count; i++)
             {
-                tour.IsWarmup = true;
-                tour.OrderIndex = 0;
-
-                // Shift other tours
-                var otherTours = allTours
-                    .Where(t => t.Id != tourId)
-                    .OrderBy(t => t.OrderIndex)
-                    .ToList();
-
-                for (int i = 0; i < otherTours.Count; i++)
-                {
-                    otherTours[i].OrderIndex = i + 1;
-                }
+                orderedTours[i].OrderIndex = i;
             }
 
             await context.SaveChangesAsync();

@@ -538,8 +538,8 @@ public class QhubExtractorTests : IDisposable
 
         var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
 
-        result.Tours[0].IsWarmup.Should().BeTrue();
-        result.Tours[1].IsWarmup.Should().BeFalse();
+        result.Tours[0].Type.Should().Be(TourType.Warmup);
+        result.Tours[1].Type.Should().Be(TourType.Regular);
     }
 
     [Fact]

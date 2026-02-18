@@ -139,7 +139,6 @@ public class PackageListServiceTests : IDisposable
         {
             Number = (package.Tours.Count + 1).ToString(),
             OrderIndex = package.Tours.Count,
-            IsWarmup = false,
             Questions = [],
             Editors = [],
             Blocks = []

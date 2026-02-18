@@ -315,7 +315,7 @@ public class PackageDbImporterTests : IDisposable
             {
                 new()
                 {
-                    Number = "0", OrderIndex = 0, IsWarmup = true,
+                    Number = "0", OrderIndex = 0, Type = TourType.Warmup,
                     Questions = new List<QuestionDto>
                     {
                         new() { Number = "1", Text = "Розминка", Answer = "Так" }
@@ -336,10 +336,10 @@ public class PackageDbImporterTests : IDisposable
 
         using var db = _dbFactory.CreateDbContext();
         var warmup = db.Tours.First(t => t.Number == "0");
-        warmup.IsWarmup.Should().BeTrue();
+        warmup.Type.Should().Be(TourType.Warmup);
 
         var regular = db.Tours.First(t => t.Number == "1");
-        regular.IsWarmup.Should().BeFalse();
+        regular.Type.Should().Be(TourType.Regular);
     }
 
     [Fact]

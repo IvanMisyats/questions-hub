@@ -53,7 +53,6 @@ public class PackageManagementServiceTests : IDisposable
             {
                 Number = (t + 1).ToString(CultureInfo.InvariantCulture),
                 OrderIndex = t,
-                IsWarmup = false,
                 Questions = [],
                 Editors = [],
                 Blocks = []
@@ -163,7 +162,7 @@ public class PackageManagementServiceTests : IDisposable
         result.Entity.Should().NotBeNull();
         result.Entity!.Number.Should().Be("1");
         result.Entity.OrderIndex.Should().Be(0);
-        result.Entity.IsWarmup.Should().BeFalse();
+        result.Entity.Type.Should().Be(TourType.Regular);
     }
 
     [Fact]
@@ -188,7 +187,7 @@ public class PackageManagementServiceTests : IDisposable
         // Arrange
         var package = await CreatePackage(tourCount: 2);
         var firstTourId = package.Tours.First(t => t.OrderIndex == 0).Id;
-        await _service.SetWarmup(firstTourId, true);
+        await _service.SetTourType(firstTourId, TourType.Warmup);
 
         // Act
         var result = await _service.CreateTour(package.Id);
@@ -254,7 +253,7 @@ public class PackageManagementServiceTests : IDisposable
         var lastTour = package.Tours.First(t => t.OrderIndex == 2);
 
         // Act
-        var result = await _service.SetWarmup(lastTour.Id, true);
+        var result = await _service.SetTourType(lastTour.Id, TourType.Warmup);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -281,7 +280,7 @@ public class PackageManagementServiceTests : IDisposable
         await _service.CreateQuestion(newTourId);
 
         // Act - Set new tour as warmup
-        var result = await _service.SetWarmup(newTourId, true);
+        var result = await _service.SetTourType(newTourId, TourType.Warmup);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -306,10 +305,10 @@ public class PackageManagementServiceTests : IDisposable
         // Arrange
         var package = await CreatePackage(tourCount: 2, questionsPerTour: 2);
         var firstTour = package.Tours.First(t => t.OrderIndex == 0);
-        await _service.SetWarmup(firstTour.Id, true);
+        await _service.SetTourType(firstTour.Id, TourType.Warmup);
 
         // Act
-        var result = await _service.SetWarmup(firstTour.Id, false);
+        var result = await _service.SetTourType(firstTour.Id, TourType.Regular);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -331,10 +330,10 @@ public class PackageManagementServiceTests : IDisposable
         var tour1 = package.Tours.First(t => t.OrderIndex == 0);
         var tour3 = package.Tours.First(t => t.OrderIndex == 2);
 
-        await _service.SetWarmup(tour1.Id, true);
+        await _service.SetTourType(tour1.Id, TourType.Warmup);
 
         // Act - Set tour3 as warmup
-        var result = await _service.SetWarmup(tour3.Id, true);
+        var result = await _service.SetTourType(tour3.Id, TourType.Warmup);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -391,7 +390,7 @@ public class PackageManagementServiceTests : IDisposable
 
         // Add warmup tour
         var warmupResult = await _service.CreateTour(package.Id);
-        await _service.SetWarmup(warmupResult.Entity!.Id, true);
+        await _service.SetTourType(warmupResult.Entity!.Id, TourType.Warmup);
 
         // Act - Add question to warmup tour
         var result = await _service.CreateQuestion(warmupResult.Entity.Id);
@@ -588,7 +587,7 @@ public class PackageManagementServiceTests : IDisposable
         var package = await CreatePackage(tourCount: 2, questionsPerTour: 3);
         var mainTour = package.Tours.First(t => t.OrderIndex == 0);
         var warmupTour = package.Tours.First(t => t.OrderIndex == 1);
-        await _service.SetWarmup(warmupTour.Id, true);
+        await _service.SetTourType(warmupTour.Id, TourType.Warmup);
 
         // Reload to get updated warmup tour
         var reloaded = await GetPackageWithToursAndQuestions(package.Id);
@@ -786,7 +785,7 @@ public class PackageManagementServiceTests : IDisposable
     public async Task SetWarmup_InvalidTourId_ReturnsFail()
     {
         // Act
-        var result = await _service.SetWarmup(99999, true);
+        var result = await _service.SetTourType(99999, TourType.Warmup);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -823,7 +822,7 @@ public class PackageManagementServiceTests : IDisposable
         var questionResult = await _service.CreateQuestion(newTourId);
 
         // Step 5: Mark as warmup
-        await _service.SetWarmup(newTourId, true);
+        await _service.SetTourType(newTourId, TourType.Warmup);
 
         // Assert
         var final = await GetPackageWithToursAndQuestions(package.Id);

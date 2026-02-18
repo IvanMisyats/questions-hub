@@ -72,6 +72,13 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:Розминочне\s+питання|Розминкове\s+питання|Розминка)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex WarmupQuestionLabel();
 
+    // Shootout (Перестрілка) detection
+    [GeneratedRegex(@"^\s*Перестрілка\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShootoutTourStart();
+
+    [GeneratedRegex(@"^\s*[-–—]\s*Перестрілка\s*[-–—]\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShootoutTourStartDashed();
+
     // Question detection
     [GeneratedRegex(@"^\s*(\d+)\.\s+(.*)$")]
     public static partial Regex QuestionStartWithText();
@@ -503,26 +510,32 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Attempts to parse and handle a tour start line (including warmup tours).
+    /// Attempts to parse and handle a tour start line (including warmup and shootout tours).
     /// Also handles bold warmup question labels (e.g., "Розминочне питання") that create implicit warmup tours.
     /// </summary>
     private bool TryProcessTourStart(string line, ParserContext ctx)
     {
-        var isWarmup = false;
+        var tourType = TourType.Regular;
         string tourNumber;
         string? preamble = null;
 
         // Check for warmup tour first
         if (TryParseWarmupTourStart(line))
         {
-            isWarmup = true;
+            tourType = TourType.Warmup;
             tourNumber = "0";
         }
         // Check for bold warmup question label (only before any tours exist)
         else if (TryParseWarmupQuestionLabel(line, ctx))
         {
-            isWarmup = true;
+            tourType = TourType.Warmup;
             tourNumber = "0";
+        }
+        // Check for shootout tour
+        else if (TryParseShootoutTourStart(line))
+        {
+            tourType = TourType.Shootout;
+            tourNumber = "П";
         }
         else if (!TryParseTourStart(line, out tourNumber, out preamble))
         {
@@ -538,7 +551,7 @@ public class PackageParser
         {
             Number = tourNumber,
             OrderIndex = orderIndex,
-            IsWarmup = isWarmup,
+            Type = tourType,
             Preamble = preamble
         };
         ctx.Result.Tours.Add(ctx.CurrentTour);
@@ -548,7 +561,7 @@ public class PackageParser
         ctx.ExpectedNextQuestionInTour = null;
         ctx.Format = QuestionFormat.Unknown; // Allow each tour to use its own format
 
-        _logger.LogDebug("Found tour: {TourNumber}, IsWarmup: {IsWarmup}", tourNumber, isWarmup);
+        _logger.LogDebug("Found tour: {TourNumber}, Type: {TourType}", tourNumber, tourType);
         return true;
     }
 
@@ -1288,8 +1301,8 @@ public class PackageParser
         if (ctx.Result.Tours.Count == 0 && ctx.HeaderBlocks.Count > 0)
             ParsePackageHeader(ctx.HeaderBlocks, ctx.Result);
 
-        // Ensure warmup tour is at the front if present
-        EnsureWarmupTourFirst(ctx.Result);
+        // Ensure special tours are in correct positions
+        EnsureSpecialTourPositions(ctx.Result);
 
         // Detect and set numbering mode
         DetectNumberingMode(ctx);
@@ -1326,21 +1339,20 @@ public class PackageParser
     }
 
     /// <summary>
-    /// Ensures the warmup tour (if any) is positioned first in the tour list.
+    /// Ensures special tours are in correct positions: warmup first, shootout last.
     /// </summary>
-    private static void EnsureWarmupTourFirst(ParseResult result)
+    private static void EnsureSpecialTourPositions(ParseResult result)
     {
-        var warmupTour = result.Tours.FirstOrDefault(t => t.IsWarmup);
-        if (warmupTour == null)
-            return;
+        var warmupTour = result.Tours.FirstOrDefault(t => t.Type == TourType.Warmup);
+        var shootoutTour = result.Tours.FirstOrDefault(t => t.Type == TourType.Shootout);
 
-        var warmupIndex = result.Tours.IndexOf(warmupTour);
-        if (warmupIndex <= 0)
-            return; // Already first or not found
+        // Remove special tours from their current positions
+        if (warmupTour != null) result.Tours.Remove(warmupTour);
+        if (shootoutTour != null) result.Tours.Remove(shootoutTour);
 
-        // Move warmup to front
-        result.Tours.RemoveAt(warmupIndex);
-        result.Tours.Insert(0, warmupTour);
+        // Re-insert: warmup at front, shootout at end
+        if (warmupTour != null) result.Tours.Insert(0, warmupTour);
+        if (shootoutTour != null) result.Tours.Add(shootoutTour);
     }
 
     /// <summary>
@@ -1595,6 +1607,12 @@ public class PackageParser
         return ParserPatterns.WarmupTourStart().IsMatch(text) ||
                ParserPatterns.WarmupTourStartDashed().IsMatch(text) ||
                ParserPatterns.TourZeroStart().IsMatch(text);
+    }
+
+    private static bool TryParseShootoutTourStart(string text)
+    {
+        return ParserPatterns.ShootoutTourStart().IsMatch(text) ||
+               ParserPatterns.ShootoutTourStartDashed().IsMatch(text);
     }
 
     /// <summary>

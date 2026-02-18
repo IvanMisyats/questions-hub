@@ -130,7 +130,6 @@ public class PackageReloadDataTests : IDisposable
             {
                 Number = "1",
                 OrderIndex = 0,
-                IsWarmup = false,
                 Questions = [],
                 Editors = [],
                 Blocks = []

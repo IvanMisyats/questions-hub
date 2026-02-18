@@ -87,7 +87,10 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(t => t.Preamble);
             entity.Property(t => t.Comment).HasMaxLength(2000);
             entity.Property(t => t.OrderIndex).HasDefaultValue(0);
-            entity.Property(t => t.IsWarmup).HasDefaultValue(false);
+            entity.Property(t => t.Type).HasDefaultValue(TourType.Regular);
+            entity.Ignore(t => t.IsWarmup);
+            entity.Ignore(t => t.IsShootout);
+            entity.Ignore(t => t.IsSpecial);
 
             entity.HasMany(t => t.Questions)
                 .WithOne(q => q.Tour)
