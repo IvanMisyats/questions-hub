@@ -17,6 +17,9 @@
       - Email__SenderEmail=noreply@questions.com.ua
       - "Email__SenderName=База запитань ЩДК"
       - Email__SiteUrl=https://questions.com.ua
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
+      - Telegram__ChannelId=@questions_com_ua
+      - Telegram__SiteUrl=https://questions.com.ua
     volumes:
       - ${UPLOADS_PATH:-./uploads}:/app/uploads
       - ${KEYS_PATH:-./keys}:/app/keys

@@ -66,6 +66,7 @@ jobs:
             #   - ADMIN_PASSWORD
             #   - EMAIL_API_KEY (Mailjet API Key)
             #   - EMAIL_API_SECRET (Mailjet API Secret)
+            #   - TELEGRAM_BOT_TOKEN (Telegram Bot API token)
             set -a
             source ~/.env
             set +a
@@ -77,6 +78,7 @@ jobs:
             export ADMIN_PASSWORD
             export EMAIL_API_KEY
             export EMAIL_API_SECRET
+            export TELEGRAM_BOT_TOKEN
             export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
             export UPLOADS_PATH=~/questions-hub/uploads
             export KEYS_PATH=~/questions-hub/keys

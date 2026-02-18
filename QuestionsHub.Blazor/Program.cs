@@ -25,6 +25,7 @@ builder.Services
     .AddMediaServices(builder.Configuration, builder.Environment)
     .AddPackageImport(builder.Configuration)
     .AddEmailServices(builder.Configuration)
+    .AddTelegramServices(builder.Configuration)
     .AddDataProtectionServices(builder.Environment);
 
 var app = builder.Build();
@@ -144,6 +145,16 @@ internal static class ServiceCollectionExtensions
     {
         services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
         services.AddTransient<IEmailSender<ApplicationUser>, MailjetEmailSender>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddTelegramServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<TelegramSettings>(configuration.GetSection(TelegramSettings.SectionName));
+        services.AddScoped<TelegramNotificationService>();
 
         return services;
     }
