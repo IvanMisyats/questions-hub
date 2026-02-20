@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Auth;
 
 /// <summary>
 /// Custom claims principal factory that adds FirstName and LastName claims.

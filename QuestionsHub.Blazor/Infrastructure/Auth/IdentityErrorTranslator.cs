@@ -1,4 +1,4 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure;
+﻿namespace QuestionsHub.Blazor.Infrastructure.Auth;
 
 /// <summary>
 /// Helper class for translating Identity error codes to Ukrainian messages.

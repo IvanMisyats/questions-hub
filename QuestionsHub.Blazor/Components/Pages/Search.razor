@@ -2,7 +2,7 @@
 @page "/search/{Query}"
 @attribute [StreamRendering]
 @using QuestionsHub.Blazor.Infrastructure
-@using static QuestionsHub.Blazor.Infrastructure.HighlightSanitizer
+@using static QuestionsHub.Blazor.Infrastructure.Search.HighlightSanitizer
 @using static QuestionsHub.Blazor.Infrastructure.SourceLinkifier
 @inject SearchService SearchService
 @inject AccessControlService AccessControl

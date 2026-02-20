@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using System.Web;
 using Microsoft.AspNetCore.Components;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Search;
 
 /// <summary>
 /// Helper for safely rendering highlighted search results.

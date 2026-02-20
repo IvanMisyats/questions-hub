@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 
@@ -18,13 +19,13 @@ public class PackageImportBackgroundService : BackgroundService
 
     public PackageImportBackgroundService(
         IServiceScopeFactory scopeFactory,
-        PackageImportOptions options,
+        IOptions<PackageImportOptions> options,
         ILogger<PackageImportBackgroundService> logger)
     {
         _scopeFactory = scopeFactory;
-        _options = options;
+        _options = options.Value;
         _logger = logger;
-        _concurrencyLimit = new SemaphoreSlim(options.MaxConcurrentJobs);
+        _concurrencyLimit = new SemaphoreSlim(_options.MaxConcurrentJobs);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

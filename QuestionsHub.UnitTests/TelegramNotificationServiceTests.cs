@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
+using QuestionsHub.Blazor.Infrastructure.Telegram;
 using QuestionsHub.UnitTests.TestInfrastructure;
 using Xunit;
 

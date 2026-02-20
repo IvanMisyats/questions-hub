@@ -1,4 +1,4 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure;
+﻿namespace QuestionsHub.Blazor.Infrastructure.Email;
 
 /// <summary>
 /// Configuration settings for email service (Mailjet).

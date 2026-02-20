@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Email;
 
 /// <summary>
 /// Email sender implementation using Mailjet API.

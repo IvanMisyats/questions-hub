@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using QuestionsHub.Blazor.Domain;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Auth;
 
 /// <summary>
 /// Centralized service for access control decisions.

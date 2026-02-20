@@ -1,4 +1,4 @@
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Telegram;
 
 /// <summary>
 /// Configuration settings for Telegram channel notifications.

@@ -2,9 +2,11 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
 using QuestionsHub.Blazor.Infrastructure.Import;
+using QuestionsHub.Blazor.Infrastructure.Media;
 using QuestionsHub.UnitTests.TestInfrastructure;
 using Xunit;
 
@@ -57,7 +59,7 @@ public class PackageDbImporterTests : IDisposable
         var db = _dbFactory.CreateDbContext();
         return new PackageDbImporter(
             db,
-            _mediaOptions,
+            Options.Create(_mediaOptions),
             _authorService,
             _tagService,
             NullLogger<PackageDbImporter>.Instance);

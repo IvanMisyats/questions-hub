@@ -4,8 +4,10 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure.Import;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Infrastructure.Export;
 
@@ -25,9 +27,9 @@ public class QhubExporter
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    public QhubExporter(MediaUploadOptions mediaOptions, ILogger<QhubExporter> logger)
+    public QhubExporter(IOptions<MediaUploadOptions> mediaOptions, ILogger<QhubExporter> logger)
     {
-        _mediaOptions = mediaOptions;
+        _mediaOptions = mediaOptions.Value;
         _logger = logger;
     }
 

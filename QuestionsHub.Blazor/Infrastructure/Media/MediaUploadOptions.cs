@@ -1,4 +1,4 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure;
+﻿namespace QuestionsHub.Blazor.Infrastructure.Media;
 
 /// <summary>
 /// Configuration options for media file uploads.

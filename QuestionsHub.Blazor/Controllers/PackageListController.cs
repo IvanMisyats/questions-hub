@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using QuestionsHub.Blazor.Infrastructure;
+using QuestionsHub.Blazor.Infrastructure.Auth;
 using System.Security.Claims;
 
 namespace QuestionsHub.Blazor.Controllers;

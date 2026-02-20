@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Controllers.Dto;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Infrastructure;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Controllers;
 

@@ -1,6 +1,9 @@
 ﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
+using QuestionsHub.Blazor.Infrastructure.Auth;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Infrastructure;
 
@@ -16,12 +19,12 @@ public class PackageService
 
     public PackageService(
         IDbContextFactory<QuestionsHubDbContext> dbContextFactory,
-        MediaUploadOptions mediaOptions,
+        IOptions<MediaUploadOptions> mediaOptions,
         ILogger<PackageService> logger,
         AccessControlService accessControl)
     {
         _dbContextFactory = dbContextFactory;
-        _mediaOptions = mediaOptions;
+        _mediaOptions = mediaOptions.Value;
         _logger = logger;
         _accessControl = accessControl;
     }

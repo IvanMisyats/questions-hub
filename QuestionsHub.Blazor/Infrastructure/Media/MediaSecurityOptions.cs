@@ -1,6 +1,6 @@
 ﻿using System.Security.Cryptography;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Media;
 
 /// <summary>
 /// Type of media content.

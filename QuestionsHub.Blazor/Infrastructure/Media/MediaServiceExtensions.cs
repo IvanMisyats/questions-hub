@@ -1,4 +1,4 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure;
+﻿namespace QuestionsHub.Blazor.Infrastructure.Media;
 
 /// <summary>
 /// Extension methods for registering media services.
@@ -13,16 +13,17 @@ public static class MediaServiceExtensions
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
-        // Configure media upload options
-        var options = new MediaUploadOptions();
-        configuration.GetSection(MediaUploadOptions.SectionName).Bind(options);
+        services.Configure<MediaUploadOptions>(
+            configuration.GetSection(MediaUploadOptions.SectionName));
 
         // Set uploads path based on environment
-        options.UploadsPath = environment.IsDevelopment()
-            ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads")
-            : "/app/uploads";
+        services.PostConfigure<MediaUploadOptions>(options =>
+        {
+            options.UploadsPath = environment.IsDevelopment()
+                ? Path.Combine(Directory.GetCurrentDirectory(), "..", "uploads")
+                : "/app/uploads";
+        });
 
-        services.AddSingleton(options);
         services.AddScoped<MediaService>();
 
         return services;

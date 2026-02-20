@@ -8,7 +8,12 @@ using QuestionsHub.Blazor.Components;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
+using QuestionsHub.Blazor.Infrastructure.Auth;
+using QuestionsHub.Blazor.Infrastructure.Email;
 using QuestionsHub.Blazor.Infrastructure.Import;
+using QuestionsHub.Blazor.Infrastructure.Media;
+using QuestionsHub.Blazor.Infrastructure.Search;
+using QuestionsHub.Blazor.Infrastructure.Telegram;
 
 // Set Ukrainian culture as default for the entire application
 var ukrainianCulture = new CultureInfo("uk-UA");

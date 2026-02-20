@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Telegram;
 
 /// <summary>
 /// Sends notifications to a Telegram channel when packages are published.

@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using QuestionsHub.Blazor.Infrastructure.Media;
 using A = DocumentFormat.OpenXml.Drawing;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;

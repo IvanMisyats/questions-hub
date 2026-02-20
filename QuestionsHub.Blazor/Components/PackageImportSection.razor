@@ -1,10 +1,11 @@
 ﻿@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Options
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @using QuestionsHub.Blazor.Infrastructure.Import
 
 @inject PackageImportService ImportService
-@inject PackageImportOptions ImportOptions
+@inject IOptions<PackageImportOptions> ImportOptionsAccessor
 @inject PackageService PackageService
 
 @implements IDisposable
@@ -101,6 +102,8 @@
 }
 
 @code {
+    private PackageImportOptions ImportOptions => ImportOptionsAccessor.Value;
+
     [Parameter, EditorRequired]
     public required string UserId { get; set; }
 

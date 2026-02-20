@@ -1,4 +1,6 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure;
+﻿using Microsoft.Extensions.Options;
+
+namespace QuestionsHub.Blazor.Infrastructure.Media;
 
 /// <summary>
 /// Result of a media file upload operation.
@@ -19,11 +21,11 @@ public class MediaService
     private readonly ILogger<MediaService> _logger;
     private readonly string _handoutsPath;
 
-    public MediaService(MediaUploadOptions options, ILogger<MediaService> logger)
+    public MediaService(IOptions<MediaUploadOptions> options, ILogger<MediaService> logger)
     {
-        _options = options;
+        _options = options.Value;
         _logger = logger;
-        _handoutsPath = Path.Combine(options.UploadsPath, options.HandoutsFolder);
+        _handoutsPath = Path.Combine(_options.UploadsPath, _options.HandoutsFolder);
 
         // Ensure handouts directory exists
         if (!Directory.Exists(_handoutsPath))

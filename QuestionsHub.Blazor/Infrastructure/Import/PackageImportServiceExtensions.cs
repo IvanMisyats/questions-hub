@@ -1,4 +1,5 @@
 ﻿using QuestionsHub.Blazor.Infrastructure.Export;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -15,9 +16,8 @@ public static class PackageImportServiceExtensions
         IConfiguration configuration)
     {
         // Configure package import options
-        var options = new PackageImportOptions();
-        configuration.GetSection(PackageImportOptions.SectionName).Bind(options);
-        services.AddSingleton(options);
+        services.Configure<PackageImportOptions>(
+            configuration.GetSection(PackageImportOptions.SectionName));
 
         // Register import services
         services.AddScoped<DocxExtractor>();

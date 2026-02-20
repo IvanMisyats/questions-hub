@@ -1,8 +1,10 @@
 ﻿using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -23,13 +25,13 @@ public class PackageImportService
 
     public PackageImportService(
         IServiceScopeFactory scopeFactory,
-        PackageImportOptions options,
-        MediaUploadOptions mediaOptions,
+        IOptions<PackageImportOptions> options,
+        IOptions<MediaUploadOptions> mediaOptions,
         ILogger<PackageImportService> logger)
     {
         _scopeFactory = scopeFactory;
-        _options = options;
-        _mediaOptions = mediaOptions;
+        _options = options.Value;
+        _mediaOptions = mediaOptions.Value;
         _logger = logger;
     }
 

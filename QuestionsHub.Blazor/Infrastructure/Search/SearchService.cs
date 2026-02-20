@@ -3,7 +3,7 @@ using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Utils;
 
-namespace QuestionsHub.Blazor.Infrastructure;
+namespace QuestionsHub.Blazor.Infrastructure.Search;
 
 /// <summary>
 /// Result of a search query containing full question data and metadata.

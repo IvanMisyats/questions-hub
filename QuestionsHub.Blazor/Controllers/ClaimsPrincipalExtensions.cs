@@ -1,6 +1,5 @@
 ﻿using System.Security.Claims;
 using QuestionsHub.Blazor.Domain;
-using QuestionsHub.Blazor.Infrastructure;
 
 namespace QuestionsHub.Blazor.Controllers;
 

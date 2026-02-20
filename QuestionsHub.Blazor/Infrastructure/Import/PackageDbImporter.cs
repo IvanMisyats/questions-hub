@@ -1,7 +1,9 @@
 ﻿using System.Text.RegularExpressions;
 
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -18,13 +20,13 @@ public partial class PackageDbImporter
 
     public PackageDbImporter(
         QuestionsHubDbContext db,
-        MediaUploadOptions mediaOptions,
+        IOptions<MediaUploadOptions> mediaOptions,
         AuthorService authorService,
         TagService tagService,
         ILogger<PackageDbImporter> logger)
     {
         _db = db;
-        _mediaOptions = mediaOptions;
+        _mediaOptions = mediaOptions.Value;
         _authorService = authorService;
         _tagService = tagService;
         _logger = logger;
