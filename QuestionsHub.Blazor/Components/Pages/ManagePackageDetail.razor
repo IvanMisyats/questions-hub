@@ -381,9 +381,16 @@
                                                                             <Icon Name="drag" Size="14" />
                                                                         </span>
                                                                         <span class="badge bg-primary flex-shrink-0">@question.Number</span>
-                                                                        <div class="flex-grow-1 small" style="cursor: pointer;"
+                                                                        <div class="flex-grow-1 small" style="cursor: pointer; min-height: 1.5em;"
                                                                              @onclick="() => OpenQuestionEditor(tour, question)">
-                                                                            @question.Text
+                                                                            @if (string.IsNullOrWhiteSpace(question.Text))
+                                                                            {
+                                                                                <span class="text-muted fst-italic">(порожнє запитання)</span>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                @question.Text
+                                                                            }
                                                                         </div>
                                                                         <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
                                                                                 style="width: 20px; height: 20px; padding: 0; font-size: 1rem; line-height: 1;"
@@ -434,9 +441,16 @@
                                                                         <Icon Name="drag" Size="14" />
                                                                     </span>
                                                                     <span class="badge bg-primary flex-shrink-0">@question.Number</span>
-                                                                    <div class="flex-grow-1 small" style="cursor: pointer;"
+                                                                    <div class="flex-grow-1 small" style="cursor: pointer; min-height: 1.5em;"
                                                                          @onclick="() => OpenQuestionEditor(tour, question)">
-                                                                        @question.Text
+                                                                        @if (string.IsNullOrWhiteSpace(question.Text))
+                                                                        {
+                                                                            <span class="text-muted fst-italic">(порожнє запитання)</span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            @question.Text
+                                                                        }
                                                                     </div>
                                                                     <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
                                                                             style="width: 20px; height: 20px; padding: 0; font-size: 1rem; line-height: 1;"
@@ -477,9 +491,16 @@
                                                             <Icon Name="drag" />
                                                         </span>
                                                         <span class="badge bg-primary flex-shrink-0">@question.Number</span>
-                                                        <div class="flex-grow-1" style="cursor: pointer;"
+                                                        <div class="flex-grow-1" style="cursor: pointer; min-height: 1.5em;"
                                                              @onclick="() => OpenQuestionEditor(tour, question)">
-                                                            @question.Text
+                                                            @if (string.IsNullOrWhiteSpace(question.Text))
+                                                            {
+                                                                <span class="text-muted fst-italic">(порожнє запитання)</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                @question.Text
+                                                            }
                                                         </div>
                                                         <button class="btn btn-danger flex-shrink-0 d-flex align-items-center justify-content-center"
                                                                 style="width: 24px; height: 24px; padding: 0; font-size: 1.25rem; line-height: 1;"
