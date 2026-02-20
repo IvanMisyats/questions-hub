@@ -201,9 +201,17 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Тури <span class="badge bg-secondary ms-2">@_package.Tours.Count(t => t.Type == TourType.Regular)</span></h5>
-                <button class="btn btn-success btn-sm" @onclick="AddTourAsync">
-                    <i class="bi bi-plus-lg me-1"></i>Додати тур
-                </button>
+                <div class="d-flex gap-2">
+                    @if (!_package.Tours.Any(t => t.Type == TourType.Warmup))
+                    {
+                        <button class="btn btn-outline-success btn-sm" @onclick="AddWarmupTourAsync">
+                            <i class="bi bi-plus-lg me-1"></i>Додати розминку
+                        </button>
+                    }
+                    <button class="btn btn-success btn-sm" @onclick="AddTourAsync">
+                        <i class="bi bi-plus-lg me-1"></i>Додати тур
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 @if (_package.Tours.Count == 0)
@@ -1846,6 +1854,53 @@
         catch
         {
             _saveStatus = "Помилка збереження";
+        }
+        StateHasChanged();
+    }
+
+    private async Task AddWarmupTourAsync()
+    {
+        if (_package == null) return;
+        if (_package.Tours.Any(t => t.Type == TourType.Warmup)) return;
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            var tour = new Tour
+            {
+                PackageId = _package.Id,
+                Number = "0",
+                OrderIndex = 0,
+                Type = TourType.Warmup,
+                Editors = new List<Author>(),
+                Preamble = null,
+                Comment = null,
+                Questions = new List<Question>()
+            };
+
+            // Shift existing tours' OrderIndex by 1
+            var existingTours = await context.Tours
+                .Where(t => t.PackageId == _package.Id)
+                .ToListAsync();
+            foreach (var t in existingTours)
+            {
+                t.OrderIndex += 1;
+            }
+
+            context.Tours.Add(tour);
+            await context.SaveChangesAsync();
+
+            // Renumber, reload and reinitialize sortables
+            await RenumberAndReload();
+
+            _expandedTours.Add(tour.Id);
+            _saveStatus = "Розминку додано";
+            _needsSortableInit = true;
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
         }
         StateHasChanged();
     }
