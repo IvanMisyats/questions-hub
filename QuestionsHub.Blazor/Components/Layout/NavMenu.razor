@@ -1,30 +1,76 @@
 ﻿<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">
-            <img src="images/icon.png" alt="Questions Hub" width="32" height="32" class="me-2" />
-            Questions-Hub
+            <img src="images/icon.png" alt="Що?Де?Коли?" width="32" height="32" />
+            <span class="brand-text">
+                <span class="brand-name">Що?Де?Коли?</span>
+                <span class="brand-sub">База запитань</span>
+            </span>
         </a>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler"/>
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+<div class="nav-scrollable" onclick="closeMobileSidebar()">
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Додому
+                <Icon Name="home" Class="nav-icon" /> <span class="nav-text">Додому</span>
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="search">
-                <span class="bi bi-search-nav-menu" aria-hidden="true"></span> Пошук
+                <Icon Name="search" Class="nav-icon" /> <span class="nav-text">Пошук</span>
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="editors">
-                <span class="bi bi-people-nav-menu" aria-hidden="true"></span> Автори
+                <Icon Name="group" Class="nav-icon" /> <span class="nav-text">Автори</span>
             </NavLink>
         </div>
+        @if (_isEditor || _isAdmin)
+        {
+            <div class="nav-separator"></div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="manage/packages">
+                    <Icon Name="folder" Class="nav-icon" /> <span class="nav-text">Мої пакети</span>
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/editors">
+                    <Icon Name="person-badge" Class="nav-icon" /> <span class="nav-text">Редактори</span>
+                </NavLink>
+            </div>
+        }
+        @if (_isAdmin)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/users">
+                    <Icon Name="person-gear" Class="nav-icon" /> <span class="nav-text">Користувачі</span>
+                </NavLink>
+            </div>
+        }
     </nav>
+    <div class="sidebar-collapse-toggle px-3">
+        <button class="collapse-btn" onclick="event.stopPropagation(); toggleSidebarCollapse();" title="Згорнути/Розгорнути">
+            <Icon Name="chevron-left" Class="nav-icon collapse-icon" /> <span class="nav-text">Згорнути</span>
+        </button>
+    </div>
 </div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private bool _isEditor;
+    private bool _isAdmin;
+
+    protected override void OnInitialized()
+    {
+        var user = HttpContext?.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            _isAdmin = user.IsInRole("Admin");
+            _isEditor = user.IsInRole("Editor");
+        }
+    }
+}

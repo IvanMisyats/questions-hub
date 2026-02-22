@@ -12,7 +12,7 @@ main {
 }
 
 .sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    background-image: linear-gradient(180deg, #1e3a5f 0%, #0f172a 100%);
 }
 
 .top-row {
@@ -61,7 +61,7 @@ main {
 }
 
 [data-bs-theme="dark"] .search-icon {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23adb5bd' class='bi bi-search' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2394a3b8' class='bi bi-search' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E");
 }
 
 .search-input {
@@ -111,9 +111,64 @@ main {
     .top-row ::deep a, .top-row ::deep .btn-link {
         margin-left: 0;
     }
+
+    /* Mobile sidebar drawer */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100vh;
+        z-index: 1050;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    :global(.sidebar.mobile-open) {
+        /* override handled in app.css (global) */
+    }
+
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+    }
+
+    :global(.sidebar-backdrop.show) {
+        /* override handled in app.css (global) */
+    }
+
+    .mobile-menu-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        padding: 0.25rem;
+        color: var(--app-text);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .mobile-menu-btn ::deep .icon {
+        fill: var(--app-text);
+    }
 }
 
 @media (min-width: 641px) {
+    .mobile-menu-btn {
+        display: none;
+    }
+
+    .sidebar-backdrop {
+        display: none !important;
+    }
+
     .page {
         flex-direction: row;
     }
@@ -123,6 +178,12 @@ main {
         height: 100vh;
         position: sticky;
         top: 0;
+        transition: width 0.2s ease;
+        overflow: hidden;
+    }
+
+    .sidebar.collapsed {
+        width: 64px;
     }
 
     .top-row {

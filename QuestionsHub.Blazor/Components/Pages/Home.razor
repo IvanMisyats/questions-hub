@@ -37,7 +37,7 @@
                 {
                     var tag = _popularTags[i];
                     <button type="button"
-                            class="btn btn-sm rounded-pill tag-filter-btn @(_tagId == tag.Id ? "btn-primary" : "btn-outline-primary") @(i >= 10 ? "tag-hidden" : "")"
+                            class="btn btn-sm rounded-pill tag-filter-btn @(_tagId == tag.Id ? "tag-active" : "tag-default") @(i >= 10 ? "tag-hidden" : "")"
                             data-tag-id="@tag.Id"
                             data-tag-name="@tag.Name"
                             data-tag-index="@i">

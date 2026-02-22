@@ -35,6 +35,11 @@ The following icons are available in the sprite file:
 | `i-download` | download, export | Download / export file |
 | `i-eye` | eye, show, visible | Eye icon for show/visible state |
 | `i-eye-slash` | eye-slash, hide, hidden | Eye with slash for hide/hidden state |
+| `i-person-circle` | person-circle, avatar | Person in circle for user menu |
+| `i-home` | home, house | House icon for home navigation |
+| `i-folder` | folder, packages | Folder icon for packages navigation |
+| `i-person-badge` | person-badge, editor-badge | Person badge for editors navigation |
+| `i-person-gear` | person-gear, user-settings | Person with gear for user management |
 
 ## Usage
 

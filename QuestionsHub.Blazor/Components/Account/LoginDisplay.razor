@@ -3,24 +3,22 @@
 @if (_isAuthenticated)
 {
     <div class="dropdown">
-        <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-            @_userName
+        <button class="btn dropdown-toggle user-menu-btn" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="@_userName">
+            <Icon Name="person-circle" Size="22" />
         </button>
         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
-            <li><a class="dropdown-item" href="/Account/Profile">Мій профіль</a></li>
-            @if (_isEditor || _isAdmin)
-            {
-                <li><a class="dropdown-item" href="/manage/packages">Мої пакети</a></li>
-                <li><a class="dropdown-item" href="/admin/editors">Редактори</a></li>
-            }
-            @if (_isAdmin)
-            {
-                <li><a class="dropdown-item" href="/admin/users">Користувачі</a></li>
-            }
+            <li>
+                <div class="user-menu-header">
+                    <div class="user-name">@_userName</div>
+                    <div class="user-email">@_userEmail</div>
+                </div>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/Account/Profile">Профіль</a></li>
             <li><hr class="dropdown-divider"></li>
             <li>
                 <form method="post" action="/api/Auth/logout">
-                    <button type="submit" class="dropdown-item">Вийти</button>
+                    <button type="submit" class="dropdown-item user-menu-logout">Вийти</button>
                 </form>
             </li>
         </ul>
@@ -40,6 +38,7 @@ else
     private bool _isEditor;
     private bool _isAdmin;
     private string _userName = "Користувач";
+    private string _userEmail = "";
 
     protected override void OnInitialized()
     {
@@ -51,6 +50,8 @@ else
             _isAdmin = user.IsInRole("Admin");
             _isEditor = user.IsInRole("Editor");
 
+            _userEmail = user.Identity?.Name ?? "";
+
             // Get name from claims (added during login)
             var firstName = user.FindFirst("FirstName")?.Value;
             var lastName = user.FindFirst("LastName")?.Value;
@@ -61,8 +62,7 @@ else
             }
             else
             {
-                // Fallback to email if claims not set
-                _userName = user.Identity?.Name ?? "Користувач";
+                _userName = _userEmail;
             }
         }
     }

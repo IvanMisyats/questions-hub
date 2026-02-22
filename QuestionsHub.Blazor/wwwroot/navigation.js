@@ -96,3 +96,67 @@ window.restoreScrollPosition = function() {
     }
 };
 
+// Sidebar collapse toggle (desktop)
+window.toggleSidebarCollapse = function() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    sidebar.classList.toggle('collapsed');
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    localStorage.setItem('sidebar-collapsed', isCollapsed ? '1' : '0');
+};
+
+// Mobile sidebar drawer toggle
+window.toggleMobileSidebar = function() {
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.querySelector('.sidebar-backdrop');
+    if (!sidebar || !backdrop) return;
+
+    const isOpen = sidebar.classList.contains('mobile-open');
+    if (isOpen) {
+        closeMobileSidebar();
+    } else {
+        sidebar.classList.add('mobile-open');
+        backdrop.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+};
+
+window.closeMobileSidebar = function() {
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.querySelector('.sidebar-backdrop');
+    if (!sidebar || !backdrop) return;
+
+    sidebar.classList.remove('mobile-open');
+    backdrop.classList.remove('show');
+    document.body.style.overflow = '';
+};
+
+// Restore sidebar collapsed state on load / enhanced navigation
+(function initSidebarCollapse() {
+    function applySidebarState() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+        // Only apply on desktop (>= 641px)
+        if (window.innerWidth < 641) {
+            sidebar.classList.remove('collapsed');
+            return;
+        }
+        const stored = localStorage.getItem('sidebar-collapsed');
+        if (stored === '1') {
+            sidebar.classList.add('collapsed');
+        } else {
+            sidebar.classList.remove('collapsed');
+        }
+    }
+
+    // Apply on initial load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applySidebarState);
+    } else {
+        applySidebarState();
+    }
+
+    // Re-apply after Blazor enhanced navigation
+    document.addEventListener('blazor:enhanced-nav', applySidebarState);
+})();
+

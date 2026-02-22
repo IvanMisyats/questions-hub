@@ -15,9 +15,9 @@
 }
 
 .question-number {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--app-primary);
-    font-size: 1rem;
+    font-size: 0.875rem;
 }
 
 .answer-toggle-section {

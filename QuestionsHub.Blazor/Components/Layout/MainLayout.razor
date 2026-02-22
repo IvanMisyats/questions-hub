@@ -1,12 +1,16 @@
 ﻿@inherits LayoutComponentBase
 
 <div class="page">
+    <div class="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
     <div class="sidebar">
         <NavMenu/>
     </div>
 
     <main>
         <div class="top-row px-4">
+            <button class="mobile-menu-btn" type="button" onclick="toggleMobileSidebar()">
+                <Icon Name="menu" Size="24" />
+            </button>
             <div class="top-bar-title">
                 <a href="/" class="title-link">База українських запитань "Що?Де?Коли?"</a>
             </div>

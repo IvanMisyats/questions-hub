@@ -899,11 +899,11 @@
         section.querySelectorAll('.tag-filter-btn').forEach(btn => {
             const tagId = parseInt(btn.dataset.tagId);
             if (state.tagId === tagId) {
-                btn.classList.remove('btn-outline-primary');
-                btn.classList.add('btn-primary');
+                btn.classList.remove('tag-default');
+                btn.classList.add('tag-active');
             } else {
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-outline-primary');
+                btn.classList.remove('tag-active');
+                btn.classList.add('tag-default');
             }
         });
 
