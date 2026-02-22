@@ -11,6 +11,7 @@
 .package-card .card-title {
     font-weight: 600;
     line-height: 1.25;
+    overflow-wrap: break-word;
 }
 
 .package-card .card-text.small {
