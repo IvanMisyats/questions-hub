@@ -29,8 +29,6 @@
 /* Block sections */
 .block-section {
     margin-bottom: 2rem;
-    padding-left: 1rem;
-    border-left: 3px solid var(--app-border);
 }
 
 .block-header {

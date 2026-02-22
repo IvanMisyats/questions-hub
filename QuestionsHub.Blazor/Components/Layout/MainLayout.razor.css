@@ -102,6 +102,8 @@ main {
     .top-row {
         justify-content: space-between;
         gap: 0.5rem;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
     }
 
     .top-bar-title {
@@ -110,6 +112,11 @@ main {
 
     .top-row ::deep a, .top-row ::deep .btn-link {
         margin-left: 0;
+    }
+
+    article {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
     }
 
     /* Mobile sidebar drawer */

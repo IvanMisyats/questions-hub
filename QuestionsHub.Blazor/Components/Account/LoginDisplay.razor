@@ -26,8 +26,15 @@
 }
 else
 {
-    <a href="/Account/Login" class="btn btn-primary me-2">Увійти</a>
-    <a href="/Account/Register" class="btn btn-outline-primary">Реєстрація</a>
+    <div class="dropdown">
+        <button class="btn dropdown-toggle user-menu-btn" type="button" id="guestMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Увійти">
+            <Icon Name="person-circle" Size="22" />
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="guestMenuDropdown">
+            <li><a class="dropdown-item" href="/Account/Login">Увійти</a></li>
+            <li><a class="dropdown-item" href="/Account/Register">Реєстрація</a></li>
+        </ul>
+    </div>
 }
 
 @code {
