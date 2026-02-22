@@ -548,7 +548,7 @@ h1:focus {
 }
 
 /* Mobile sidebar drawer — must be global to override scoped CSS */
-@media (max-width: 640.98px) {
+@media (max-width: 767.98px) {
     .sidebar.mobile-open {
         transform: translateX(0) !important;
     }

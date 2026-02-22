@@ -1,21 +1,11 @@
-﻿﻿/* Two-column layout */
-.package-container {
-    display: flex;
-    gap: 2rem;
-}
-
-.sidebar {
-    flex: 0 0 250px;
-    min-width: 200px;
-}
-
+﻿﻿/* Keep main content from shrinking below 0 in flex layout */
 .main-content {
-    flex: 1;
     min-width: 0;
+    max-width: 1200px;
 }
 
-/* Responsive: hide sidebar on mobile */
-@media (max-width: 768px) {
+/* Responsive: hide tour navigation sidebar below lg breakpoint */
+@media (max-width: 991.98px) {
     .sidebar {
         display: none;
     }

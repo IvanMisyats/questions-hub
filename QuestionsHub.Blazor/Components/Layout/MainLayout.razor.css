@@ -99,7 +99,7 @@ main {
         text-overflow: ellipsis;
     }
 
-@media (max-width: 640.98px) {
+@media (max-width: 767.98px) {
     .top-row {
         justify-content: space-between;
         gap: 0.5rem;
@@ -168,7 +168,7 @@ main {
     }
 }
 
-@media (min-width: 641px) {
+@media (min-width: 768px) {
     .mobile-menu-btn {
         display: none;
     }
@@ -267,7 +267,7 @@ main {
     text-decoration: underline;
 }
 
-@media (max-width: 640.98px) {
+@media (max-width: 767.98px) {
     .footer-content {
         justify-content: flex-start;
     }

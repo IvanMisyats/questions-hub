@@ -97,13 +97,13 @@
     overflow-x: hidden;
 }
 
-@media (max-width: 640.98px) {
+@media (max-width: 767.98px) {
     .sidebar-collapse-toggle {
         display: none;
     }
 }
 
-@media (min-width: 641px) {
+@media (min-width: 768px) {
     .nav-scrollable .nav {
         flex: 1;
     }

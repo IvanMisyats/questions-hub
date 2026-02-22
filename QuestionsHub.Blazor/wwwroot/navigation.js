@@ -136,8 +136,8 @@ window.closeMobileSidebar = function() {
     function applySidebarState() {
         const sidebar = document.querySelector('.sidebar');
         if (!sidebar) return;
-        // Only apply on desktop (>= 641px)
-        if (window.innerWidth < 641) {
+        // Only apply on desktop (>= 768px)
+        if (window.innerWidth < 768) {
             sidebar.classList.remove('collapsed');
             return;
         }

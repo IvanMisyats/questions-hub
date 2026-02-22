@@ -1,23 +1,9 @@
 ﻿.tour-navigation {
     position: sticky;
-    top: 1rem;
-    max-height: calc(100vh - 2rem);
+    top: 4.5rem;
+    max-height: calc(100vh - 5.5rem);
     overflow-y: auto;
     padding-right: 1rem;
-}
-
-.nav-header {
-    border-bottom: 2px solid var(--app-primary);
-    padding-bottom: 0.5rem;
-}
-
-.nav-header button {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    width: 100%;
-    text-align: left;
 }
 
 .tour-link {
@@ -38,7 +24,8 @@
 
 .question-links {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(2.5rem, 1fr));
+    max-width: calc(4 * 2.5rem + 3 * 0.25rem);
     gap: 0.25rem;
     padding-left: 0.5rem;
     margin-top: 0.25rem;
