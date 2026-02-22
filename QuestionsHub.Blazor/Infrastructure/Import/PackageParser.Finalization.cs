@@ -222,25 +222,6 @@ public partial class PackageParser
     }
 
     /// <summary>
-    /// Non-mutating peek: checks if the question number would be accepted
-    /// by <see cref="IsValidNextQuestionNumber(string, ParserContext)"/>
-    /// without changing context state. Used for early guards that need to
-    /// distinguish genuine next-question numbers from numbered list items.
-    /// </summary>
-    private static bool IsExpectedNextQuestionNumber(string questionNumberStr, ParserContext ctx)
-    {
-        var expectedInTour = ctx.ExpectedNextQuestionInTour;
-        var expectedGlobal = ctx.ExpectedNextQuestionGlobal;
-        var mode = ctx.Mode;
-
-        return IsValidNextQuestionNumber(
-            questionNumberStr,
-            ref expectedInTour,
-            ref expectedGlobal,
-            ref mode);
-    }
-
-    /// <summary>
     /// Validates question numbering. Chooses numbering mode (Global vs PerTour) when a tour boundary is observed.
     /// </summary>
     private static bool IsValidNextQuestionNumber(

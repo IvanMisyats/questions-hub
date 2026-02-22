@@ -1505,6 +1505,44 @@ public class PackageParserTests
         result.Tours[0].Questions[1].Number.Should().Be("2");
     }
 
+    [Fact]
+    public void Parse_NumberedSourceMatchingNextQuestionNumber_NotParsedAsQuestion()
+    {
+        // Arrange - Numbered source items whose number matches the expected next question
+        // should NOT be treated as a new question start (regression test for the bug where
+        // "2. https://..." in source was parsed as question 2 because 2 was the expected next).
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("1. Маргарет Мітчелл вела листування"),
+            Block("Відповідь: \"Червона літера\". Залік: The Scarlet Letter."),
+            Block("Коментар: листи Маргарет Мітчелл опублікували в книзі The Scarlett Letters."),
+            Block("Джерела: 1. https://tinyurl.com/mr2jnacy"),
+            Block("2. https://ru.wikipedia.org/wiki/Алая_буква"),
+            Block("Автор: Олександр Кудрявцев (Николаев)"),
+            Block(""),
+            Block("2. У першій половині 1990-х Фенікс на ім'я Блейз став ІКСОМ"),
+            Block("Відповідь: талісман/маскот Паралімпійських ігор в Атланті.")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Questions.Should().HaveCount(2);
+
+        var question1 = result.Tours[0].Questions[0];
+        question1.Number.Should().Be("1");
+        question1.Source.Should().Contain("tinyurl.com");
+        question1.Source.Should().Contain("wikipedia.org");
+        question1.Authors.Should().Contain("Олександр Кудрявцев");
+
+        var question2 = result.Tours[0].Questions[1];
+        question2.Number.Should().Be("2");
+        question2.Text.Should().Contain("Фенікс");
+        question2.Answer.Should().Contain("талісман");
+    }
+
     #endregion
 
     #region Answer Parsing

@@ -23,13 +23,12 @@ public partial class PackageParser
             return false;
         }
 
-        // Context-based validation: don't allow "N." pattern in Source section
-        // This prevents numbered list items in sources from being parsed as questions
-        // But allow through if the number matches the expected next question
-        // (e.g., after an empty "Джерело:" label, the next question should still be detected)
+        // Context-based validation: don't allow "N." pattern in Source section.
+        // This prevents numbered list items in sources from being parsed as questions.
+        // A blank line ends the Source section (see ProcessBlock), so if the next question
+        // follows after a blank line it will be detected normally.
         if (detectedFormat == QuestionFormat.Numbered &&
-            ctx.CurrentSection == ParserSection.Source &&
-            !IsExpectedNextQuestionNumber(questionNumber, ctx))
+            ctx.CurrentSection == ParserSection.Source)
         {
             ProcessAsRegularContent(line, ctx);
             return true;

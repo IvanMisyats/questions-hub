@@ -158,7 +158,13 @@ public partial class PackageParser
         {
             if (ctx.CurrentQuestion != null)
             {
-                if (IsContentSection(ctx.CurrentSection))
+                if (ctx.CurrentSection == ParserSection.Source)
+                {
+                    // A blank line after source ends the section, preventing
+                    // subsequent numbered lines from being swallowed as source items.
+                    ctx.CurrentSection = ParserSection.Comment;
+                }
+                else if (IsContentSection(ctx.CurrentSection))
                 {
                     AppendBlankLineToSection(ctx.CurrentSection, ctx.CurrentQuestion);
                 }
