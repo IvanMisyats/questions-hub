@@ -9,13 +9,16 @@ window.toggleAnswer = function(button) {
     if (!answerSection) return;
 
     const isHidden = answerSection.classList.contains('answer-hidden');
+    const label = button.querySelector('.answer-toggle-label');
 
     if (isHidden) {
         answerSection.classList.remove('answer-hidden');
-        button.textContent = 'Сховати відповідь';
+        button.classList.add('expanded');
+        if (label) label.textContent = 'Сховати відповідь';
     } else {
         answerSection.classList.add('answer-hidden');
-        button.textContent = 'Показати відповідь';
+        button.classList.remove('expanded');
+        if (label) label.textContent = 'Показати відповідь';
     }
 };
 
@@ -29,26 +32,34 @@ window.toggleAllAnswers = function(button) {
         if (el.classList.contains('answer-hidden')) anyHidden = true;
     });
 
+    var spriteBase = (window.__iconsSvgUrl || '/icons.svg');
+
     if (anyHidden) {
         // Show all
         answers.forEach(function(el) { el.classList.remove('answer-hidden'); });
-        toggles.forEach(function(el) { el.textContent = 'Сховати відповідь'; });
+        toggles.forEach(function(el) {
+            el.classList.add('expanded');
+            var lbl = el.querySelector('.answer-toggle-label');
+            if (lbl) lbl.textContent = 'Сховати відповідь';
+        });
         button.querySelector('.toggle-all-label').textContent = 'Сховати всі відповіді';
         // Swap icon to eye-slash
         var use = button.querySelector('.toggle-all-icon use');
         if (use) {
-            var spriteBase = (window.__iconsSvgUrl || '/icons.svg');
             use.setAttribute('href', spriteBase + '#i-eye-slash');
         }
     } else {
         // Hide all
         answers.forEach(function(el) { el.classList.add('answer-hidden'); });
-        toggles.forEach(function(el) { el.textContent = 'Показати відповідь'; });
+        toggles.forEach(function(el) {
+            el.classList.remove('expanded');
+            var lbl = el.querySelector('.answer-toggle-label');
+            if (lbl) lbl.textContent = 'Показати відповідь';
+        });
         button.querySelector('.toggle-all-label').textContent = 'Показати всі відповіді';
         // Swap icon to eye
         var use = button.querySelector('.toggle-all-icon use');
         if (use) {
-            var spriteBase = (window.__iconsSvgUrl || '/icons.svg');
             use.setAttribute('href', spriteBase + '#i-eye');
         }
     }

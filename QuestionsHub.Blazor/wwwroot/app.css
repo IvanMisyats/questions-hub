@@ -228,6 +228,15 @@ h1:focus {
 .answer-hidden {
     display: none !important;
 }
+
+/* Answer toggle chevron icon rotation */
+.answer-toggle .answer-toggle-icon {
+    transition: transform 0.2s ease;
+}
+
+.answer-toggle.expanded .answer-toggle-icon {
+    transform: rotate(180deg);
+}
 /* Home page: expandable popular tags */
 .tag-filter-btn.tag-hidden {
     display: none !important;
@@ -430,7 +439,7 @@ h1:focus {
 
 .adult-blur-wrapper.blurred .question-text,
 .adult-blur-wrapper.blurred .answer-section,
-.adult-blur-wrapper.blurred .answer-toggle-section,
+.adult-blur-wrapper.blurred .answer-toggle,
 .adult-blur-wrapper.blurred .handout,
 .adult-blur-wrapper.blurred .host-instructions,
 .adult-blur-wrapper.blurred .media-container {

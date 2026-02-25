@@ -30,22 +30,20 @@
                 <span>🔞 Вміст 18+. Натисніть, щоб показати.</span>
             </div>
             <QuestionContent Question="Question" ShowAnswer="false">
-                <div class="answer-toggle-section">
-                    <button class="btn btn-link answer-toggle p-0" onclick="toggleAnswer(this)">
-                        Показати відповідь
-                    </button>
-                </div>
+                <button class="answer-toggle" onclick="toggleAnswer(this)">
+                    <span class="answer-toggle-label">Показати відповідь</span>
+                    <Icon Name="chevron-down" Class="answer-toggle-icon" Size="14" />
+                </button>
             </QuestionContent>
         </div>
     }
     else
     {
         <QuestionContent Question="Question" ShowAnswer="false">
-            <div class="answer-toggle-section">
-                <button class="btn btn-link answer-toggle p-0" onclick="toggleAnswer(this)">
-                    Показати відповідь
-                </button>
-            </div>
+            <button class="answer-toggle" onclick="toggleAnswer(this)">
+                <span class="answer-toggle-label">Показати відповідь</span>
+                <Icon Name="chevron-down" Class="answer-toggle-icon" Size="14" />
+            </button>
         </QuestionContent>
     }
 </div>
