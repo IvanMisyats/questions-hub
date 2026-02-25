@@ -497,3 +497,4 @@ $RECYCLE.BIN/
 # Copilot / LLM
 .github/upgrades/
 .playwright-mcp/
+.claude/settings.local.json
