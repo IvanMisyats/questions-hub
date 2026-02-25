@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if CI succeeded (for workflow_run trigger) or manual trigger
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       # 1. Check out the code
       - name: Checkout code
@@ -26,7 +29,7 @@ jobs:
 
       # 2. Log in to GitHub Container Registry (GHCR)
       - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       # 3. Build Docker image
       - name: Build Docker image
