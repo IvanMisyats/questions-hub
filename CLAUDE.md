@@ -25,6 +25,11 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 
 **Package → Tours → (optional) Blocks → Questions**. Each entity has `OrderIndex` (0-based, ordering source of truth) and `Number` (display string). Key flags: `NumberingMode` (Global/PerTour/Manual), `SharedEditors`, `IsWarmup`, `AccessLevel` (All/RegisteredOnly/EditorsOnly), `PackageStatus` (Draft/Published/Archived).
 
+## Testing
+
+- **Always run related unit tests** (`dotnet test`) when modifying code in `QuestionsHub.Blazor/` that has corresponding tests in `QuestionsHub.UnitTests/`. Do not consider a change complete until tests pass.
+- When adding new service methods or modifying existing ones, add or update unit tests.
+
 ## Code Conventions
 
 - UTF-8 without BOM
