@@ -882,4 +882,236 @@ public class PackageManagementServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Split Tour Into Blocks Tests
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_EvenQuestionCount_SplitsEvenly()
+    {
+        // Arrange - 6 questions split into 2 blocks → 3 + 3
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 6);
+        var tour = package.Tours.First();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Entity.Should().HaveCount(2);
+
+        using var context = _dbFactory.CreateDbContext();
+        var blocks = await context.Blocks
+            .Where(b => b.TourId == tour.Id)
+            .OrderBy(b => b.OrderIndex)
+            .ToListAsync();
+
+        blocks.Should().HaveCount(2);
+        blocks[0].OrderIndex.Should().Be(0);
+        blocks[1].OrderIndex.Should().Be(1);
+
+        var block1Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[0].Id)
+            .OrderBy(q => q.OrderIndex)
+            .ToListAsync();
+
+        var block2Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[1].Id)
+            .OrderBy(q => q.OrderIndex)
+            .ToListAsync();
+
+        block1Questions.Should().HaveCount(3);
+        block2Questions.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_OddQuestionCount_FirstBlockGetsMore()
+    {
+        // Arrange - 7 questions split into 2 blocks → 4 + 3
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 7);
+        var tour = package.Tours.First();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        using var context = _dbFactory.CreateDbContext();
+        var blocks = await context.Blocks
+            .Where(b => b.TourId == tour.Id)
+            .OrderBy(b => b.OrderIndex)
+            .ToListAsync();
+
+        var block1Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[0].Id)
+            .ToListAsync();
+        var block2Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[1].Id)
+            .ToListAsync();
+
+        block1Questions.Should().HaveCount(4);
+        block2Questions.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_NoQuestions_CreatesTwoEmptyBlocks()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 0);
+        var tour = package.Tours.First();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Entity.Should().HaveCount(2);
+
+        using var context = _dbFactory.CreateDbContext();
+        var blocks = await context.Blocks
+            .Where(b => b.TourId == tour.Id)
+            .ToListAsync();
+
+        blocks.Should().HaveCount(2);
+
+        var questions = await context.Questions
+            .Where(q => q.TourId == tour.Id)
+            .ToListAsync();
+        questions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_SingleQuestion_GoesToFirstBlock()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 1);
+        var tour = package.Tours.First();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        using var context = _dbFactory.CreateDbContext();
+        var blocks = await context.Blocks
+            .Where(b => b.TourId == tour.Id)
+            .OrderBy(b => b.OrderIndex)
+            .ToListAsync();
+
+        var block1Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[0].Id)
+            .ToListAsync();
+        var block2Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[1].Id)
+            .ToListAsync();
+
+        block1Questions.Should().HaveCount(1);
+        block2Questions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_PreservesQuestionOrder()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 6);
+        var tour = package.Tours.First();
+        var originalTexts = tour.Questions.OrderBy(q => q.OrderIndex).Select(q => q.Text).ToList();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        using var context = _dbFactory.CreateDbContext();
+        var blocks = await context.Blocks
+            .Where(b => b.TourId == tour.Id)
+            .OrderBy(b => b.OrderIndex)
+            .ToListAsync();
+
+        var block1Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[0].Id)
+            .OrderBy(q => q.OrderIndex)
+            .Select(q => q.Text)
+            .ToListAsync();
+        var block2Questions = await context.Questions
+            .Where(q => q.BlockId == blocks[1].Id)
+            .OrderBy(q => q.OrderIndex)
+            .Select(q => q.Text)
+            .ToListAsync();
+
+        // First 3 questions should be in block 1, next 3 in block 2
+        block1Questions.Should().BeEquivalentTo(originalTexts.Take(3), o => o.WithStrictOrdering());
+        block2Questions.Should().BeEquivalentTo(originalTexts.Skip(3), o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_QuestionsGetZeroBasedOrderIndex()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 4);
+        var tour = package.Tours.First();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        using var context = _dbFactory.CreateDbContext();
+        var blocks = await context.Blocks
+            .Where(b => b.TourId == tour.Id)
+            .OrderBy(b => b.OrderIndex)
+            .ToListAsync();
+
+        var block1Indices = await context.Questions
+            .Where(q => q.BlockId == blocks[0].Id)
+            .OrderBy(q => q.OrderIndex)
+            .Select(q => q.OrderIndex)
+            .ToListAsync();
+        var block2Indices = await context.Questions
+            .Where(q => q.BlockId == blocks[1].Id)
+            .OrderBy(q => q.OrderIndex)
+            .Select(q => q.OrderIndex)
+            .ToListAsync();
+
+        // Each block's questions should have 0-based OrderIndex
+        block1Indices.Should().BeEquivalentTo([0, 1], o => o.WithStrictOrdering());
+        block2Indices.Should().BeEquivalentTo([0, 1], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_TourAlreadyHasBlocks_ReturnsFail()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1);
+        var tour = package.Tours.First();
+
+        using (var context = _dbFactory.CreateDbContext())
+        {
+            context.Blocks.Add(new Block { TourId = tour.Id, OrderIndex = 0 });
+            await context.SaveChangesAsync();
+        }
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(tour.Id);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Tour already has blocks");
+    }
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_InvalidTourId_ReturnsFail()
+    {
+        // Act
+        var result = await _service.SplitTourIntoBlocks(99999);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Tour not found");
+    }
+
+    #endregion
 }

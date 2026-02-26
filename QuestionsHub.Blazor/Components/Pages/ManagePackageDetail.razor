@@ -12,6 +12,7 @@
 @inject AuthorService AuthorService
 @inject TagService TagService
 @inject PackageRenumberingService RenumberingService
+@inject PackageManagementService PackageManagement
 @inject AccessControlService AccessControl
 @inject PackageListService PackageListService
 @inject TelegramNotificationService TelegramNotification
@@ -476,8 +477,8 @@
                                         {
                                             <!-- No blocks - show questions directly and "Add Block" button -->
                                             <div class="mb-3">
-                                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => AddBlockAsync(tour)">
-                                                    ☰ Розділити на блоки
+                                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => SplitIntoTwoBlocksAsync(tour)">
+                                                    ☰ Розділити на 2 блоки
                                                 </button>
                                             </div>
 
@@ -2876,6 +2877,55 @@
     }
 
     // Block management methods
+
+    private async Task SplitIntoTwoBlocksAsync(Tour tour)
+    {
+        if (_package == null) return;
+
+        try
+        {
+            var result = await PackageManagement.SplitTourIntoBlocks(tour.Id);
+
+            if (!result.Success)
+            {
+                _saveStatus = $"Помилка: {result.ErrorMessage}";
+                StateHasChanged();
+                return;
+            }
+
+            // Reload data and reinitialize sortables
+            await ReloadPackageData();
+
+            var reloadedTour = _package.Tours.FirstOrDefault(t => t.Id == tour.Id);
+            if (reloadedTour != null)
+            {
+                foreach (var block in reloadedTour.Blocks)
+                {
+                    _expandedBlocks.Add(block.Id);
+                }
+            }
+
+            StateHasChanged();
+            await Task.Delay(50);
+
+            if (reloadedTour != null)
+            {
+                foreach (var block in reloadedTour.Blocks)
+                {
+                    await InitializeBlockQuestionsSortable(block.Id);
+                }
+                await JS.InvokeVoidAsync("sortableInterop.initBlocksSortable",
+                    $"blocks-tour-{reloadedTour.Id}", reloadedTour.Id, _dotNetRef);
+            }
+
+            _saveStatus = "Тур розділено на 2 блоки";
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"Помилка: {ex.Message}";
+        }
+        StateHasChanged();
+    }
 
     private async Task AddBlockAsync(Tour tour)
     {

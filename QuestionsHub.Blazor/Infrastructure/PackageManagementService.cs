@@ -441,6 +441,80 @@ public class PackageManagementService(
     #region Block Operations
 
     /// <summary>
+    /// Splits a tour's questions evenly into the specified number of blocks.
+    /// First block gets ceiling(n/blockCount), remaining blocks get floor shares.
+    /// </summary>
+    public async Task<CreateResult<List<Block>>> SplitTourIntoBlocks(int tourId, int blockCount = 2)
+    {
+        if (blockCount < 2)
+            return CreateResult.Fail<List<Block>>("Block count must be at least 2");
+
+        try
+        {
+            await using var context = await dbContextFactory.CreateDbContextAsync();
+
+            var tour = await context.Tours
+                .Include(t => t.Questions)
+                .Include(t => t.Blocks)
+                .FirstOrDefaultAsync(t => t.Id == tourId);
+
+            if (tour == null)
+                return CreateResult.Fail<List<Block>>("Tour not found");
+
+            if (tour.Blocks.Count > 0)
+                return CreateResult.Fail<List<Block>>("Tour already has blocks");
+
+            // Create blocks
+            var blocks = new List<Block>();
+            for (int i = 0; i < blockCount; i++)
+            {
+                var block = new Block
+                {
+                    TourId = tourId,
+                    OrderIndex = i,
+                    Editors = [],
+                    Questions = []
+                };
+                context.Blocks.Add(block);
+                blocks.Add(block);
+            }
+
+            await context.SaveChangesAsync();
+
+            // Distribute questions evenly
+            var questions = tour.Questions
+                .OrderBy(q => q.OrderIndex)
+                .ToList();
+
+            if (questions.Count > 0)
+            {
+                var baseSize = questions.Count / blockCount;
+                var remainder = questions.Count % blockCount;
+                var offset = 0;
+
+                for (int b = 0; b < blockCount; b++)
+                {
+                    var size = baseSize + (b < remainder ? 1 : 0);
+                    for (int i = 0; i < size; i++)
+                    {
+                        questions[offset + i].BlockId = blocks[b].Id;
+                        questions[offset + i].OrderIndex = i;
+                    }
+                    offset += size;
+                }
+
+                await context.SaveChangesAsync();
+            }
+
+            return CreateResult.Ok(blocks);
+        }
+        catch (Exception ex)
+        {
+            return CreateResult.Fail<List<Block>>(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Reorders blocks within a tour.
     /// </summary>
     public async Task<OperationResult> ReorderBlocks(int tourId, int[] blockIds)
