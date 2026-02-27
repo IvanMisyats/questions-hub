@@ -190,10 +190,6 @@ main {
         overflow: hidden;
     }
 
-    .sidebar.collapsed {
-        width: 64px;
-    }
-
     .top-row {
         position: sticky;
         top: 0;

@@ -98,10 +98,8 @@ window.restoreScrollPosition = function() {
 
 // Sidebar collapse toggle (desktop)
 window.toggleSidebarCollapse = function() {
-    const sidebar = document.querySelector('.sidebar');
-    if (!sidebar) return;
-    sidebar.classList.toggle('collapsed');
-    const isCollapsed = sidebar.classList.contains('collapsed');
+    // State lives on <html> so Blazor's DOM morphing never strips it
+    const isCollapsed = document.documentElement.classList.toggle('sidebar-collapsed');
     localStorage.setItem('sidebar-collapsed', isCollapsed ? '1' : '0');
 };
 
@@ -131,32 +129,23 @@ window.closeMobileSidebar = function() {
     document.body.style.overflow = '';
 };
 
-// Restore sidebar collapsed state on load / enhanced navigation
+// Restore sidebar collapsed state on load.
 (function initSidebarCollapse() {
     function applySidebarState() {
-        const sidebar = document.querySelector('.sidebar');
-        if (!sidebar) return;
-        // Only apply on desktop (>= 768px)
         if (window.innerWidth < 768) {
-            sidebar.classList.remove('collapsed');
+            document.documentElement.classList.remove('sidebar-collapsed');
             return;
         }
-        const stored = localStorage.getItem('sidebar-collapsed');
-        if (stored === '1') {
-            sidebar.classList.add('collapsed');
+        if (localStorage.getItem('sidebar-collapsed') === '1') {
+            document.documentElement.classList.add('sidebar-collapsed');
         } else {
-            sidebar.classList.remove('collapsed');
+            document.documentElement.classList.remove('sidebar-collapsed');
         }
     }
 
-    // Apply on initial load
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', applySidebarState);
-    } else {
-        applySidebarState();
-    }
+    applySidebarState();
 
-    // Re-apply after Blazor enhanced navigation
-    document.addEventListener('blazor:enhanced-nav', applySidebarState);
+    // Re-apply after Blazor enhanced navigation (same pattern as theme.js)
+    Blazor.addEventListener('enhancedload', applySidebarState);
 })();
 

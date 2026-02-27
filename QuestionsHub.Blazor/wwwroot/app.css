@@ -556,6 +556,51 @@ h1:focus {
     color: var(--app-primary) !important;
 }
 
+/* Sidebar collapsed state styles.
+   The html.sidebar-collapsed class is the single source of truth for collapsed state.
+   It is set synchronously in <head> before first paint (prevents FOUC),
+   and lives on <html> so Blazor's DOM morphing never strips it.
+   Uses transitionable properties (opacity, max-width, margin) instead of
+   display:none / justify-content to avoid layout jumps during animation. */
+@media (min-width: 768px) {
+    html.sidebar-collapsed .sidebar {
+        width: 64px;
+    }
+
+    html.sidebar-collapsed .sidebar .brand-text,
+    html.sidebar-collapsed .sidebar .nav-text {
+        opacity: 0;
+        max-width: 0;
+    }
+
+    html.sidebar-collapsed .sidebar .nav-icon {
+        margin-right: 0;
+    }
+
+    html.sidebar-collapsed .sidebar .collapse-icon {
+        transform: rotate(180deg);
+    }
+
+    html.sidebar-collapsed .sidebar .navbar-brand {
+        gap: 0;
+        margin-right: 0;
+    }
+
+    html.sidebar-collapsed .sidebar .navbar-brand img {
+        margin-right: 0 !important;
+    }
+
+    html.sidebar-collapsed .sidebar .container-fluid {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    html.sidebar-collapsed .sidebar .nav-separator {
+        margin-left: 0.5rem;
+        margin-right: 0.5rem;
+    }
+}
+
 /* Mobile sidebar drawer — must be global to override scoped CSS */
 @media (max-width: 767.98px) {
     .sidebar.mobile-open {

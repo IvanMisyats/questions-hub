@@ -1,10 +1,10 @@
-.navbar-toggler {
-    display: none;
-}
-
 .top-row {
     min-height: 3.5rem;
     background-color: rgba(0,0,0,0.4);
+}
+
+.top-row .container-fluid {
+    transition: padding 0.2s ease;
 }
 
 .navbar-brand {
@@ -15,6 +15,7 @@
     align-items: center;
     gap: 0.5rem;
     white-space: nowrap;
+    transition: gap 0.2s ease, margin 0.2s ease;
 }
 
 .navbar-brand img {
@@ -26,6 +27,11 @@
     flex-direction: column;
     line-height: 1.15;
     min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 1;
+    max-width: 200px;
+    transition: opacity 0.15s ease, max-width 0.2s ease;
 }
 
 .brand-name {
@@ -47,6 +53,15 @@
     margin-right: 0.75rem;
     flex-shrink: 0;
     fill: white;
+    transition: margin-right 0.2s ease;
+}
+
+.nav-text {
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 1;
+    max-width: 200px;
+    transition: opacity 0.15s ease, max-width 0.2s ease;
 }
 
 .nav-separator {
@@ -129,6 +144,8 @@
     font-size: 0.875rem;
     cursor: pointer;
     transition: background-color 0.15s;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 .collapse-btn:hover {
@@ -140,67 +157,3 @@
     transition: transform 0.2s ease;
     fill: white;
 }
-
-/* Collapsed state styles */
-:global(.sidebar.collapsed) .brand-text,
-:global(.sidebar.collapsed) .nav-text {
-    display: none;
-}
-
-:global(.sidebar.collapsed) ::deep .collapse-icon {
-    transform: rotate(180deg);
-}
-
-:global(.sidebar.collapsed) .navbar-brand {
-    justify-content: center;
-    display: flex;
-}
-
-:global(.sidebar.collapsed) .navbar-brand img {
-    margin-right: 0 !important;
-}
-
-:global(.sidebar.collapsed) .nav-item {
-    padding-left: 0.25rem !important;
-    padding-right: 0.25rem !important;
-}
-
-:global(.sidebar.collapsed) .nav-item ::deep .nav-link {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-}
-
-:global(.sidebar.collapsed) ::deep .nav-icon {
-    margin-right: 0;
-}
-
-:global(.sidebar.collapsed) .sidebar-collapse-toggle {
-    padding-left: 0.25rem !important;
-    padding-right: 0.25rem !important;
-}
-
-:global(.sidebar.collapsed) .collapse-btn {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-}
-
-:global(.sidebar.collapsed) .nav-separator {
-    margin-left: 0.5rem;
-    margin-right: 0.5rem;
-}
-
-:global(.sidebar.collapsed) .top-row {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    justify-content: center;
-}
-
-:global(.sidebar.collapsed) .container-fluid {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-}
-
-

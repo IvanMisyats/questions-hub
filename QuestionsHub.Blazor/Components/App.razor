@@ -12,6 +12,10 @@
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const theme = stored || (prefersDark ? 'dark' : 'light');
             document.documentElement.setAttribute('data-bs-theme', theme);
+            // Prevent sidebar collapse flash on refresh
+            if (localStorage.getItem('sidebar-collapsed') === '1' && window.innerWidth >= 768) {
+                document.documentElement.classList.add('sidebar-collapsed');
+            }
         })();
     </script>
     <HeadOutlet/>
@@ -32,10 +36,10 @@
 <script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script src="@Assets["sortable-interop.js"]"></script>
-<script src="@Assets["navigation.js"]"></script>
 <script src="@Assets["question-card.js"]"></script>
 <script src="@Assets["adult-content.js"]"></script>
 <script src="_framework/blazor.web.js"></script>
+<script src="@Assets["navigation.js"]"></script>
 <script src="@Assets["theme.js"]"></script>
 <script src="@Assets["date-formatter.js"]"></script>
 </body>
