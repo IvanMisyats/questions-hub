@@ -274,28 +274,43 @@ public class PackageImportService
         bool isRetriable,
         CancellationToken ct)
     {
-        job.ErrorMessage = errorMessage;
-        job.ErrorDetails = errorDetails;
-
-        if (isRetriable && job.Attempts < _options.MaxRetryAttempts)
+        try
         {
-            // Schedule retry
-            var delay = GetRetryDelay(job.Attempts);
-            job.NextRetryAt = DateTime.UtcNow + delay;
-            job.Status = ImportJobStatus.Failed;
-            _logger.LogWarning(
-                "Job {JobId} failed (attempt {Attempt}/{Max}), will retry in {Delay}",
-                job.Id, job.Attempts, _options.MaxRetryAttempts, delay);
-        }
-        else
-        {
-            job.Status = ImportJobStatus.Failed;
-            job.FinishedAt = DateTime.UtcNow;
-            job.NextRetryAt = null;
-            _logger.LogError("Job {JobId} failed permanently: {Error}", job.Id, errorMessage);
-        }
+            // Detach all tracked entities except the job itself to avoid
+            // re-saving invalid entities from a failed import transaction.
+            foreach (var entry in db.ChangeTracker.Entries().ToList())
+            {
+                if (!ReferenceEquals(entry.Entity, job))
+                    entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+            }
 
-        await db.SaveChangesAsync(ct);
+            job.ErrorMessage = errorMessage;
+            job.ErrorDetails = errorDetails;
+
+            if (isRetriable && job.Attempts < _options.MaxRetryAttempts)
+            {
+                // Schedule retry
+                var delay = GetRetryDelay(job.Attempts);
+                job.NextRetryAt = DateTime.UtcNow + delay;
+                job.Status = ImportJobStatus.Failed;
+                _logger.LogWarning(
+                    "Job {JobId} failed (attempt {Attempt}/{Max}), will retry in {Delay}",
+                    job.Id, job.Attempts, _options.MaxRetryAttempts, delay);
+            }
+            else
+            {
+                job.Status = ImportJobStatus.Failed;
+                job.FinishedAt = DateTime.UtcNow;
+                job.NextRetryAt = null;
+                _logger.LogError("Job {JobId} failed permanently: {Error}", job.Id, errorMessage);
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save error status for job {JobId}: {Error}", job.Id, errorMessage);
+        }
     }
 
     private static TimeSpan GetRetryDelay(int attempt)

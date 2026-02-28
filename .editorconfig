@@ -53,6 +53,10 @@ dotnet_diagnostic.CA1873.severity = none
 # "Expression value is never used" - acceptable for EF Add/Remove/SaveChanges and cache Set
 dotnet_diagnostic.IDE0058.severity = none
 
+# Expression-bodied members - don't enforce style preference
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_local_functions = when_on_single_line:silent
+
 # Generated EF migrations: don't nag
 [**/Migrations/*.cs]
 generated_code = true

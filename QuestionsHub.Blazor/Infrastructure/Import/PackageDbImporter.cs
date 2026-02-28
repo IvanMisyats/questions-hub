@@ -57,10 +57,11 @@ public partial class PackageDbImporter
             // Create package
             var package = new Package
             {
-                Title = parseResult.Title ?? "Імпортований пакет",
-                Description = parseResult.Description,
+                Title = TruncateWithWarning(parseResult.Title, 500, "Назва пакету", parseResult.Warnings)
+                        ?? "Імпортований пакет",
+                Description = TruncateWithWarning(parseResult.Description, 2000, "Опис пакету", parseResult.Warnings),
                 Preamble = parseResult.Preamble,
-                SourceUrl = parseResult.SourceUrl,
+                SourceUrl = TruncateWithWarning(parseResult.SourceUrl, 2000, "URL джерела пакету", parseResult.Warnings),
                 Status = PackageStatus.Draft,
                 OwnerId = ownerId,
                 TotalQuestions = parseResult.TotalQuestions,
@@ -104,7 +105,7 @@ public partial class PackageDbImporter
             {
                 var tour = new Tour
                 {
-                    Number = tourDto.Number,
+                    Number = TruncateWithWarning(tourDto.Number, 50, $"Номер туру {tourDto.Number}", parseResult.Warnings) ?? tourDto.Number,
                     OrderIndex = tourDto.OrderIndex,
                     Type = tourDto.Type,
                     Preamble = tourDto.Preamble,
@@ -125,7 +126,7 @@ public partial class PackageDbImporter
                     {
                         var block = new Block
                         {
-                            Name = blockDto.Name,
+                            Name = TruncateWithWarning(blockDto.Name, 200, $"Назва блоку {blockDto.Name}", parseResult.Warnings),
                             OrderIndex = blockDto.OrderIndex,
                             Preamble = blockDto.Preamble,
                             TourId = tour.Id,
@@ -139,7 +140,7 @@ public partial class PackageDbImporter
                         foreach (var questionDto in blockDto.Questions)
                         {
                             var question = await CreateQuestion(
-                                questionDto, tourQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, ct);
+                                questionDto, tourQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, parseResult.Warnings, ct);
                             _db.Questions.Add(question);
                         }
 
@@ -153,7 +154,7 @@ public partial class PackageDbImporter
                     foreach (var questionDto in tourDto.Questions)
                     {
                         var question = await CreateQuestion(
-                            questionDto, orderIndex++, tour.Id, null, jobAssetsPath, ct);
+                            questionDto, orderIndex++, tour.Id, null, jobAssetsPath, parseResult.Warnings, ct);
                         _db.Questions.Add(question);
                     }
 
@@ -183,6 +184,7 @@ public partial class PackageDbImporter
         int tourId,
         int? blockId,
         string jobAssetsPath,
+        List<string> warnings,
         CancellationToken ct)
     {
         // Resolve handout: prefer local file, fall back to external URL stored on DTO
@@ -196,16 +198,16 @@ public partial class PackageDbImporter
         return new Question
         {
             OrderIndex = orderIndex,
-            Number = questionDto.Number,
-            HostInstructions = TruncateIfNeeded(questionDto.HostInstructions, 1000),
+            Number = TruncateWithWarning(questionDto.Number, 20, $"Номер запитання {questionDto.Number}", warnings) ?? questionDto.Number,
+            HostInstructions = TruncateWithWarning(questionDto.HostInstructions, 1000, $"Вказівка ведучому (запитання {questionDto.Number})", warnings),
             Text = questionDto.Text,
             HandoutText = questionDto.HandoutText,
-            HandoutUrl = handoutUrl,
-            Answer = TruncateIfNeeded(questionDto.Answer, 1000) ?? "",
-            AcceptedAnswers = TruncateIfNeeded(questionDto.AcceptedAnswers, 1000),
-            RejectedAnswers = TruncateIfNeeded(questionDto.RejectedAnswers, 1000),
+            HandoutUrl = TruncateWithWarning(handoutUrl, 500, $"URL роздатки (запитання {questionDto.Number})", warnings),
+            Answer = TruncateWithWarning(questionDto.Answer, 1000, $"Відповідь (запитання {questionDto.Number})", warnings) ?? "",
+            AcceptedAnswers = TruncateWithWarning(questionDto.AcceptedAnswers, 1000, $"Залік (запитання {questionDto.Number})", warnings),
+            RejectedAnswers = TruncateWithWarning(questionDto.RejectedAnswers, 1000, $"Незалік (запитання {questionDto.Number})", warnings),
             Comment = questionDto.Comment,
-            CommentAttachmentUrl = commentUrl,
+            CommentAttachmentUrl = TruncateWithWarning(commentUrl, 500, $"URL коментаря (запитання {questionDto.Number})", warnings),
             Source = questionDto.Source,
             TourId = tourId,
             BlockId = blockId,
@@ -330,10 +332,16 @@ public partial class PackageDbImporter
         }
     }
 
-    private static string? TruncateIfNeeded(string? text, int maxLength)
+    /// <summary>
+    /// Truncates a value to the given maximum length and adds a warning if truncated.
+    /// </summary>
+    private static string? TruncateWithWarning(string? text, int maxLength, string fieldName, List<string> warnings)
     {
         if (string.IsNullOrEmpty(text)) return text;
-        return text.Length <= maxLength ? text : text[..maxLength];
+        if (text.Length <= maxLength) return text;
+
+        warnings.Add($"{fieldName}: значення обрізано з {text.Length} до {maxLength} символів");
+        return text[..maxLength];
     }
 
     private static string? NullIfEmpty(string? value)
