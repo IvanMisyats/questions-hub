@@ -25,8 +25,9 @@ else
 
 @code {
     /// <summary>
-    /// Icon name. Supported values: check, link, drag, search, close, group, shield-exclamation, person-plus, person-minus.
-    /// Aliases: trash/delete → close, users → group, handle/grip → drag.
+    /// Icon name. Supported values: check, link, drag, search, close, group, shield-exclamation, person-plus, person-minus,
+    /// plus, exclamation-triangle, check-circle, x-circle, envelope-check, pencil, info-circle, question-circle,
+    /// collection, external-link, upload, arrow-repeat, box, list-ul, arrow-left, exclamation-circle, and more.
     /// </summary>
     [Parameter, EditorRequired]
     public required string Name { get; set; }
@@ -62,7 +63,7 @@ else
             "shield-exclamation" or "shield" => "i-shield-exclamation",
             "person-plus" or "user-plus" => "i-person-plus",
             "person-minus" or "user-minus" => "i-person-minus",
-            "chevron-left" or "arrow-left" => "i-chevron-left",
+            "chevron-left" => "i-chevron-left",
             "chevron-right" or "arrow-right" => "i-chevron-right",
             "chevron-double-left" or "chevrons-left" => "i-chevron-double-left",
             "chevron-double-right" or "chevrons-right" => "i-chevron-double-right",
@@ -84,6 +85,22 @@ else
             "person-gear" or "user-settings" => "i-person-gear",
             "menu" or "hamburger" or "bars" => "i-menu",
             "trash" or "delete" => "i-trash",
+            "plus" or "add" => "i-plus",
+            "exclamation-triangle" or "warning" => "i-exclamation-triangle",
+            "check-circle" or "success" => "i-check-circle",
+            "x-circle" or "error" => "i-x-circle",
+            "envelope-check" or "email-confirmed" => "i-envelope-check",
+            "pencil" or "edit" => "i-pencil",
+            "info-circle" or "info" => "i-info-circle",
+            "question-circle" or "help" => "i-question-circle",
+            "collection" => "i-collection",
+            "external-link" or "box-arrow-up-right" => "i-external-link",
+            "upload" => "i-upload",
+            "arrow-repeat" or "sync" or "refresh" => "i-arrow-repeat",
+            "box" or "package" => "i-box",
+            "list-ul" or "list" => "i-list-ul",
+            "arrow-left" or "back" => "i-arrow-left",
+            "exclamation-circle" => "i-exclamation-circle",
             _ => $"i-{name.ToLowerInvariant()}"
         };
     }

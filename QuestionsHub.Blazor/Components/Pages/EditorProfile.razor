@@ -22,7 +22,7 @@
     else if (_author == null)
     {
         <div class="alert alert-warning" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>Редактора не знайдено
+            <Icon Name="exclamation-triangle" Class="me-2" />Редактора не знайдено
         </div>
         <a href="/" class="btn btn-secondary">Повернутися на головну</a>
     }
@@ -35,7 +35,7 @@
         {
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="bi bi-person-badge me-2"></i>Пов'язаний користувач
+                    <Icon Name="person-badge" Class="me-2" />Пов'язаний користувач
                 </div>
                 <div class="card-body">
                     @if (_linkedUser != null)
@@ -52,7 +52,7 @@
                                 }
                             </div>
                             <button class="btn btn-outline-danger btn-sm" @onclick="UnlinkUser" disabled="@_isProcessing">
-                                <i class="bi bi-link-45deg me-1"></i>Від'єднати
+                                <Icon Name="link" Class="me-1" />Від'єднати
                             </button>
                         </div>
                     }
@@ -74,7 +74,7 @@
                             <div class="col-md-4">
                                 <button class="btn btn-primary" @onclick="LinkUser"
                                         disabled="@(string.IsNullOrEmpty(_selectedUserId) || _isProcessing)">
-                                    <i class="bi bi-link me-1"></i>Пов'язати
+                                    <Icon Name="link" Class="me-1" />Пов'язати
                                 </button>
                             </div>
                         </div>
@@ -95,7 +95,7 @@
             <div class="col-md-6">
                 <div class="card h-100" @onclick="ShowPackagesList" style="cursor: pointer;">
                     <div class="card-header">
-                        <i class="bi bi-box me-2"></i>Пакети
+                        <Icon Name="box" Class="me-2" />Пакети
                     </div>
                     <div class="card-body">
                         <h3 class="card-title">@_packagesCount</h3>
@@ -106,7 +106,7 @@
             <div class="col-md-6">
                 <div class="card h-100" @onclick="ShowQuestionsList" style="cursor: pointer;">
                     <div class="card-header">
-                        <i class="bi bi-question-circle me-2"></i>Запитання
+                        <Icon Name="question-circle" Class="me-2" />Запитання
                     </div>
                     <div class="card-body">
                         <h3 class="card-title">@_questionsCount</h3>
@@ -121,7 +121,7 @@
         {
             <div class="card mb-4" id="packages-list">
                 <div class="card-header">
-                    <i class="bi bi-list-ul me-2"></i>Список пакетів
+                    <Icon Name="list-ul" Class="me-2" />Список пакетів
                 </div>
                 <div class="card-body">
                     <ul class="list-unstyled">
@@ -192,7 +192,7 @@
         }
 
         <a href="/" class="btn btn-secondary">
-            <i class="bi bi-arrow-left me-1"></i>Повернутися на головну
+            <Icon Name="arrow-left" Class="me-1" />Повернутися на головну
         </a>
     }
 </div>

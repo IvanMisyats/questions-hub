@@ -20,7 +20,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Мої пакети</h1>
         <button class="btn btn-success" @onclick="CreateNewPackage">
-            <i class="bi bi-plus-lg me-2"></i>Створити пакет
+            <Icon Name="plus" Class="me-2" />Створити пакет
         </button>
     </div>
 
@@ -40,13 +40,13 @@
     else if (_errorMessage != null)
     {
         <div class="alert alert-danger" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+            <Icon Name="exclamation-triangle" Class="me-2" />@_errorMessage
         </div>
     }
     else if (_packages == null || _packages.Count == 0)
     {
         <div class="alert alert-info" role="alert">
-            <i class="bi bi-info-circle me-2"></i>У вас ще немає пакетів. Натисніть "Створити пакет", щоб почати.
+            <Icon Name="info-circle" Class="me-2" />У вас ще немає пакетів. Натисніть "Створити пакет", щоб почати.
         </div>
     }
     else
@@ -116,7 +116,7 @@
                 <div class="modal-body">
                     <p>Ви впевнені, що хочете видалити пакет <strong>"@_packageToDelete?.Title"</strong>?</p>
                     <p class="text-danger mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <Icon Name="exclamation-triangle" Class="me-2" />
                         Ця дія незворотня. Всі тури та питання пакету будуть видалені.
                     </p>
                 </div>

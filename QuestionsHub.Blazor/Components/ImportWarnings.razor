@@ -5,9 +5,9 @@
 {
     <div class="alert alert-warning mt-2 mb-0 py-2 px-3">
         <div class="d-flex align-items-center gap-2" role="button" @onclick="ToggleExpanded" style="cursor: pointer;">
-            <i class="bi bi-exclamation-triangle-fill"></i>
+            <Icon Name="exclamation-triangle" />
             <span>@_warnings.Count @GetWarningsWord(_warnings.Count)</span>
-            <i class="bi @(_isExpanded ? "bi-chevron-up" : "bi-chevron-down") ms-auto"></i>
+            <Icon Name="@(_isExpanded ? "chevron-up" : "chevron-down")" Class="ms-auto" />
         </div>
         @if (_isExpanded)
         {

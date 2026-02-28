@@ -32,7 +32,7 @@
     else if (_errorMessage != null)
     {
         <div class="alert alert-danger" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>@_errorMessage
+            <Icon Name="exclamation-triangle" Class="me-2" />@_errorMessage
         </div>
         <a href="/manage/packages" class="btn btn-secondary">Повернутися до списку</a>
     }
@@ -55,7 +55,7 @@
                 @if (_saveStatus != null)
                 {
                     <span class="text-muted">
-                        <i class="bi @(_isSaving ? "bi-arrow-repeat" : "bi-check-circle") me-1"></i>
+                        <Icon Name="@(_isSaving ? "arrow-repeat" : "check-circle")" Class="me-1" />
                         @_saveStatus
                     </span>
                 }
@@ -206,11 +206,11 @@
                     @if (!_package.Tours.Any(t => t.Type == TourType.Warmup))
                     {
                         <button class="btn btn-outline-success btn-sm" @onclick="AddWarmupTourAsync">
-                            <i class="bi bi-plus-lg me-1"></i>Додати розминку
+                            <Icon Name="plus" Class="me-1" />Додати розминку
                         </button>
                     }
                     <button class="btn btn-success btn-sm" @onclick="AddTourAsync">
-                        <i class="bi bi-plus-lg me-1"></i>Додати тур
+                        <Icon Name="plus" Class="me-1" />Додати тур
                     </button>
                 </div>
             </div>
@@ -218,7 +218,7 @@
                 @if (_package.Tours.Count == 0)
                 {
                     <div class="text-center py-4 text-muted">
-                        <i class="bi bi-collection fs-1 d-block mb-2"></i>
+                        <Icon Name="collection" Size="40" Class="d-block mb-2" />
                         <p>Пакет ще не має турів. Натисніть "Додати тур", щоб почати.</p>
                     </div>
                 }
@@ -299,7 +299,7 @@
                                                 <label class="form-label small">&nbsp;</label>
                                                 <button class="btn btn-outline-danger btn-sm w-100"
                                                         @onclick="() => ConfirmDeleteTour(tour)">
-                                                    <i class="bi bi-trash"></i> Видалити
+                                                    <Icon Name="trash" /> Видалити
                                                 </button>
                                             </div>
                                             <div class="col-12">
@@ -434,7 +434,7 @@
                                                 <div class="card mb-3 border-warning">
                                                     <div class="card-header d-flex justify-content-between align-items-center py-2 bg-warning-subtle">
                                                         <div class="d-flex align-items-center gap-2">
-                                                            <i class="bi bi-exclamation-triangle text-warning"></i>
+                                                            <Icon Name="exclamation-triangle" Class="text-warning" />
                                                             <strong>Запитання поза блоками</strong>
                                                             <span class="badge bg-warning text-dark">@orphanQuestions.Count запитань</span>
                                                         </div>
@@ -523,7 +523,7 @@
 
                                             <button class="btn btn-outline-success btn-sm"
                                                     @onclick="() => AddQuestionAsync(tour)">
-                                                <i class="bi bi-plus-lg me-1"></i>Додати запитання
+                                                <Icon Name="plus" Class="me-1" />Додати запитання
                                             </button>
                                         }
                                     </div>
@@ -534,7 +534,7 @@
 
                     <div class="mt-3 text-center">
                         <button class="btn btn-success" @onclick="AddTourAsync">
-                            <i class="bi bi-plus-lg me-1"></i>Додати тур
+                            <Icon Name="plus" Class="me-1" />Додати тур
                         </button>
                     </div>
                 }
@@ -556,7 +556,7 @@
                 <div class="modal-body">
                     <p>Ви впевнені, що хочете видалити <strong>Тур @_tourToDelete.Number</strong>?</p>
                     <p class="text-danger mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <Icon Name="exclamation-triangle" Class="me-2" />
                         Всі @_tourToDelete.Questions.Count запитань туру будуть видалені.
                     </p>
                 </div>
@@ -604,7 +604,7 @@
                 <div class="modal-body">
                     <p>Ви впевнені, що хочете видалити <strong>@_blockToDelete.DisplayName</strong>?</p>
                     <p class="text-info mb-0">
-                        <i class="bi bi-info-circle me-2"></i>
+                        <Icon Name="info-circle" Class="me-2" />
                         @{
                             var blockQuestionCount = _blockToDeleteTour?.Questions.Count(q => q.BlockId == _blockToDelete.Id) ?? 0;
                         }
@@ -642,19 +642,19 @@
                         <button class="btn btn-outline-secondary btn-sm me-1"
                                 @onclick="NavigateToPrevQuestion"
                                 disabled="@(!CanNavigatePrev())">
-                            <i class="bi bi-chevron-left"></i> Попереднє
+                            <Icon Name="chevron-left" /> Попереднє
                         </button>
                         <button class="btn btn-outline-secondary btn-sm"
                                 @onclick="NavigateToNextQuestion"
                                 disabled="@(!CanNavigateNext())">
-                            Наступне <i class="bi bi-chevron-right"></i>
+                            Наступне <Icon Name="chevron-right" />
                         </button>
                         @if (!CanNavigateNext())
                         {
                             <button class="btn btn-outline-success btn-sm ms-1"
                                     @onclick="CreateAndNavigateToNextQuestion"
                                     title="Створити нове запитання в цьому турі">
-                                <i class="bi bi-plus-lg"></i> Створити наступне
+                                <Icon Name="plus" /> Створити наступне
                             </button>
                         }
                     </div>
@@ -696,12 +696,12 @@
                                         <div class="mb-2 p-2 border rounded bg-light">
                                             <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <a href="@_editingQuestion.HandoutUrl" target="_blank" class="text-truncate small">
-                                                    <i class="bi bi-box-arrow-up-right me-1"></i>@GetFileName(_editingQuestion.HandoutUrl)
+                                                    <Icon Name="external-link" Class="me-1" />@GetFileName(_editingQuestion.HandoutUrl)
                                                 </a>
                                                 <button type="button" class="btn btn-danger btn-sm"
                                                         @onclick="DeleteHandoutMediaAsync"
                                                         disabled="@_isUploadingHandout">
-                                                    <i class="bi bi-trash me-1"></i>Видалити
+                                                    <Icon Name="trash" Class="me-1" />Видалити
                                                 </button>
                                             </div>
                                             @{
@@ -748,7 +748,7 @@
                                     @if (!string.IsNullOrEmpty(_handoutUploadError))
                                     {
                                         <div class="text-danger small mt-1">
-                                            <i class="bi bi-exclamation-circle me-1"></i>@_handoutUploadError
+                                            <Icon Name="exclamation-circle" Class="me-1" />@_handoutUploadError
                                         </div>
                                     }
                                 </div>
@@ -798,12 +798,12 @@
                                 <div class="mb-2 p-2 border rounded bg-light">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <a href="@_editingQuestion.CommentAttachmentUrl" target="_blank" class="text-truncate small">
-                                            <i class="bi bi-box-arrow-up-right me-1"></i>@GetFileName(_editingQuestion.CommentAttachmentUrl)
+                                            <Icon Name="external-link" Class="me-1" />@GetFileName(_editingQuestion.CommentAttachmentUrl)
                                         </a>
                                         <button type="button" class="btn btn-danger btn-sm"
                                                 @onclick="DeleteCommentMediaAsync"
                                                 disabled="@_isUploadingComment">
-                                            <i class="bi bi-trash me-1"></i>Видалити
+                                            <Icon Name="trash" Class="me-1" />Видалити
                                         </button>
                                     </div>
                                     @{
@@ -850,7 +850,7 @@
                             @if (!string.IsNullOrEmpty(_commentUploadError))
                             {
                                 <div class="text-danger small mt-1">
-                                    <i class="bi bi-exclamation-circle me-1"></i>@_commentUploadError
+                                    <Icon Name="exclamation-circle" Class="me-1" />@_commentUploadError
                                 </div>
                             }
                         </div>
@@ -878,7 +878,7 @@
                     @if (_questionSaveStatus != null)
                     {
                         <span class="text-muted me-auto">
-                            <i class="bi bi-check-circle me-1"></i>@_questionSaveStatus
+                            <Icon Name="check-circle" Class="me-1" />@_questionSaveStatus
                         </span>
                     }
                     <button type="button" class="btn btn-secondary" @onclick="CloseQuestionEditor">Закрити</button>

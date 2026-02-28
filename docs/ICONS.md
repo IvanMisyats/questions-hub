@@ -40,6 +40,22 @@ The following icons are available in the sprite file:
 | `i-folder` | folder, packages | Folder icon for packages navigation |
 | `i-person-badge` | person-badge, editor-badge | Person badge for editors navigation |
 | `i-person-gear` | person-gear, user-settings | Person with gear for user management |
+| `i-plus` | plus, add | Plus sign for add/create actions |
+| `i-exclamation-triangle` | exclamation-triangle, warning | Triangle warning icon |
+| `i-check-circle` | check-circle, success | Circle with checkmark for success |
+| `i-x-circle` | x-circle, error | Circle with X for error/failure |
+| `i-envelope-check` | envelope-check, email-confirmed | Envelope with checkmark for email confirmation |
+| `i-pencil` | pencil, edit | Pencil for edit actions |
+| `i-info-circle` | info-circle, info | Circle with "i" for informational messages |
+| `i-question-circle` | question-circle, help | Circle with "?" for help/questions |
+| `i-collection` | collection | Stacked cards for empty tour state |
+| `i-external-link` | external-link, box-arrow-up-right | Arrow pointing out of box for external links |
+| `i-upload` | upload | Upload arrow for import actions |
+| `i-arrow-repeat` | arrow-repeat, sync, refresh | Circular arrows for loading/sync |
+| `i-box` | box, package | 3D box for packages/items |
+| `i-list-ul` | list-ul, list | Bulleted list |
+| `i-arrow-left` | arrow-left, back | Left arrow for back navigation |
+| `i-exclamation-circle` | exclamation-circle | Circle with "!" for inline errors |
 
 ## Usage
 
