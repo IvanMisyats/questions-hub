@@ -8,6 +8,7 @@ Questions Hub provides full-text search across all published questions using Pos
 
 | Feature | Description |
 |---------|-------------|
+| **Prefix Search** | Find words by their beginning (сепул → сепульки, сепулькарії, сепулювання) |
 | **Ukrainian Morphology** | Finds words in different forms (відмінки, роди, числа) |
 | **Accent Insensitive** | Searches ignore Ukrainian accents (А́мундсен = Амундсен) |
 | **Typo Tolerance** | Finds results even with spelling mistakes |
@@ -39,10 +40,30 @@ The search looks in the following question fields (in order of priority):
 
 ## Technical Implementation
 
+### Search Strategy (3-tier hybrid)
+
+The search uses three complementary matching strategies, combined with OR:
+
+1. **Full-word FTS** (`websearch_to_tsquery` + `@@`) — morphological matching via Ukrainian hunspell dictionary. Handles word forms (відмінки, роди, числа) for words in the dictionary.
+
+2. **Prefix FTS** (`to_tsquery('simple', 'term:*')` + `@@`) — matches any word starting with the search term. Handles proper nouns, foreign words, and partial word search. Built by `SearchQueryParser.BuildPrefixTsquery()`.
+
+3. **Word-level trigram** (`word_similarity` + `<%`) — fuzzy matching for typo tolerance. Uses `word_similarity()` instead of `similarity()` to match at the word level within the document rather than the whole document.
+
+### Ranking
+
+Results are ranked by a weighted combination:
+
+| Strategy | Weight | Purpose |
+|----------|--------|---------|
+| Full-word FTS (`ts_rank_cd`) | 4x | Exact morphological matches rank highest |
+| Prefix FTS (`ts_rank_cd`) | 2x | Prefix matches rank medium |
+| Word-level trigram (`word_similarity`) | 1x | Fuzzy matches rank lowest |
+
 ### PostgreSQL Extensions
 
 - **`unaccent`** - Removes diacritical marks (accents)
-- **`pg_trgm`** - Trigram matching for fuzzy search
+- **`pg_trgm`** - Trigram matching for fuzzy search and `word_similarity`
 
 ### Text Search Configuration
 
@@ -58,8 +79,8 @@ The `Questions` table has generated columns:
 
 ### Indexes
 
-- GIN index on `SearchTextNorm` for trigram operations
-- GIN index on `SearchVector` for full-text search
+- GIN index on `SearchTextNorm` for trigram operations (`%`, `<%` operators)
+- GIN index on `SearchVector` for full-text search (`@@` operator — used by both full-word and prefix tsqueries)
 
 ## Setup Requirements
 
@@ -133,14 +154,15 @@ The `*Highlighted` fields contain the same text as the original fields but with 
 
 The search uses a hybrid approach for highlighting:
 
-1. **Server-side (PostgreSQL ts_headline)**: Highlights words matched by the full-text search using Ukrainian morphology. Handles word forms (відмінки, роди, числа).
+1. **Server-side (PostgreSQL ts_headline)**: Highlights words matched by the combined full-word + prefix tsquery. When a prefix like "сепул" matches, the entire matched word ("сепульки") is highlighted.
 
-2. **Client-side fallback (HighlightSanitizer)**: When ts_headline doesn't produce highlights (e.g., for accented words like "Копенга́гена" when searching "Копенгаген"), the sanitizer applies accent-insensitive regex-based highlighting.
+2. **Client-side fallback (HighlightSanitizer)**: When ts_headline doesn't produce highlights (e.g., for accented words like "Копенга́гена" when searching "Копенгаген"), the sanitizer applies accent-insensitive character-level matching. This also handles prefix highlighting at the substring level.
 
 This ensures:
 - Words with accents (stress marks) are properly highlighted
 - Original text is preserved with its accents
-- Both morphological variants and exact matches are highlighted
+- Both morphological variants, prefix matches, and exact matches are highlighted
+- Proper nouns not in the Ukrainian dictionary are still findable by prefix
 
 ## Troubleshooting
 

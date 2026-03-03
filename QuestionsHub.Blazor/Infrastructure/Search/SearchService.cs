@@ -54,8 +54,9 @@ public class SearchService
     }
 
     /// <summary>
-    /// Searches questions using hybrid FTS + trigram matching.
+    /// Searches questions using hybrid FTS + prefix + trigram matching.
     /// Supports web-style query syntax: AND (default), OR, "phrase", -exclude.
+    /// Prefix matching allows finding words by their beginning (e.g., "сепул" finds "сепульки").
     /// </summary>
     /// <param name="query">Search query string</param>
     /// <param name="accessContext">User access context for filtering by access level</param>
@@ -76,6 +77,9 @@ public class SearchService
         // Normalize apostrophes in search query to match stored data
         query = TextNormalizer.NormalizeApostrophes(query)!;
 
+        // Build prefix tsquery for partial word matching (e.g., "сепул" → "'сепул':*")
+        var prefixTsquery = SearchQueryParser.BuildPrefixTsquery(query);
+
         // Clamp limit to reasonable bounds
         limit = Math.Clamp(limit, 1, 100);
 
@@ -92,6 +96,9 @@ public class SearchService
                 WITH q AS (
                     SELECT
                         websearch_to_tsquery('ukrainian', public.qh_normalize({query})) AS tsq,
+                        CASE WHEN {prefixTsquery} IS NOT NULL
+                             THEN to_tsquery('simple', public.qh_normalize({prefixTsquery}))
+                        END AS tsq_prefix,
                         public.qh_normalize({query}) AS qnorm
                 )
                 SELECT
@@ -110,22 +117,30 @@ public class SearchService
                     qu.""Comment"",
                     qu.""CommentAttachmentUrl"",
                     qu.""Source"",
-                    ts_headline('ukrainian', COALESCE(qu.""Text"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""Text"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""TextHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""Answer"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""Answer"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""AnswerHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""HandoutText"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""HandoutText"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""HandoutTextHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""AcceptedAnswers"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""AcceptedAnswers"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""AcceptedAnswersHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""RejectedAnswers"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""RejectedAnswers"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""RejectedAnswersHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""Comment"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""Comment"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""CommentHighlighted"",
-                    ts_headline('ukrainian', COALESCE(qu.""Source"", ''), q.tsq,
+                    ts_headline('ukrainian', COALESCE(qu.""Source"", ''),
+                        COALESCE(q.tsq || q.tsq_prefix, q.tsq, q.tsq_prefix),
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""SourceHighlighted"",
-                    (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) +
-                     COALESCE(similarity(qu.""SearchTextNorm"", q.qnorm), 0))::float8 AS ""Rank"",
+                    (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) * 4.0 +
+                     COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq_prefix), 0) * 2.0 +
+                     COALESCE(word_similarity(q.qnorm, qu.""SearchTextNorm""), 0))::float8 AS ""Rank"",
                     (SELECT string_agg(a.""Id""::text || ':' || a.""FirstName"" || ' ' || a.""LastName"", '|' ORDER BY a.""LastName"", a.""FirstName"")
                      FROM ""QuestionAuthors"" qa
                      JOIN ""Authors"" a ON qa.""AuthorsId"" = a.""Id""
@@ -143,7 +158,8 @@ public class SearchService
                 WHERE p.""Status"" = 1
                   AND (
                        qu.""SearchVector"" @@ q.tsq
-                       OR qu.""SearchTextNorm"" % q.qnorm
+                       OR (q.tsq_prefix IS NOT NULL AND qu.""SearchVector"" @@ q.tsq_prefix)
+                       OR q.qnorm <% qu.""SearchTextNorm""
                   )
                   AND (
                        {isAdmin} = true
