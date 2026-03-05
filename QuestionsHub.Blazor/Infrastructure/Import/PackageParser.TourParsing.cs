@@ -42,9 +42,31 @@ public partial class PackageParser
             return false;
         }
 
+        // "Тур 0. Бліц-криг" matches TourStartWithPreamble as a regular tour with number "0".
+        // Treat any tour numbered "0" as warmup so its numbering doesn't interfere with main tours.
+        if (tourNumber == "0" && tourType == TourType.Regular)
+        {
+            tourType = TourType.Warmup;
+        }
+
         SaveCurrentQuestion(ctx);
         SaveCurrentBlock(ctx);
         EnsurePackageHeaderParsed(ctx);
+
+        // Warmup/shootout tours have independent numbering.
+        // Save current numbering state so the next regular tour can resume from where it left off.
+        if (tourType is TourType.Warmup or TourType.Shootout)
+        {
+            ctx.SavedNumberingState ??= (ctx.Mode, ctx.ExpectedNextQuestionGlobal);
+            ctx.Mode = NumberingMode.Unknown;
+            ctx.ExpectedNextQuestionGlobal = null;
+        }
+        else if (ctx.SavedNumberingState is { } saved)
+        {
+            ctx.Mode = saved.Mode;
+            ctx.ExpectedNextQuestionGlobal = saved.ExpectedGlobal;
+            ctx.SavedNumberingState = null;
+        }
 
         var orderIndex = ctx.Result.Tours.Count;
         ctx.CurrentTour = new TourDto

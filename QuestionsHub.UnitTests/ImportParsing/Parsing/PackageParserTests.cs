@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure.Import;
 using Xunit;
 
@@ -4902,6 +4903,258 @@ public class PackageParserTests
         // Assert
         var q = result.Tours[0].Questions[0];
         q.Text.Should().Be("Текст питання"); // No trailing blank lines
+    }
+
+    #endregion
+
+    #region Warmup Independent Numbering
+
+    /// <summary>
+    /// Warmup tour (1-10) followed by main tours with global numbering (1-12, 13-24, 25-36).
+    /// The warmup numbering must not poison the global mode detection for main tours.
+    /// </summary>
+    [Fact]
+    public void Parse_WarmupThenGlobalMainTours_DetectsGlobalNumbering()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>();
+        blocks.Add(Block("Розминка"));
+        for (var i = 1; i <= 10; i++)
+        {
+            blocks.Add(Block($"{i}. Розминкове питання {i}"));
+            blocks.Add(Block($"Відповідь: Р{i}"));
+        }
+
+        blocks.Add(Block("Тур 1"));
+        for (var i = 1; i <= 12; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 1 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        blocks.Add(Block("Тур 2"));
+        for (var i = 13; i <= 24; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 2 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        blocks.Add(Block("Тур 3"));
+        for (var i = 25; i <= 36; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 3 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(4);
+        result.Tours[0].Type.Should().Be(TourType.Warmup);
+        result.Tours[0].Questions.Should().HaveCount(10);
+
+        result.Tours[1].Questions.Should().HaveCount(12);
+        result.Tours[1].Questions[0].Number.Should().Be("1");
+
+        result.Tours[2].Questions.Should().HaveCount(12);
+        result.Tours[2].Questions[0].Number.Should().Be("13");
+
+        result.Tours[3].Questions.Should().HaveCount(12);
+        result.Tours[3].Questions[0].Number.Should().Be("25");
+
+        result.NumberingMode.Should().Be(QuestionNumberingMode.Global);
+    }
+
+    /// <summary>
+    /// Warmup tour followed by per-tour numbering main tours (each starts at 1).
+    /// Ensures the save/restore doesn't break PerTour detection.
+    /// </summary>
+    [Fact]
+    public void Parse_WarmupThenPerTourMainTours_DetectsPerTourNumbering()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>();
+        blocks.Add(Block("Розминка"));
+        for (var i = 1; i <= 3; i++)
+        {
+            blocks.Add(Block($"{i}. Розминкове питання {i}"));
+            blocks.Add(Block($"Відповідь: Р{i}"));
+        }
+
+        blocks.Add(Block("Тур 1"));
+        for (var i = 1; i <= 6; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 1 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        blocks.Add(Block("Тур 2"));
+        for (var i = 1; i <= 6; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 2 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Type.Should().Be(TourType.Warmup);
+        result.Tours[0].Questions.Should().HaveCount(3);
+
+        result.Tours[1].Questions.Should().HaveCount(6);
+        result.Tours[1].Questions[0].Number.Should().Be("1");
+
+        result.Tours[2].Questions.Should().HaveCount(6);
+        result.Tours[2].Questions[0].Number.Should().Be("1");
+
+        result.NumberingMode.Should().Be(QuestionNumberingMode.PerTour);
+    }
+
+    /// <summary>
+    /// Warmup tour appearing after main tours (at end of document).
+    /// The warmup numbering must not break already-detected global mode.
+    /// EnsureSpecialTourPositions moves warmup to front after parsing.
+    /// </summary>
+    [Fact]
+    public void Parse_GlobalMainToursThenWarmupAtEnd_DetectsGlobalNumbering()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>();
+
+        blocks.Add(Block("Тур 1"));
+        for (var i = 1; i <= 6; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 1 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        blocks.Add(Block("Тур 2"));
+        for (var i = 7; i <= 12; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 2 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        blocks.Add(Block("Розминка"));
+        for (var i = 1; i <= 3; i++)
+        {
+            blocks.Add(Block($"{i}. Розминкове питання {i}"));
+            blocks.Add(Block($"Відповідь: Р{i}"));
+        }
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert — warmup moved to front by EnsureSpecialTourPositions
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Type.Should().Be(TourType.Warmup);
+        result.Tours[0].Questions.Should().HaveCount(3);
+
+        result.Tours[1].Questions.Should().HaveCount(6);
+        result.Tours[1].Questions[0].Number.Should().Be("1");
+
+        result.Tours[2].Questions.Should().HaveCount(6);
+        result.Tours[2].Questions[0].Number.Should().Be("7");
+
+        result.NumberingMode.Should().Be(QuestionNumberingMode.Global);
+    }
+
+    /// <summary>
+    /// "Тур 0. Бліц-криг" (tour zero with preamble) must be treated as warmup,
+    /// so its 1-10 numbering doesn't force PerTour mode on the main tours.
+    /// Duplet sub-questions numbered "1.", "2." inside globally-numbered tours must
+    /// be treated as regular content, not as new questions.
+    /// </summary>
+    [Fact]
+    public void Parse_TourZeroWithPreambleThenGlobalToursWithDuplets_DetectsGlobalNumbering()
+    {
+        // Arrange — mirrors "ГАС-2015" package structure
+        var blocks = new List<DocBlock>();
+        blocks.Add(Block("Галицький синхрон"));
+
+        // "Тур 0. Бліц-криг" — should be detected as warmup despite preamble text
+        blocks.Add(Block("Тур 0. Бліц-криг"));
+        for (var i = 1; i <= 10; i++)
+        {
+            blocks.Add(Block($"{i}. Питання бліц {i}"));
+            blocks.Add(Block($"Відповідь: Б{i}"));
+        }
+
+        // "Основний пакет" header (just text, not a tour)
+        blocks.Add(Block("Основний пакет"));
+
+        // Tour 1: questions 1-12 (global numbering starts fresh after warmup)
+        blocks.Add(Block("Тур 1"));
+        for (var i = 1; i <= 12; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 1 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        // Tour 2: questions 13-24 with a duplet at question 21
+        blocks.Add(Block("Тур 2"));
+        for (var i = 13; i <= 20; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 2 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+        // Duplet: question 21 with sub-questions "1." and "2."
+        blocks.Add(Block("21. Дуплет. Два запитання по 30 секунд."));
+        blocks.Add(Block("1. Підпитання дуплета А"));
+        blocks.Add(Block("2. Підпитання дуплета Б"));
+        blocks.Add(Block("Відповідь: 1. Відповідь А. 2. Відповідь Б."));
+        for (var i = 22; i <= 24; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 2 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        // Tour 3: questions 25-36 with a duplet at question 30
+        blocks.Add(Block("Тур 3"));
+        for (var i = 25; i <= 29; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 3 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+        blocks.Add(Block("30. Дуплет. Два запитання по 30 секунд."));
+        blocks.Add(Block("1. Підпитання дуплета В"));
+        blocks.Add(Block("2. Підпитання дуплета Г"));
+        blocks.Add(Block("Відповідь: 1. Відповідь В. 2. Відповідь Г."));
+        for (var i = 31; i <= 36; i++)
+        {
+            blocks.Add(Block($"{i}. Питання туру 3 номер {i}"));
+            blocks.Add(Block($"Відповідь: В{i}"));
+        }
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(4);
+
+        // Warmup (Тур 0. Бліц-криг) moved to front
+        result.Tours[0].Type.Should().Be(TourType.Warmup);
+        result.Tours[0].Questions.Should().HaveCount(10);
+
+        // Tour 1: 12 questions
+        result.Tours[1].Questions.Should().HaveCount(12);
+        result.Tours[1].Questions[0].Number.Should().Be("1");
+
+        // Tour 2: 12 questions (duplet sub-questions are part of Q21 text, not separate questions)
+        result.Tours[2].Questions.Should().HaveCount(12);
+        result.Tours[2].Questions[0].Number.Should().Be("13");
+        result.Tours[2].Questions[8].Number.Should().Be("21");
+        result.Tours[2].Questions[8].Text.Should().Contain("Підпитання дуплета А");
+        result.Tours[2].Questions[8].Text.Should().Contain("Підпитання дуплета Б");
+
+        // Tour 3: 12 questions
+        result.Tours[3].Questions.Should().HaveCount(12);
+        result.Tours[3].Questions[0].Number.Should().Be("25");
+
+        result.NumberingMode.Should().Be(QuestionNumberingMode.Global);
     }
 
     #endregion

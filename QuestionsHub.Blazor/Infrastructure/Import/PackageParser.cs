@@ -42,6 +42,13 @@ public partial class PackageParser
         public QuestionFormat Format { get; set; } = QuestionFormat.Unknown;
         public int? ExpectedNextQuestionInTour { get; set; }
         public int? ExpectedNextQuestionGlobal { get; set; }
+
+        /// <summary>
+        /// Saved numbering state from before a warmup/shootout tour.
+        /// Restored when the next regular tour starts, allowing warmup/shootout
+        /// tours to have independent question numbering.
+        /// </summary>
+        public (NumberingMode Mode, int? ExpectedGlobal)? SavedNumberingState { get; set; }
         public bool QuestionCreatedInCurrentBlock { get; set; }
         public DocBlock? CurrentBlock { get; set; }
 
