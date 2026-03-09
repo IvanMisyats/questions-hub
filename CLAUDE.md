@@ -43,6 +43,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 - **Always squash-merge**
 - Do not push branches to remote
 - Commit only on explicit command
+- **Never amend commits that have been pushed to origin** — create a new commit instead
 
 ## Key Docs (read when needed)
 
