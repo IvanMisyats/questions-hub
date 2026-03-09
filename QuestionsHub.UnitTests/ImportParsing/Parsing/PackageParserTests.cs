@@ -431,6 +431,96 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Tests reversed Roman numeral tour names: "І тур", "ІІ тур", "III Тур" (numerals BEFORE "тур").
+    /// </summary>
+    [Theory]
+    [InlineData("І тур", "1")]
+    [InlineData("ІІ тур", "2")]
+    [InlineData("ІІІ тур", "3")]
+    [InlineData("IV тур", "4")]
+    [InlineData("III Тур", "3")]
+    [InlineData("II ТУР", "2")]
+    [InlineData("  ІІ тур  ", "2")]    // With whitespace
+    [InlineData("ІІІ тур.", "3")]      // With trailing dot
+    [InlineData("IV тур:", "4")]       // With trailing colon
+    public void Parse_ReversedRomanTourStart_DetectsTour(string tourLine, string expectedNumber)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+    }
+
+    /// <summary>
+    /// Tests reversed Roman numeral tour with inline preamble: "ІІ тур. Лірики".
+    /// </summary>
+    [Theory]
+    [InlineData("ІІ тур. Лірики", "2", "Лірики")]
+    [InlineData("III Тур: Фізики", "3", "Фізики")]
+    [InlineData("І тур. НАЗВА ТУРУ", "1", "НАЗВА ТУРУ")]
+    public void Parse_ReversedRomanTourStartWithPreamble_DetectsTourAndPreamble(string tourLine, string expectedNumber, string expectedPreamble)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedNumber);
+        result.Tours[0].Preamble.Should().Be(expectedPreamble);
+    }
+
+    /// <summary>
+    /// Tests multiple tours using reversed Roman numeral format (as in "Галицький синхрон - 2017").
+    /// </summary>
+    [Fact]
+    public void Parse_MultipleReversedRomanTours_ParsesAllTours()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("І тур"),
+            Block("1. Питання туру 1"),
+            Block("Відповідь: В1"),
+            Block("ІІ тур"),
+            Block("1. Питання туру 2"),
+            Block("Відповідь: В2"),
+            Block("ІІІ тур"),
+            Block("1. Питання туру 3"),
+            Block("Відповідь: В3")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(3);
+        result.Tours[0].Number.Should().Be("1");
+        result.Tours[0].Questions.Should().HaveCount(1);
+        result.Tours[1].Number.Should().Be("2");
+        result.Tours[1].Questions.Should().HaveCount(1);
+        result.Tours[2].Number.Should().Be("3");
+        result.Tours[2].Questions.Should().HaveCount(1);
+    }
+
+    /// <summary>
     /// Tests that tours without inline preamble (just "Тур N") don't have the inline preamble,
     /// but still collect subsequent tour header text.
     /// </summary>

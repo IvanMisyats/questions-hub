@@ -54,6 +54,14 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*(?:ТУР|Тур|Tour)\s+([IІVXХLCDMіivxхlcdm]+)[\.:,]?\s+(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex TourRomanStartWithPreamble();
 
+    // Matches: "ІІ тур", "III Тур", "ІІІ ТУР" (Roman numerals BEFORE word "Тур")
+    [GeneratedRegex(@"^\s*([IІVXХLCDMіivxхlcdm]+)\s+(?:ТУР|Тур|тур|Tour)[\.:,]?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex RomanTourStart();
+
+    // Matches: "ІІ тур. Лірики", "III Тур: Назва" (Roman numerals before "Тур" with preamble)
+    [GeneratedRegex(@"^\s*([IІVXХLCDMіivxхlcdm]+)\s+(?:ТУР|Тур|тур|Tour)[\.:,]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex RomanTourStartWithPreamble();
+
     // Warmup tour detection: "Розминка", "Warmup", "Тур 0", "Розминковий тур"
     [GeneratedRegex(@"^\s*(?:Розминка|Warmup|Розминковий\s+тур)\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex WarmupTourStart();

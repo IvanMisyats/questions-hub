@@ -211,6 +211,31 @@ public partial class PackageParser
             }
         }
 
+        // Try reversed Roman numeral patterns: "ІІ тур", "III Тур"
+        var reversedRomanMatch = ParserPatterns.RomanTourStart().Match(text);
+        if (reversedRomanMatch.Success)
+        {
+            var romanNumber = RomanToNumber(reversedRomanMatch.Groups[1].Value);
+            if (romanNumber != null)
+            {
+                tourNumber = romanNumber;
+                return true;
+            }
+        }
+
+        // Try reversed Roman numeral with preamble: "ІІ тур. Лірики"
+        var reversedRomanPreambleMatch = ParserPatterns.RomanTourStartWithPreamble().Match(text);
+        if (reversedRomanPreambleMatch.Success)
+        {
+            var romanNumber = RomanToNumber(reversedRomanPreambleMatch.Groups[1].Value);
+            if (romanNumber != null)
+            {
+                tourNumber = romanNumber;
+                preamble = reversedRomanPreambleMatch.Groups[2].Value.Trim();
+                return true;
+            }
+        }
+
         // Try ordinal patterns (normalize apostrophes for matching)
         var normalizedText = TextNormalizer.NormalizeApostrophes(text) ?? text;
 
