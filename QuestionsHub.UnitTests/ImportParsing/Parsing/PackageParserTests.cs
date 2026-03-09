@@ -1643,6 +1643,8 @@ public class PackageParserTests
     [InlineData("Відповідь:Київ", "Київ")]
     [InlineData("  Відповідь:   Харків  ", "Харків")]
     [InlineData("ВІДПОВІДЬ: Львів", "Львів")]
+    [InlineData("Відповіді: відповідь", "відповідь")]     // Plural form
+    [InlineData("ВІДПОВІДІ: ВЕЛИКИМИ", "ВЕЛИКИМИ")]       // Plural uppercase
     public void Parse_AnswerLabel_ExtractsAnswer(string answerLine, string expectedAnswer)
     {
         // Arrange

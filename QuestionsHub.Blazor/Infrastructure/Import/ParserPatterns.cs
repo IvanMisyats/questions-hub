@@ -102,9 +102,9 @@ public static partial class ParserPatterns
     // Labels (field markers)
     // Note: Using character class to match both Cyrillic 'і' (U+0456) and Latin 'i' (U+0069)
     // This handles common typing/OCR errors where Latin 'i' is used instead of Cyrillic 'і'
-    // Also supports Russian "Ответ" as alternative to Ukrainian "Відповідь"
+    // Also supports Russian "Ответ"/"Ответы" as alternative to Ukrainian "Відповідь"/"Відповіді"
     // Separator can be colon (:) or dot with optional whitespace (.) to support dot at end of line
-    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]дь|Ответ)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*(?:В[\u0456\u0069]дпов[\u0456\u0069]д[ь\u0456\u0069]|Ответы?)\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex AnswerLabel();
 
     // Matches: "Залік: ...", "Заліки: ...", "Залік (не оголошувати): ...", "Залік. ..."
