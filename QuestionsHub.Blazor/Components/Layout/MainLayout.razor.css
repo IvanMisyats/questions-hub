@@ -116,8 +116,8 @@ main {
     }
 
     article {
-        padding-left: 0.75rem !important;
-        padding-right: 0.75rem !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
     }
 
     /* Mobile sidebar drawer */

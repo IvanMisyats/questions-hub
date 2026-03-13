@@ -11,6 +11,24 @@
     }
 }
 
+/* Tighter mobile layout for reading */
+@media (max-width: 767.98px) {
+    ::deep .container-fluid {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    ::deep .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    ::deep .row > * {
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+
 /* Tour sections */
 .tour-section {
     margin-bottom: 3rem;

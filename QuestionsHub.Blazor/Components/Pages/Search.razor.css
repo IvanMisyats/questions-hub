@@ -12,7 +12,7 @@
 
 /* Search result card styling */
 .search-result-card {
-    border-left: 4px solid var(--app-primary);
+    border-left: 2px solid var(--app-primary);
 }
 
 .search-result-card .card-header {
@@ -31,7 +31,7 @@
     padding: 0.75rem;
     background: var(--app-handout-bg);
     border-radius: 0.25rem;
-    border-left: 4px solid var(--app-handout-border);
+    border-left: 2px solid var(--app-handout-border);
     white-space: pre-line;
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.875rem;
