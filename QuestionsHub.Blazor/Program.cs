@@ -231,7 +231,18 @@ internal static class ApplicationExtensions
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error", createScopeForErrors: true);
+            app.UseHsts();
         }
+
+        // Security headers
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers.XContentTypeOptions = "nosniff";
+            context.Response.Headers.XFrameOptions = "DENY";
+            context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            context.Response.Headers.ContentSecurityPolicy = "frame-ancestors 'none'";
+            await next();
+        });
 
         // Ukrainian culture
         var supportedCultures = new[] { new CultureInfo("uk-UA") };
@@ -282,7 +293,7 @@ internal static class ApplicationExtensions
                     return;
                 }
 
-                ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+                ctx.Context.Response.Headers.XContentTypeOptions = "nosniff";
                 ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
                 ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000");
             }
