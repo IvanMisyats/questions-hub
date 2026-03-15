@@ -74,6 +74,9 @@ internal static class ServiceCollectionExtensions
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.EnableRetryOnFailure(maxRetryCount: 3)), ServiceLifetime.Scoped);
 
+        services.AddHealthChecks()
+            .AddDbContextCheck<QuestionsHubDbContext>("database");
+
         services.AddMemoryCache();
 
         services.AddScoped<SearchService>();
@@ -264,6 +267,7 @@ internal static class ApplicationExtensions
         app.UseAuthorization();
         app.UseAntiforgery();
 
+        app.MapHealthChecks("/health");
         app.MapStaticAssets();
         app.MapControllers();
         app.MapRazorComponents<App>()
