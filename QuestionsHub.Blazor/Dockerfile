@@ -23,6 +23,12 @@ FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "QuestionsHub.Blazor.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 FROM base AS final
+
+# Run as non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+USER appuser
 ENTRYPOINT ["dotnet", "QuestionsHub.Blazor.dll"]
