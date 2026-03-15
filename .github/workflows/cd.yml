@@ -99,10 +99,9 @@ jobs:
                      "$UPLOADS_PATH/jobs" \
                      "$KEYS_PATH"
 
-            # Set directory permissions only (don't recurse into files to avoid errors on root-owned files)
+            # Set ownership to match container's appuser (UID 1654)
+            chown -R 1654:1654 "$UPLOADS_PATH" "$KEYS_PATH"
             chmod 755 "$UPLOADS_PATH" "$UPLOADS_PATH/handouts" "$UPLOADS_PATH/packages" "$UPLOADS_PATH/jobs"
-
-            # Set secure permissions for keys directory (readable/writable only by owner)
             chmod 700 "$KEYS_PATH"
 
             # Stop existing containers (if any)
