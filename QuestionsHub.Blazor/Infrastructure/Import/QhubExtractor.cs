@@ -17,6 +17,12 @@ public class QhubExtractor
     /// <summary>Maximum download size per external asset (20 MB).</summary>
     private const long MaxAssetDownloadBytes = 20 * 1024 * 1024;
 
+    /// <summary>Maximum total decompressed size for all ZIP entries (500 MB).</summary>
+    private const long MaxTotalDecompressedBytes = 500 * 1024 * 1024;
+
+    /// <summary>Maximum compression ratio to detect decompression bombs.</summary>
+    private const long MaxCompressionRatio = 100;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = false,
@@ -43,6 +49,8 @@ public class QhubExtractor
         QhubPackage package;
         using (var zip = ZipFile.OpenRead(qhubFilePath))
         {
+            ValidateZipSafety(zip);
+
             // Find package.json
             var packageJsonEntry = zip.GetEntry("package.json")
                 ?? throw new ExtractionException("Файл package.json не знайдено в архіві .qhub");
@@ -53,18 +61,7 @@ public class QhubExtractor
                 ?? throw new ExtractionException("Не вдалося прочитати package.json");
 
             // Extract local assets from assets/ folder
-            foreach (var entry in zip.Entries)
-            {
-                if (!entry.FullName.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var fileName = Path.GetFileName(entry.FullName);
-                if (string.IsNullOrEmpty(fileName))
-                    continue; // skip directory entries
-
-                var destPath = Path.Combine(assetsOutputPath, fileName);
-                entry.ExtractToFile(destPath, overwrite: true);
-            }
+            ExtractAssets(zip, assetsOutputPath);
         }
 
         return await MapToParseResult(package, assetsOutputPath, ct);
@@ -80,6 +77,8 @@ public class QhubExtractor
         QhubPackage package;
         using (var zip = new ZipArchive(qhubStream, ZipArchiveMode.Read, leaveOpen: true))
         {
+            ValidateZipSafety(zip);
+
             var packageJsonEntry = zip.GetEntry("package.json")
                 ?? throw new ExtractionException("Файл package.json не знайдено в архіві .qhub");
 
@@ -87,21 +86,65 @@ public class QhubExtractor
             package = await JsonSerializer.DeserializeAsync<QhubPackage>(stream, JsonOptions, ct)
                 ?? throw new ExtractionException("Не вдалося прочитати package.json");
 
-            foreach (var entry in zip.Entries)
-            {
-                if (!entry.FullName.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var fileName = Path.GetFileName(entry.FullName);
-                if (string.IsNullOrEmpty(fileName))
-                    continue;
-
-                var destPath = Path.Combine(assetsOutputPath, fileName);
-                entry.ExtractToFile(destPath, overwrite: true);
-            }
+            ExtractAssets(zip, assetsOutputPath);
         }
 
         return await MapToParseResult(package, assetsOutputPath, ct);
+    }
+
+    /// <summary>
+    /// Validates ZIP archive to prevent decompression bombs and path traversal.
+    /// </summary>
+    private static void ValidateZipSafety(ZipArchive zip)
+    {
+        long totalDecompressed = 0;
+
+        foreach (var entry in zip.Entries)
+        {
+            totalDecompressed += entry.Length;
+
+            if (totalDecompressed > MaxTotalDecompressedBytes)
+            {
+                throw new ExtractionException(
+                    $"Архів занадто великий після розпакування (перевищено ліміт {MaxTotalDecompressedBytes / 1024 / 1024} МБ)");
+            }
+
+            // Check compression ratio for non-empty entries
+            if (entry.CompressedLength > 0 && entry.Length / entry.CompressedLength > MaxCompressionRatio)
+            {
+                throw new ExtractionException(
+                    $"Підозрілий ступінь стиснення для '{entry.FullName}' (можлива декомпресійна бомба)");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extracts asset files from the assets/ folder in the ZIP, with path traversal protection.
+    /// </summary>
+    private static void ExtractAssets(ZipArchive zip, string assetsOutputPath)
+    {
+        var targetFullPath = Path.GetFullPath(assetsOutputPath);
+
+        foreach (var entry in zip.Entries)
+        {
+            if (!entry.FullName.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var fileName = Path.GetFileName(entry.FullName);
+            if (string.IsNullOrEmpty(fileName))
+                continue; // skip directory entries
+
+            var destPath = Path.GetFullPath(Path.Combine(assetsOutputPath, fileName));
+
+            // Verify the resolved path is within the target directory
+            if (!destPath.StartsWith(targetFullPath + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && destPath != targetFullPath)
+            {
+                throw new ExtractionException($"Виявлено спробу обходу шляху: '{entry.FullName}'");
+            }
+
+            entry.ExtractToFile(destPath, overwrite: true);
+        }
     }
 
     private async Task<ParseResult> MapToParseResult(QhubPackage package, string assetsOutputPath, CancellationToken ct)
