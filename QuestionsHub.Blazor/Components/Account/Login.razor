@@ -24,6 +24,7 @@
                     }
 
                     <form method="post" action="/api/Auth/login">
+                        <AntiforgeryToken />
                         <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
 
                         <div class="mb-3">

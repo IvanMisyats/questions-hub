@@ -52,7 +52,7 @@ internal static class ServiceCollectionExtensions
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
         services.AddRazorComponents().AddInteractiveServerComponents();
-        services.AddControllers();
+        services.AddControllersWithViews();
 
         services.AddHttpContextAccessor();
         services.AddHttpClient();

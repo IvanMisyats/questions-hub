@@ -21,6 +21,7 @@
                     <div id="clientValidationError" class="alert alert-danger d-none" role="alert"></div>
 
                     <form method="post" action="/api/Auth/register" id="registerForm" onsubmit="return validateRegisterForm()">
+                        <AntiforgeryToken />
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="firstName" class="form-label">Ім'я *</label>

@@ -27,6 +27,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login([FromForm] string email, [FromForm] string password, [FromForm] bool rememberMe, [FromForm] string? returnUrl)
     {
         var user = await _userManager.FindByEmailAsync(email);
@@ -53,6 +54,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Register(
         [FromForm] string firstName,
         [FromForm] string lastName,
@@ -147,14 +149,8 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("logout")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
-    {
-        await _signInManager.SignOutAsync();
-        return LocalRedirect("/");
-    }
-
-    [HttpGet("logout")]
-    public async Task<IActionResult> LogoutGet()
     {
         await _signInManager.SignOutAsync();
         return LocalRedirect("/");

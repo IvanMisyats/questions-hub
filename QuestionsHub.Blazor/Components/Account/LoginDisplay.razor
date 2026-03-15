@@ -18,6 +18,7 @@
             <li><hr class="dropdown-divider"></li>
             <li>
                 <form method="post" action="/api/Auth/logout">
+                    <AntiforgeryToken />
                     <button type="submit" class="dropdown-item user-menu-logout">Вийти</button>
                 </form>
             </li>

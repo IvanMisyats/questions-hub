@@ -1,11 +1,9 @@
-﻿@page "/Account/Logout"
-@inject NavigationManager NavigationManager
+@page "/Account/Logout"
 
-@code {
-    protected override void OnInitialized()
-    {
-        // Redirect to the logout API endpoint which will clear cookies and redirect to home
-        NavigationManager.NavigateTo("/api/Auth/logout", forceLoad: true);
-    }
-}
+<form method="post" action="/api/Auth/logout" id="logoutForm">
+    <AntiforgeryToken />
+</form>
 
+<script>
+    document.getElementById('logoutForm').submit();
+</script>
