@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Infrastructure.Email;
 
 namespace QuestionsHub.Blazor.Controllers;
 
@@ -15,15 +17,19 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailSender<ApplicationUser> _emailSender;
+    private readonly bool _emailConfigured;
 
     public AuthController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
-        IEmailSender<ApplicationUser> emailSender)
+        IEmailSender<ApplicationUser> emailSender,
+        IOptions<EmailSettings> emailSettings)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _emailSender = emailSender;
+        _emailConfigured = !string.IsNullOrEmpty(emailSettings.Value.ApiKey)
+                           && !string.IsNullOrEmpty(emailSettings.Value.ApiSecret);
     }
 
     [HttpPost("login")]
@@ -108,15 +114,24 @@ public class AuthController : ControllerBase
         {
             await _userManager.AddToRoleAsync(user, "User");
 
-            // Generate email confirmation token and send email
-            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var request = HttpContext.Request;
-            var callbackUrl = $"{request.Scheme}://{request.Host}/Account/ConfirmEmail?userId={Uri.EscapeDataString(user.Id)}&code={Uri.EscapeDataString(code)}";
+            if (_emailConfigured)
+            {
+                // Generate email confirmation token and send email
+                var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var request = HttpContext.Request;
+                var callbackUrl = $"{request.Scheme}://{request.Host}/Account/ConfirmEmail?userId={Uri.EscapeDataString(user.Id)}&code={Uri.EscapeDataString(code)}";
 
-            await _emailSender.SendConfirmationLinkAsync(user, email, callbackUrl);
+                await _emailSender.SendConfirmationLinkAsync(user, email, callbackUrl);
 
-            // Redirect to confirmation page instead of auto-login
-            return Redirect($"/Account/RegisterConfirmation?email={Uri.EscapeDataString(email)}");
+                // Redirect to confirmation page
+                return Redirect($"/Account/RegisterConfirmation?email={Uri.EscapeDataString(email)}");
+            }
+
+            // Email not configured (local dev) — auto-confirm and sign in
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            await _userManager.ConfirmEmailAsync(user, token);
+            await _signInManager.SignInAsync(user, isPersistent: false);
+            return LocalRedirect("/");
         }
 
         var errors = string.Join(",", result.Errors.Select(e => e.Code));

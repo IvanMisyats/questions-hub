@@ -143,6 +143,12 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
     /// </summary>
     private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {
+        if (string.IsNullOrEmpty(_settings.ApiKey) || string.IsNullOrEmpty(_settings.ApiSecret))
+        {
+            _logger.LogWarning("Email not configured (API keys missing). Skipping email to {Email}", toEmail);
+            return;
+        }
+
         try
         {
             var client = new MailjetClient(_settings.ApiKey, _settings.ApiSecret);

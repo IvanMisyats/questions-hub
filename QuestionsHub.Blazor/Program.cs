@@ -35,6 +35,18 @@ builder.Services
 
 var app = builder.Build();
 
+// Validate production configuration
+if (!app.Environment.IsDevelopment())
+{
+    var emailSettings = app.Configuration.GetSection(EmailSettings.SectionName).Get<EmailSettings>();
+    if (string.IsNullOrEmpty(emailSettings?.ApiKey) || string.IsNullOrEmpty(emailSettings?.ApiSecret))
+    {
+        throw new InvalidOperationException(
+            "Email:ApiKey and Email:ApiSecret must be configured in production. " +
+            "Email confirmation cannot work without a configured email provider.");
+    }
+}
+
 // Initialize database
 await app.InitializeDatabase(args);
 
@@ -112,7 +124,7 @@ internal static class ServiceCollectionExtensions
                 options.User.RequireUniqueEmail = true;
 
                 // SignIn settings
-                options.SignIn.RequireConfirmedEmail = false;
+                options.SignIn.RequireConfirmedEmail = true;
                 options.SignIn.RequireConfirmedAccount = false;
             })
             .AddEntityFrameworkStores<QuestionsHubDbContext>()
