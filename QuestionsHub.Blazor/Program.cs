@@ -117,6 +117,8 @@ internal static class ServiceCollectionExtensions
         services.ConfigureApplicationCookie(options =>
         {
             options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.Lax;
             options.ExpireTimeSpan = TimeSpan.FromDays(30);
             options.SlidingExpiration = true;
             options.LoginPath = "/Account/Login";
