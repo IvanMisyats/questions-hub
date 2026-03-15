@@ -67,10 +67,12 @@ internal static class ServiceCollectionExtensions
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
         services.AddDbContext<QuestionsHubDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.EnableRetryOnFailure(maxRetryCount: 3)));
 
         services.AddDbContextFactory<QuestionsHubDbContext>(options =>
-            options.UseNpgsql(connectionString), ServiceLifetime.Scoped);
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.EnableRetryOnFailure(maxRetryCount: 3)), ServiceLifetime.Scoped);
 
         services.AddMemoryCache();
 
