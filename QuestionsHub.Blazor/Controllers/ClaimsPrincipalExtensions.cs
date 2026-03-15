@@ -21,16 +21,17 @@ public static class ClaimsPrincipalExtensions
 
         /// <summary>
         /// Creates a PackageAccessContext from the claims principal.
-        /// Note: HasVerifiedEmail is set to true because API controllers require authentication,
-        /// and we assume authenticated API users have verified emails. For stricter checking,
-        /// the controller should query the database for EmailConfirmed status.
+        /// Uses the EmailConfirmed claim added by CustomUserClaimsPrincipalFactory.
         /// </summary>
         public PackageAccessContext ToAccessContext()
         {
+            var emailConfirmedClaim = user.FindFirst("EmailConfirmed")?.Value;
+            var hasVerifiedEmail = bool.TryParse(emailConfirmedClaim, out var confirmed) && confirmed;
+
             return new PackageAccessContext(
                 IsAdmin: user.IsInRole("Admin"),
                 IsEditor: user.IsInRole("Editor"),
-                HasVerifiedEmail: user.Identity?.IsAuthenticated ?? false,
+                HasVerifiedEmail: hasVerifiedEmail,
                 UserId: user.GetUserId()
             );
         }

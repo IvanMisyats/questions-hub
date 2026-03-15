@@ -28,6 +28,9 @@ public class CustomUserClaimsPrincipalFactory : UserClaimsPrincipalFactory<Appli
         identity.AddClaim(new Claim("FirstName", user.FirstName ?? ""));
         identity.AddClaim(new Claim("LastName", user.LastName ?? ""));
 
+        // Add email confirmed claim for access control decisions without DB roundtrip
+        identity.AddClaim(new Claim("EmailConfirmed", user.EmailConfirmed.ToString()));
+
         return identity;
     }
 }
