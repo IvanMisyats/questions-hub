@@ -41,9 +41,9 @@ if (!app.Environment.IsDevelopment())
     var emailSettings = app.Configuration.GetSection(EmailSettings.SectionName).Get<EmailSettings>();
     if (string.IsNullOrEmpty(emailSettings?.ApiKey) || string.IsNullOrEmpty(emailSettings?.ApiSecret))
     {
-        throw new InvalidOperationException(
-            "Email:ApiKey and Email:ApiSecret must be configured in production. " +
-            "Email confirmation cannot work without a configured email provider.");
+        app.Logger.LogWarning(
+            "Email:ApiKey and Email:ApiSecret are not configured. " +
+            "Email confirmation and password reset will not work.");
     }
 }
 
