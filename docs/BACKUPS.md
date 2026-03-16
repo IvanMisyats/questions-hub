@@ -35,7 +35,7 @@ Optional [Healthchecks](https://healthchecks.io/) integration:
 
 | Item | Value |
 |------|-------|
-| Backup user | `github-actions` (UID 1001) |
+| Backup user | `github-actions` (UID 1001, member of `appgroup` GID 10000 for keys access) |
 | App directory | `/home/github-actions/questions-hub/` |
 | Backup secrets | `/home/github-actions/.config/questions-hub-backup/backup.env` |
 | Backup script (runtime) | `/home/github-actions/questions-hub/infra/backup/runtime/backup.sh` |

@@ -114,7 +114,22 @@ restic -r "${RESTIC_REPO}" snapshots
 '
 ```
 
-## 4) Ensure github-actions can run Docker commands
+## 4) Ensure github-actions can read container-owned directories
+
+The `keys` directory is owned by the Docker container's `appuser` (UID/GID 10000) with mode `750`.
+The backup user must be in the `appgroup` (GID 10000) to read it:
+
+```bash
+sudo groupadd -g 10000 appgroup 2>/dev/null || true
+sudo usermod -aG appgroup github-actions
+```
+
+Verify (after re-login or `newgrp`):
+```bash
+sudo -u github-actions ls /home/github-actions/questions-hub/keys/
+```
+
+## 5) Ensure github-actions can run Docker commands
 DB backup calls `docker exec ... pg_dump ...`
 
 Test:
@@ -131,7 +146,7 @@ Re-login or restart services, then re-test.
 
 > Note: docker group is effectively root-equivalent. This is common but be aware.
 
-## 5) Install script and systemd units
+## 6) Install script and systemd units
 Copy from repo:
 ```bash
 sudo install -m 0755 -o github-actions -g github-actions infra/backup/scripts/backup.sh   /home/github-actions/questions-hub/infra/backup/runtime/backup.sh
@@ -193,6 +208,14 @@ sudo chmod 700 /home/github-actions/.config
 sudo chown -R github-actions:github-actions /home/github-actions/.config/questions-hub-backup
 sudo chmod 700 /home/github-actions/.config/questions-hub-backup
 sudo chmod 600 /home/github-actions/.config/questions-hub-backup/backup.env
+```
+
+## "Permission denied" reading keys directory
+The `keys` directory is owned by UID/GID 10000 (Docker appuser) with mode 750.
+The backup user must be in `appgroup` (GID 10000):
+```bash
+sudo groupadd -g 10000 appgroup 2>/dev/null || true
+sudo usermod -aG appgroup github-actions
 ```
 
 ## Docker permission denied

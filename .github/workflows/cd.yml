@@ -99,10 +99,13 @@ jobs:
                      "$UPLOADS_PATH/jobs" \
                      "$KEYS_PATH"
 
-            # Set ownership to match container's appuser (UID 1654)
+            # Set ownership to match container's appuser (UID/GID 10000)
             chown -R 10000:10000 "$UPLOADS_PATH" "$KEYS_PATH"
             chmod 755 "$UPLOADS_PATH" "$UPLOADS_PATH/handouts" "$UPLOADS_PATH/packages" "$UPLOADS_PATH/jobs"
-            chmod 700 "$KEYS_PATH"
+            # Keys: group-readable so backup user (github-actions in appgroup) can read
+            chmod 750 "$KEYS_PATH"
+            find "$KEYS_PATH" -type f -exec chmod 640 {} +
+            setfacl -d -m g::r "$KEYS_PATH"  # new key files inherit group-read
 
             # Stop existing containers (if any)
             docker compose --profile production down 2>/dev/null || true
