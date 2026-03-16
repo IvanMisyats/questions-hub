@@ -153,11 +153,45 @@ public class SearchQueryParserTests
     }
 
     [Fact]
-    public void BuildPrefixTsquery_SingleQuoteInWord_EscapesQuote()
+    public void BuildPrefixTsquery_AsciiApostropheInWord_SplitsWithAdjacency()
     {
         var result = SearchQueryParser.BuildPrefixTsquery("O'Brien");
 
-        result.Should().Be("'O''Brien':*");
+        result.Should().Be("('O' <-> 'Brien':*)");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_UkrainianApostropheInWord_SplitsWithAdjacency()
+    {
+        // U+02BC — the normalized Ukrainian apostrophe
+        var result = SearchQueryParser.BuildPrefixTsquery("п\u02BCяний");
+
+        result.Should().Be("('п' <-> 'яний':*)");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_ApostropheInQuotedPhrase_FlattensAdjacency()
+    {
+        var result = SearchQueryParser.BuildPrefixTsquery("\"п\u02BCяний кіт\"");
+
+        result.Should().Be("('п' <-> 'яний' <-> 'кіт':*)");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_NegationWithApostrophe_SplitsWithAdjacency()
+    {
+        var result = SearchQueryParser.BuildPrefixTsquery("-O'Brien");
+
+        result.Should().Be("!('O' <-> 'Brien':*)");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_ApostropheAtEdge_IgnoresEmptyParts()
+    {
+        // Leading apostrophe — first part is empty, should be skipped
+        var result = SearchQueryParser.BuildPrefixTsquery("'книга");
+
+        result.Should().Be("'книга':*");
     }
 
     [Fact]

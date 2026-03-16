@@ -14,6 +14,13 @@ public static partial class SearchQueryParser
     private const int MinTermLength = 2;
 
     /// <summary>
+    /// Characters treated as apostrophes. PostgreSQL's unaccent converts U+02BC to U+0027,
+    /// which would break tsquery syntax if left inside lexeme quotes. We split words at these
+    /// characters and use the adjacency operator, mirroring how PostgreSQL's text parser tokenizes.
+    /// </summary>
+    private static readonly char[] ApostropheChars = ['\'', '\u02BC'];
+
+    /// <summary>
     /// Builds a tsquery string with :* prefix operator on each term.
     /// Uses 'simple' config semantics (no morphological normalization).
     /// Supports AND (default), OR, and negation (-word).
@@ -64,7 +71,8 @@ public static partial class SearchQueryParser
                     if (needsOperator)
                         sb.Append(" & ");
 
-                    sb.Append($"!'{EscapeTsquery(token.Text)}':*");
+                    sb.Append('!');
+                    AppendTerm(sb, token.Text, prefix: true);
                     needsOperator = true;
                     nextOperator = "&";
                     break;
@@ -76,7 +84,7 @@ public static partial class SearchQueryParser
                     if (needsOperator)
                         sb.Append($" {nextOperator} ");
 
-                    sb.Append($"'{EscapeTsquery(token.Text)}':*");
+                    AppendTerm(sb, token.Text, prefix: true);
                     needsOperator = true;
                     nextOperator = "&";
                     break;
@@ -88,28 +96,68 @@ public static partial class SearchQueryParser
     }
 
     /// <summary>
+    /// Appends a single term, splitting at apostrophes into adjacent parts if needed.
+    /// Apostrophes must be split because PostgreSQL's unaccent converts U+02BC → U+0027,
+    /// which breaks tsquery quote syntax. Splitting with &lt;-&gt; mirrors the text parser behavior.
+    /// </summary>
+    private static void AppendTerm(StringBuilder sb, string word, bool prefix)
+    {
+        var parts = word.Split(ApostropheChars, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return;
+
+        if (parts.Length == 1)
+        {
+            sb.Append($"'{EscapeTsquery(parts[0])}'");
+            if (prefix) sb.Append(":*");
+            return;
+        }
+
+        sb.Append('(');
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (i > 0)
+                sb.Append(" <-> ");
+
+            sb.Append($"'{EscapeTsquery(parts[i])}'");
+            if (prefix && i == parts.Length - 1)
+                sb.Append(":*");
+        }
+        sb.Append(')');
+    }
+
+    /// <summary>
     /// Appends a phrase as proximity-matched terms (word1 &lt;-&gt; word2) with :* on the last word.
+    /// Words containing apostrophes are flattened into the adjacency chain.
     /// </summary>
     private static void AppendPhrase(StringBuilder sb, string phrase)
     {
         var words = phrase.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length == 0) return;
 
-        if (words.Length == 1)
+        // Flatten all words, splitting each at apostrophes
+        var allParts = new List<string>();
+        foreach (var word in words)
         {
-            sb.Append($"'{EscapeTsquery(words[0])}':*");
+            var parts = word.Split(ApostropheChars, StringSplitOptions.RemoveEmptyEntries);
+            allParts.AddRange(parts);
+        }
+
+        if (allParts.Count == 0) return;
+
+        if (allParts.Count == 1)
+        {
+            sb.Append($"'{EscapeTsquery(allParts[0])}':*");
             return;
         }
 
         sb.Append('(');
-        for (var i = 0; i < words.Length; i++)
+        for (var i = 0; i < allParts.Count; i++)
         {
             if (i > 0)
                 sb.Append(" <-> ");
 
-            sb.Append($"'{EscapeTsquery(words[i])}'");
-            // Add prefix operator only to the last word in phrase
-            if (i == words.Length - 1)
+            sb.Append($"'{EscapeTsquery(allParts[i])}'");
+            if (i == allParts.Count - 1)
                 sb.Append(":*");
         }
         sb.Append(')');
