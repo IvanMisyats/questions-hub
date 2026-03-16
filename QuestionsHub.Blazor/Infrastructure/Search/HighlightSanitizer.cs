@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 using Microsoft.AspNetCore.Components;
+using QuestionsHub.Blazor.Utils;
 
 namespace QuestionsHub.Blazor.Infrastructure.Search;
 
@@ -59,6 +60,11 @@ public static partial class HighlightSanitizer
             .Replace("<mark>", MarkOpenPlaceholder)
             .Replace("</mark>", MarkClosePlaceholder);
 
+        // Step 1.5: Merge adjacent highlights separated by apostrophes (e.g., <mark>п</mark>'<mark>яний</mark>)
+        // ts_headline splits at apostrophes producing separate marks for each part of the word
+        result = result.Replace(MarkClosePlaceholder + "'" + MarkOpenPlaceholder, "'");
+        result = result.Replace(MarkClosePlaceholder + "\u02BC" + MarkOpenPlaceholder, "\u02BC");
+
         // Step 2: HTML encode everything (including any malicious tags)
         result = HttpUtility.HtmlEncode(result);
 
@@ -79,6 +85,8 @@ public static partial class HighlightSanitizer
     /// </summary>
     private static string ApplyClientSideHighlighting(string text, string searchQuery)
     {
+        // Normalize apostrophes so user's keyboard apostrophe (U+0027) matches stored U+02BC
+        searchQuery = TextNormalizer.NormalizeApostrophes(searchQuery) ?? searchQuery;
         var words = ParseSearchTerms(searchQuery);
         if (words.Count == 0) return text;
 

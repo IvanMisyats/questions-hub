@@ -91,6 +91,29 @@ public class HighlightSanitizerTests
     }
 
     [Fact]
+    public void Sanitize_MergesAdjacentMarksAtApostrophe()
+    {
+        var highlighted = "<mark>п</mark>'<mark>яний</mark> текст";
+
+        var result = HighlightSanitizer.Sanitize(highlighted);
+
+        result.Value.Should().Contain("<mark>п&#39;яний</mark>");
+        result.Value.Should().NotContain("</mark>&#39;<mark>");
+    }
+
+    [Fact]
+    public void Sanitize_ClientSideFallback_HighlightsApostropheWord()
+    {
+        // Stored text uses U+02BC, search query uses U+0027 (keyboard apostrophe)
+        var original = "текст п\u02BCяний кіт";
+        var noHighlights = original;
+
+        var result = HighlightSanitizer.Sanitize(noHighlights, original, "п'яний");
+
+        result.Value.Should().Contain("<mark>");
+    }
+
+    [Fact]
     public void HasHighlights_WithMarks_ReturnsTrue()
     {
         HighlightSanitizer.HasHighlights("text <mark>word</mark>").Should().BeTrue();
