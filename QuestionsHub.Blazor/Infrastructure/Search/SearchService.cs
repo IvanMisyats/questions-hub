@@ -80,6 +80,10 @@ public class SearchService
         // Build prefix tsquery for partial word matching (e.g., "сепул" → "'сепул':*")
         var prefixTsquery = SearchQueryParser.BuildPrefixTsquery(query);
 
+        // Disable trigram fallback for phrase queries — it has no concept of word adjacency
+        // and would return results matching individual words instead of the exact phrase
+        var hasPhrase = query.Contains('"');
+
         // Clamp limit to reasonable bounds
         limit = Math.Clamp(limit, 1, 100);
 
@@ -140,7 +144,9 @@ public class SearchService
                         'StartSel=<mark>, StopSel=</mark>, HighlightAll=true') AS ""SourceHighlighted"",
                     (COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq), 0) * 4.0 +
                      COALESCE(ts_rank_cd(qu.""SearchVector"", q.tsq_prefix), 0) * 2.0 +
-                     COALESCE(word_similarity(q.qnorm, qu.""SearchTextNorm""), 0))::float8 AS ""Rank"",
+                     CASE WHEN {hasPhrase} THEN 0.0
+                          ELSE COALESCE(word_similarity(q.qnorm, qu.""SearchTextNorm""), 0)
+                     END)::float8 AS ""Rank"",
                     (SELECT string_agg(a.""Id""::text || ':' || a.""FirstName"" || ' ' || a.""LastName"", '|' ORDER BY a.""LastName"", a.""FirstName"")
                      FROM ""QuestionAuthors"" qa
                      JOIN ""Authors"" a ON qa.""AuthorsId"" = a.""Id""
@@ -159,7 +165,7 @@ public class SearchService
                   AND (
                        qu.""SearchVector"" @@ q.tsq
                        OR (q.tsq_prefix IS NOT NULL AND qu.""SearchVector"" @@ q.tsq_prefix)
-                       OR q.qnorm <% qu.""SearchTextNorm""
+                       OR ({hasPhrase} = false AND q.qnorm <% qu.""SearchTextNorm"")
                   )
                   AND (
                        {isAdmin} = true
