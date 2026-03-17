@@ -175,4 +175,63 @@ public class TextNormalizerTests
     }
 
     #endregion
+
+    #region RemoveAccents
+
+    [Fact]
+    public void RemoveAccents_RemovesCombiningAcute()
+    {
+        // Combining acute accent (U+0301) — Ukrainian stress mark
+        var result = TextNormalizer.RemoveAccents("Ру\u0301прехт");
+        result.Should().Be("Рупрехт");
+    }
+
+    [Fact]
+    public void RemoveAccents_PreservesPlainText()
+    {
+        var result = TextNormalizer.RemoveAccents("Амундсен");
+        result.Should().Be("Амундсен");
+    }
+
+    #endregion
+
+    #region NormalizeForFts
+
+    [Fact]
+    public void NormalizeForFts_LowercasesText()
+    {
+        var result = TextNormalizer.NormalizeForFts("Амундсен");
+        result.Should().Be("амундсен");
+    }
+
+    [Fact]
+    public void NormalizeForFts_RemovesAccents()
+    {
+        var result = TextNormalizer.NormalizeForFts("Ру\u0301прехт");
+        result.Should().Be("рупрехт");
+    }
+
+    [Fact]
+    public void NormalizeForFts_NormalizesUkrainianGe()
+    {
+        var result = TextNormalizer.NormalizeForFts("Ґаджет");
+        result.Should().Be("гаджет");
+    }
+
+    [Fact]
+    public void NormalizeForFts_ConvertsApostropheVariantsToAscii()
+    {
+        // U+02BC (Ukrainian apostrophe) should become ASCII apostrophe
+        var result = TextNormalizer.NormalizeForFts("п\u02BCяний");
+        result.Should().Be("п'яний");
+    }
+
+    [Fact]
+    public void NormalizeForFts_CombinedNormalization()
+    {
+        var result = TextNormalizer.NormalizeForFts("Ру\u0301прехт Ґаджет");
+        result.Should().Be("рупрехт гаджет");
+    }
+
+    #endregion
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using QuestionsHub.Blazor.Utils;
 
 namespace QuestionsHub.Blazor.Infrastructure.Search;
 
@@ -21,14 +22,15 @@ public static partial class SearchQueryParser
     private static readonly char[] ApostropheChars = ['\'', '\u02BC'];
 
     /// <summary>
-    /// Builds a tsquery string with :* prefix operator on each term.
-    /// Uses 'simple' config semantics (no morphological normalization).
+    /// Builds a pre-normalized tsquery string with :* prefix operator on each term.
+    /// Each term is normalized (lowercase, accent-stripped, ґ→г) to match the SearchVector,
+    /// so the result can be passed directly to to_tsquery('simple', ...) without qh_normalize.
     /// Supports AND (default), OR, and negation (-word).
     /// Quoted phrases are included as phrase matches (&lt;-&gt;) without prefix.
     /// </summary>
-    /// <param name="query">Raw (already normalized) search query from the user</param>
+    /// <param name="query">Search query with apostrophes already unified to U+02BC</param>
     /// <returns>
-    /// A tsquery string suitable for to_tsquery('simple', ...), or null if no valid terms.
+    /// A pre-normalized tsquery string suitable for to_tsquery('simple', ...), or null if no valid terms.
     /// Example: "'сепул':* &amp; 'антарктида':*" or "'амундсен':* | 'скотт':*"
     /// </returns>
     public static string? BuildPrefixTsquery(string? query)
@@ -97,8 +99,8 @@ public static partial class SearchQueryParser
 
     /// <summary>
     /// Appends a single term, splitting at apostrophes into adjacent parts if needed.
-    /// Apostrophes must be split because PostgreSQL's unaccent converts U+02BC → U+0027,
-    /// which breaks tsquery quote syntax. Splitting with &lt;-&gt; mirrors the text parser behavior.
+    /// Each part is FTS-normalized (lowercase, accents removed, ґ→г) so the resulting tsquery
+    /// matches the SearchVector without needing SQL-side qh_normalize.
     /// </summary>
     private static void AppendTerm(StringBuilder sb, string word, bool prefix)
     {
@@ -107,7 +109,7 @@ public static partial class SearchQueryParser
 
         if (parts.Length == 1)
         {
-            sb.Append($"'{EscapeTsquery(parts[0])}'");
+            sb.Append($"'{EscapeTsquery(NormalizePart(parts[0]))}'");
             if (prefix) sb.Append(":*");
             return;
         }
@@ -118,7 +120,7 @@ public static partial class SearchQueryParser
             if (i > 0)
                 sb.Append(" <-> ");
 
-            sb.Append($"'{EscapeTsquery(parts[i])}'");
+            sb.Append($"'{EscapeTsquery(NormalizePart(parts[i]))}'");
             if (prefix && i == parts.Length - 1)
                 sb.Append(":*");
         }
@@ -128,18 +130,20 @@ public static partial class SearchQueryParser
     /// <summary>
     /// Appends a phrase as proximity-matched terms (word1 &lt;-&gt; word2) with :* on the last word.
     /// Words containing apostrophes are flattened into the adjacency chain.
+    /// Each part is FTS-normalized.
     /// </summary>
     private static void AppendPhrase(StringBuilder sb, string phrase)
     {
         var words = phrase.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length == 0) return;
 
-        // Flatten all words, splitting each at apostrophes
+        // Flatten all words, splitting each at apostrophes, normalizing each part
         var allParts = new List<string>();
         foreach (var word in words)
         {
             var parts = word.Split(ApostropheChars, StringSplitOptions.RemoveEmptyEntries);
-            allParts.AddRange(parts);
+            foreach (var part in parts)
+                allParts.Add(NormalizePart(part));
         }
 
         if (allParts.Count == 0) return;
@@ -236,6 +240,18 @@ public static partial class SearchQueryParser
             tokens.RemoveAt(0);
 
         return tokens;
+    }
+
+    /// <summary>
+    /// FTS-normalizes a term part: lowercase, remove accents, ґ→г.
+    /// Mirrors the relevant parts of PostgreSQL's qh_normalize for individual words.
+    /// </summary>
+    private static string NormalizePart(string part)
+    {
+        part = TextNormalizer.RemoveAccents(part);
+        part = part.ToLowerInvariant();
+        part = part.Replace('ґ', 'г');
+        return part;
     }
 
     /// <summary>

@@ -77,8 +77,12 @@ public class SearchService
         // Normalize apostrophes in search query to match stored data
         query = TextNormalizer.NormalizeApostrophes(query)!;
 
-        // Build prefix tsquery for partial word matching (e.g., "сепул" → "'сепул':*")
+        // Build prefix tsquery — terms are FTS-normalized in C# (no SQL-side qh_normalize needed)
         var prefixTsquery = SearchQueryParser.BuildPrefixTsquery(query);
+
+        // FTS-normalize the raw query for websearch_to_tsquery and trigram paths
+        // Mirrors PostgreSQL's qh_normalize: unaccent + lower + ґ→г + apostrophe→ASCII
+        var normalizedQuery = TextNormalizer.NormalizeForFts(query);
 
         // Disable trigram fallback for phrase queries — it has no concept of word adjacency
         // and would return results matching individual words instead of the exact phrase
@@ -99,11 +103,11 @@ public class SearchService
             .SqlQuery<SearchResult>($@"
                 WITH q AS (
                     SELECT
-                        websearch_to_tsquery('ukrainian', public.qh_normalize({query})) AS tsq,
+                        websearch_to_tsquery('ukrainian', {normalizedQuery}) AS tsq,
                         CASE WHEN {prefixTsquery} IS NOT NULL
-                             THEN to_tsquery('simple', public.qh_normalize({prefixTsquery}))
+                             THEN to_tsquery('simple', {prefixTsquery})
                         END AS tsq_prefix,
-                        public.qh_normalize({query}) AS qnorm
+                        {normalizedQuery} AS qnorm
                 )
                 SELECT
                     qu.""Id"" AS ""QuestionId"",

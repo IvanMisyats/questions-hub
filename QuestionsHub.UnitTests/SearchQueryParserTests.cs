@@ -19,7 +19,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("Амундсен Антарктида");
 
-        result.Should().Be("'Амундсен':* & 'Антарктида':*");
+        result.Should().Be("'амундсен':* & 'антарктида':*");
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("Амундсен OR Скотт");
 
-        result.Should().Be("'Амундсен':* | 'Скотт':*");
+        result.Should().Be("'амундсен':* | 'скотт':*");
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("-Скотт Амундсен");
 
-        result.Should().Be("!'Скотт':* & 'Амундсен':*");
+        result.Should().Be("!'скотт':* & 'амундсен':*");
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("Амундсен -Скотт");
 
-        result.Should().Be("'Амундсен':* & !'Скотт':*");
+        result.Should().Be("'амундсен':* & !'скотт':*");
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("\"Південний полюс\"");
 
-        result.Should().Be("('Південний' <-> 'полюс':*)");
+        result.Should().Be("('" + "Південний".ToLowerInvariant() + "' <-> 'полюс':*)");
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("\"Південний полюс\" Амундсен");
 
-        result.Should().Be("('Південний' <-> 'полюс':*) & 'Амундсен':*");
+        result.Should().Be("('" + "Південний".ToLowerInvariant() + "' <-> 'полюс':*) & 'амундсен':*");
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("\"Амундсен\"");
 
-        result.Should().Be("'Амундсен':*");
+        result.Should().Be("'амундсен':*");
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("Амундсен OR");
 
-        result.Should().Be("'Амундсен':*");
+        result.Should().Be("'амундсен':*");
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("OR Амундсен");
 
-        result.Should().Be("'Амундсен':*");
+        result.Should().Be("'амундсен':*");
     }
 
     [Fact]
@@ -148,8 +148,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("Амундсен Скотт OR Нансен");
 
-        // "Амундсен" AND "Скотт" OR "Нансен"
-        result.Should().Be("'Амундсен':* & 'Скотт':* | 'Нансен':*");
+        result.Should().Be("'амундсен':* & 'скотт':* | 'нансен':*");
     }
 
     [Fact]
@@ -157,7 +156,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("O'Brien");
 
-        result.Should().Be("('O' <-> 'Brien':*)");
+        result.Should().Be("('o' <-> 'brien':*)");
     }
 
     [Fact]
@@ -182,7 +181,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("-O'Brien");
 
-        result.Should().Be("!('O' <-> 'Brien':*)");
+        result.Should().Be("!('o' <-> 'brien':*)");
     }
 
     [Fact]
@@ -199,7 +198,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("\"Південний полюс");
 
-        result.Should().Be("('Південний' <-> 'полюс':*)");
+        result.Should().Be("('" + "Південний".ToLowerInvariant() + "' <-> 'полюс':*)");
     }
 
     [Fact]
@@ -207,7 +206,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("  Амундсен   Скотт  ");
 
-        result.Should().Be("'Амундсен':* & 'Скотт':*");
+        result.Should().Be("'амундсен':* & 'скотт':*");
     }
 
     [Fact]
@@ -215,7 +214,7 @@ public class SearchQueryParserTests
     {
         var result = SearchQueryParser.BuildPrefixTsquery("-Скотт");
 
-        result.Should().Be("!'Скотт':*");
+        result.Should().Be("!'скотт':*");
     }
 
     [Fact]
@@ -225,6 +224,32 @@ public class SearchQueryParserTests
         var result = SearchQueryParser.BuildPrefixTsquery("-а книга");
 
         result.Should().Be("'книга':*");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_AccentedInput_StripsStressMarks()
+    {
+        // Stress mark (combining acute U+0301) should be removed
+        var result = SearchQueryParser.BuildPrefixTsquery("Ру\u0301прехт");
+
+        result.Should().Be("'рупрехт':*");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_PreservesDistinctCyrillicLetters()
+    {
+        // й, ї are distinct letters — NOT decomposed
+        var result = SearchQueryParser.BuildPrefixTsquery("п\u02BCяний");
+
+        result.Should().Be("('п' <-> 'яний':*)");
+    }
+
+    [Fact]
+    public void BuildPrefixTsquery_UkrainianGe_NormalizesToHe()
+    {
+        var result = SearchQueryParser.BuildPrefixTsquery("Ґаджет");
+
+        result.Should().Be("'гаджет':*");
     }
 
     [Fact]

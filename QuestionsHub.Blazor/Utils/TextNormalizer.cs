@@ -1,7 +1,10 @@
-﻿namespace QuestionsHub.Blazor.Utils;
+﻿using System.Globalization;
+using System.Text;
+
+namespace QuestionsHub.Blazor.Utils;
 
 /// <summary>
-/// Provides text normalization utilities for consistent data storage.
+/// Provides text normalization utilities for consistent data storage and search.
 /// </summary>
 public static class TextNormalizer
 {
@@ -85,5 +88,47 @@ public static class TextNormalizer
     public static string? NormalizeExcludingApostrophes(string? text)
     {
         return NormalizeWhitespaceAndDashes(text);
+    }
+
+    /// <summary>
+    /// Normalizes text for full-text search matching. Mirrors PostgreSQL's qh_normalize function:
+    /// removes accents, lowercases, normalizes ґ→г, and converts apostrophe variants to ASCII apostrophe.
+    /// Use this to pre-normalize search queries in C# instead of calling qh_normalize in SQL.
+    /// </summary>
+    /// <param name="text">Text to normalize for FTS.</param>
+    /// <returns>Normalized text ready for FTS matching.</returns>
+    public static string NormalizeForFts(string text)
+    {
+        text = RemoveAccents(text);
+        text = text.ToLowerInvariant();
+        text = text.Replace('ґ', 'г');
+
+        // Match PostgreSQL unaccent behavior: apostrophe variants → ASCII apostrophe
+        foreach (var c in ApostropheLikeCharacters)
+            text = text.Replace(c, '\'');
+        text = text.Replace(UkrainianApostrophe, '\'');
+
+        return text;
+    }
+
+    /// <summary>
+    /// Removes explicitly present combining marks (e.g., stress marks) from text.
+    /// Unlike Unicode FormD decomposition, this does NOT decompose precomposed characters
+    /// like й (U+0439) or ї (U+0457) — those are distinct Cyrillic letters, not accented variants.
+    /// This matches PostgreSQL's unaccent behavior for Ukrainian text.
+    /// </summary>
+    /// <param name="text">Text to process.</param>
+    /// <returns>Text with combining marks removed.</returns>
+    public static string RemoveAccents(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (var c in text)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+        return sb.ToString();
     }
 }

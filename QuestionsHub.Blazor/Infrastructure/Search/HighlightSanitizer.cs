@@ -140,7 +140,7 @@ public static partial class HighlightSanitizer
     {
         if (string.IsNullOrEmpty(word)) return text;
 
-        var normalizedWord = RemoveAccents(word.ToLowerInvariant());
+        var normalizedWord = TextNormalizer.RemoveAccents(word.ToLowerInvariant());
         var result = new StringBuilder();
         var i = 0;
 
@@ -178,7 +178,7 @@ public static partial class HighlightSanitizer
         while (wordPos < normalizedWord.Length && textPos < text.Length)
         {
             var textChar = text[textPos];
-            var normalizedTextChar = RemoveAccents(char.ToLowerInvariant(textChar).ToString());
+            var normalizedTextChar = TextNormalizer.RemoveAccents(char.ToLowerInvariant(textChar).ToString());
 
             // Handle combining characters (accents) in original text
             if (normalizedTextChar.Length == 0 || IsCombiningMark(textChar))
@@ -210,24 +210,6 @@ public static partial class HighlightSanitizer
         }
 
         return 0;
-    }
-
-    /// <summary>
-    /// Removes diacritical marks (accents) from text.
-    /// </summary>
-    private static string RemoveAccents(string text)
-    {
-        var normalized = text.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder();
-        foreach (var c in normalized)
-        {
-            var category = CharUnicodeInfo.GetUnicodeCategory(c);
-            if (category != UnicodeCategory.NonSpacingMark)
-            {
-                sb.Append(c);
-            }
-        }
-        return sb.ToString().Normalize(NormalizationForm.FormC);
     }
 
     /// <summary>
