@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
@@ -48,134 +49,139 @@ public partial class PackageDbImporter
         string jobAssetsPath,
         CancellationToken ct)
     {
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        try
+        return await strategy.ExecuteAsync<Package>(async cancellation =>
         {
-            _logger.LogInformation("Importing package: {Title}", parseResult.Title);
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellation);
 
-            // Create package
-            var package = new Package
+            try
             {
-                Title = TruncateWithWarning(parseResult.Title, 500, "Назва пакету", parseResult.Warnings)
-                        ?? "Імпортований пакет",
-                Description = TruncateWithWarning(parseResult.Description, 2000, "Опис пакету", parseResult.Warnings),
-                Preamble = parseResult.Preamble,
-                SourceUrl = TruncateWithWarning(parseResult.SourceUrl, 2000, "URL джерела пакету", parseResult.Warnings),
-                Status = PackageStatus.Draft,
-                OwnerId = ownerId,
-                TotalQuestions = parseResult.TotalQuestions,
-                NumberingMode = parseResult.NumberingMode,
-                PlayedFrom = parseResult.PlayedFrom,
-                PlayedTo = parseResult.PlayedTo,
-                SharedEditors = parseResult.SharedEditors
-            };
+                _logger.LogInformation("Importing package: {Title}", parseResult.Title);
 
-            _db.Packages.Add(package);
-            await _db.SaveChangesAsync(ct);
-
-            // Create package-level editors (when SharedEditors is true)
-            if (parseResult.SharedEditors && parseResult.PackageEditors.Count > 0)
-            {
-                package.PackageEditors = await ResolveAuthors(parseResult.PackageEditors, ct);
-                await _db.SaveChangesAsync(ct);
-            }
-
-            // Create tags
-            if (parseResult.Tags.Count > 0)
-            {
-                foreach (var tagName in parseResult.Tags.Distinct())
+                // Create package
+                var package = new Package
                 {
-                    if (string.IsNullOrWhiteSpace(tagName)) continue;
-                    try
-                    {
-                        var tag = await _tagService.GetOrCreate(_db, tagName);
-                        package.Tags.Add(tag);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to create tag: {TagName}", tagName);
-                    }
-                }
-                await _db.SaveChangesAsync(ct);
-            }
-
-            // Create tours
-            foreach (var tourDto in parseResult.Tours)
-            {
-                var tour = new Tour
-                {
-                    Number = TruncateWithWarning(tourDto.Number, 50, $"Номер туру {tourDto.Number}", parseResult.Warnings) ?? tourDto.Number,
-                    OrderIndex = tourDto.OrderIndex,
-                    Type = tourDto.Type,
-                    Preamble = tourDto.Preamble,
-                    PackageId = package.Id,
-                    Editors = await ResolveAuthors(tourDto.Editors, ct)
+                    Title = TruncateWithWarning(parseResult.Title, 500, "Назва пакету", parseResult.Warnings)
+                            ?? "Імпортований пакет",
+                    Description = TruncateWithWarning(parseResult.Description, 2000, "Опис пакету", parseResult.Warnings),
+                    Preamble = parseResult.Preamble,
+                    SourceUrl = TruncateWithWarning(parseResult.SourceUrl, 2000, "URL джерела пакету", parseResult.Warnings),
+                    Status = PackageStatus.Draft,
+                    OwnerId = ownerId,
+                    TotalQuestions = parseResult.TotalQuestions,
+                    NumberingMode = parseResult.NumberingMode,
+                    PlayedFrom = parseResult.PlayedFrom,
+                    PlayedTo = parseResult.PlayedTo,
+                    SharedEditors = parseResult.SharedEditors
                 };
 
-                _db.Tours.Add(tour);
-                await _db.SaveChangesAsync(ct);
+                _db.Packages.Add(package);
+                await _db.SaveChangesAsync(cancellation);
 
-                // If tour has blocks, import blocks with their questions
-                if (tourDto.Blocks.Count > 0)
+                // Create package-level editors (when SharedEditors is true)
+                if (parseResult.SharedEditors && parseResult.PackageEditors.Count > 0)
                 {
-                    // Use a single counter across all blocks so OrderIndex is globally sequential within the tour
-                    var tourQuestionOrderIndex = 0;
+                    package.PackageEditors = await ResolveAuthors(parseResult.PackageEditors, cancellation);
+                    await _db.SaveChangesAsync(cancellation);
+                }
 
-                    foreach (var blockDto in tourDto.Blocks)
+                // Create tags
+                if (parseResult.Tags.Count > 0)
+                {
+                    foreach (var tagName in parseResult.Tags.Distinct())
                     {
-                        var block = new Block
+                        if (string.IsNullOrWhiteSpace(tagName)) continue;
+                        try
                         {
-                            Name = TruncateWithWarning(blockDto.Name, 200, $"Назва блоку {blockDto.Name}", parseResult.Warnings),
-                            OrderIndex = blockDto.OrderIndex,
-                            Preamble = blockDto.Preamble,
-                            TourId = tour.Id,
-                            Editors = await ResolveAuthors(blockDto.Editors, ct)
-                        };
+                            var tag = await _tagService.GetOrCreate(_db, tagName);
+                            package.Tags.Add(tag);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to create tag: {TagName}", tagName);
+                        }
+                    }
+                    await _db.SaveChangesAsync(cancellation);
+                }
 
-                        _db.Blocks.Add(block);
-                        await _db.SaveChangesAsync(ct);
+                // Create tours
+                foreach (var tourDto in parseResult.Tours)
+                {
+                    var tour = new Tour
+                    {
+                        Number = TruncateWithWarning(tourDto.Number, 50, $"Номер туру {tourDto.Number}", parseResult.Warnings) ?? tourDto.Number,
+                        OrderIndex = tourDto.OrderIndex,
+                        Type = tourDto.Type,
+                        Preamble = tourDto.Preamble,
+                        PackageId = package.Id,
+                        Editors = await ResolveAuthors(tourDto.Editors, cancellation)
+                    };
 
-                        // Create questions for this block
-                        foreach (var questionDto in blockDto.Questions)
+                    _db.Tours.Add(tour);
+                    await _db.SaveChangesAsync(cancellation);
+
+                    // If tour has blocks, import blocks with their questions
+                    if (tourDto.Blocks.Count > 0)
+                    {
+                        // Use a single counter across all blocks so OrderIndex is globally sequential within the tour
+                        var tourQuestionOrderIndex = 0;
+
+                        foreach (var blockDto in tourDto.Blocks)
+                        {
+                            var block = new Block
+                            {
+                                Name = TruncateWithWarning(blockDto.Name, 200, $"Назва блоку {blockDto.Name}", parseResult.Warnings),
+                                OrderIndex = blockDto.OrderIndex,
+                                Preamble = blockDto.Preamble,
+                                TourId = tour.Id,
+                                Editors = await ResolveAuthors(blockDto.Editors, cancellation)
+                            };
+
+                            _db.Blocks.Add(block);
+                            await _db.SaveChangesAsync(cancellation);
+
+                            // Create questions for this block
+                            foreach (var questionDto in blockDto.Questions)
+                            {
+                                var question = await CreateQuestion(
+                                    questionDto, tourQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, parseResult.Warnings, cancellation);
+                                _db.Questions.Add(question);
+                            }
+
+                            await _db.SaveChangesAsync(cancellation);
+                        }
+                    }
+                    else
+                    {
+                        // No blocks - import questions directly to tour
+                        var orderIndex = 0;
+                        foreach (var questionDto in tourDto.Questions)
                         {
                             var question = await CreateQuestion(
-                                questionDto, tourQuestionOrderIndex++, tour.Id, block.Id, jobAssetsPath, parseResult.Warnings, ct);
+                                questionDto, orderIndex++, tour.Id, null, jobAssetsPath, parseResult.Warnings, cancellation);
                             _db.Questions.Add(question);
                         }
 
-                        await _db.SaveChangesAsync(ct);
+                        await _db.SaveChangesAsync(cancellation);
                     }
                 }
-                else
-                {
-                    // No blocks - import questions directly to tour
-                    var orderIndex = 0;
-                    foreach (var questionDto in tourDto.Questions)
-                    {
-                        var question = await CreateQuestion(
-                            questionDto, orderIndex++, tour.Id, null, jobAssetsPath, parseResult.Warnings, ct);
-                        _db.Questions.Add(question);
-                    }
 
-                    await _db.SaveChangesAsync(ct);
-                }
+                await transaction.CommitAsync(cancellation);
+
+                _logger.LogInformation(
+                    "Package imported: ID={PackageId}, Tours={TourCount}, Questions={QuestionCount}",
+                    package.Id, parseResult.Tours.Count, parseResult.TotalQuestions);
+
+                return package;
             }
-
-            await transaction.CommitAsync(ct);
-
-            _logger.LogInformation(
-                "Package imported: ID={PackageId}, Tours={TourCount}, Questions={QuestionCount}",
-                package.Id, parseResult.Tours.Count, parseResult.TotalQuestions);
-
-            return package;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(ct);
-            _logger.LogError(ex, "Failed to import package");
-            throw new DatabaseImportException("Не вдалося зберегти пакет в базу даних", ex);
-        }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(cancellation);
+                _logger.LogError(ex, "Failed to import package");
+                throw new DatabaseImportException("Не вдалося зберегти пакет в базу даних", ex);
+            }
+        }, ct);
     }
 
     private async Task<Question> CreateQuestion(
