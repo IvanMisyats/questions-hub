@@ -104,9 +104,19 @@ public class AuthorService
             return [];
         }
 
-        return await context.Authors
-            .Where(a => EF.Functions.ILike(a.LastName, trimmedQuery + "%")
-                     || EF.Functions.ILike(a.FirstName, trimmedQuery + "%"))
+        var terms = trimmedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        IQueryable<Author> authors = context.Authors;
+
+        foreach (var term in terms)
+        {
+            var t = term;
+            authors = authors.Where(a =>
+                EF.Functions.ILike(a.FirstName, t + "%") ||
+                EF.Functions.ILike(a.LastName, t + "%"));
+        }
+
+        return await authors
             .OrderBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .Take(limit)
