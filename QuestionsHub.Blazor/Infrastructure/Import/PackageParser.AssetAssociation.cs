@@ -120,29 +120,6 @@ public partial class PackageParser
     }
 
     /// <summary>
-    /// Associates remaining unassociated block assets with a specific question.
-    /// Called when transitioning to a new question within the same block to ensure
-    /// assets belonging to the previous question don't leak to the next one.
-    /// Assets are associated as comment assets since question/answer content has been processed.
-    /// </summary>
-    private static void AssociateRemainingBlockAssetsToQuestion(
-        List<AssetReference> assets,
-        QuestionDto question,
-        ParserContext ctx)
-    {
-        foreach (var asset in assets)
-        {
-            // Skip if already associated in this block
-            if (ctx.AssociatedAssetFileNames.Contains(asset.FileName))
-                continue;
-
-            // Associate as comment asset (since we've processed Q/A content for this question)
-            AssociateAsset(asset, ParserSection.Comment, question, ctx.Result);
-            ctx.AssociatedAssetFileNames.Add(asset.FileName);
-        }
-    }
-
-    /// <summary>
     /// Applies pending assets to a newly created question.
     /// These are typically assets that appeared in header/tour sections before any question.
     /// </summary>

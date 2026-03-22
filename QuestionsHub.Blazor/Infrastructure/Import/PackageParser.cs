@@ -102,17 +102,7 @@ public partial class PackageParser
 
         _logger.LogInformation("Parsing {BlockCount} blocks", blocks.Count);
 
-        // Pre-process: merge asset-only blocks backward to fix DOCX anchoring issues
-        // Images in Word are often placed in empty paragraphs after the text they relate to
-        var normalizedBlocks = MergeAssetOnlyBlocksBackward(blocks);
-
-        if (normalizedBlocks.Count != blocks.Count)
-        {
-            _logger.LogDebug("Merged {MergedCount} asset-only blocks backward",
-                blocks.Count - normalizedBlocks.Count);
-        }
-
-        foreach (var block in normalizedBlocks)
+        foreach (var block in blocks)
         {
             ProcessBlock(block, ctx);
         }
@@ -124,33 +114,6 @@ public partial class PackageParser
             ctx.Result.Tours.Count, ctx.Result.TotalQuestions, ctx.Result.Confidence);
 
         return ctx.Result;
-    }
-
-    /// <summary>
-    /// Merges asset-only blocks (blocks with no meaningful text but with assets) backward
-    /// into the previous textual block. This fixes DOCX anchoring issues where images
-    /// are placed in empty paragraphs after the text they visually relate to.
-    /// </summary>
-    private static List<DocBlock> MergeAssetOnlyBlocksBackward(List<DocBlock> blocks)
-    {
-        var result = new List<DocBlock>();
-
-        foreach (var block in blocks)
-        {
-            var text = TextNormalizer.NormalizeWhitespaceAndDashes(block.Text);
-            var hasText = !string.IsNullOrWhiteSpace(text);
-
-            // If this block has no text but has assets, merge assets to previous block
-            if (!hasText && block.Assets.Count > 0 && result.Count > 0)
-            {
-                result[^1].Assets.AddRange(block.Assets);
-                continue; // Drop this asset-only block
-            }
-
-            result.Add(block);
-        }
-
-        return result;
     }
 
     /// <summary>

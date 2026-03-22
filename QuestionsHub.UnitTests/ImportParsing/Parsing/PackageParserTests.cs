@@ -3653,12 +3653,12 @@ public class PackageParserTests
     }
 
     /// <summary>
-    /// Test for backward-merge of asset-only blocks.
-    /// When an empty block contains only assets, those assets should be merged
-    /// into the previous textual block (fixing DOCX anchoring issues).
+    /// Asset-only blocks (empty text, has assets) are processed independently using the
+    /// section state carried over from the previous block. Here the asset-only block follows
+    /// Q1's answer section, so the asset is associated as Q1's comment.
     /// </summary>
     [Fact]
-    public void Parse_AssetOnlyBlockBetweenQuestions_ShouldMergeBackward()
+    public void Parse_AssetOnlyBlockAfterAnswer_ShouldAssociateWithCurrentQuestion()
     {
         var commentAsset = new AssetReference
         {
@@ -3684,7 +3684,7 @@ public class PackageParserTests
         var q2 = result.Tours[0].Questions[1];
 
         q1.CommentAssetFileName.Should().Be("comment_image.png",
-            "asset from empty block should merge backward");
+            "asset-only block after answer section should associate as comment");
         q2.HandoutAssetFileName.Should().BeNull();
         q2.CommentAssetFileName.Should().BeNull();
     }
@@ -4021,6 +4021,74 @@ public class PackageParserTests
         question1.CommentAssetFileName.Should().Be("q1_image.png");
         question2.HandoutAssetFileName.Should().BeNull();
         question2.CommentAssetFileName.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Regression: When handout images are in separate asset-only paragraphs after "Питання N.",
+    /// each question should get its OWN handout and comment images — not the next question's.
+    /// Previously, MergeAssetOnlyBlocksBackward merged the handout image into the "Питання N."
+    /// block, and PreviousQuestionInBlock logic gave it to Q(N-1) as a comment instead.
+    /// </summary>
+    [Fact]
+    public void Parse_HandoutImagesInSeparateBlocks_ShouldNotShiftToWrongQuestion()
+    {
+        var handout1 = new AssetReference
+        {
+            FileName = "handout1.jpg", RelativeUrl = "/media/handout1.jpg",
+            ContentType = "image/jpeg", SizeBytes = 1024
+        };
+        var comment1 = new AssetReference
+        {
+            FileName = "comment1.png", RelativeUrl = "/media/comment1.png",
+            ContentType = "image/png", SizeBytes = 2048
+        };
+        var handout2 = new AssetReference
+        {
+            FileName = "handout2.jpg", RelativeUrl = "/media/handout2.jpg",
+            ContentType = "image/jpeg", SizeBytes = 1024
+        };
+        var comment2 = new AssetReference
+        {
+            FileName = "comment2.jpg", RelativeUrl = "/media/comment2.jpg",
+            ContentType = "image/jpeg", SizeBytes = 2048
+        };
+
+        // Simulates the real DOCX structure: each image is in its own asset-only paragraph
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1."),
+            Block("Питання 1."),
+            Block("", [handout1]),                          // handout image for Q1
+            Block("Кришки пляшок для молока виконані у вигляді НЛО."),
+            Block("Відповідь: НЛО"),
+            Block("Залік. Літаюча тарілка"),
+            Block("Коментарі. Існує відома міська легенда."),
+            Block("", [comment1]),                          // comment image for Q1
+            Block("Джерело: https://example.com"),
+            Block("Автор. Тестовий автор"),
+            Block(""),                                      // empty paragraph between questions
+            Block("Питання 2."),
+            Block("", [handout2]),                          // handout image for Q2
+            Block("Назвіть собор, на якому встановлено це розп'яття."),
+            Block("Відповідь. Саграда Фаміліа"),
+            Block("Коментарі. Антоніо Гауді загинув під трамваєм."),
+            Block("", [comment2]),                          // comment image for Q2
+            Block("Джерело: особисте спостереження"),
+            Block("Автор. Інший автор")
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        result.Tours[0].Questions.Should().HaveCount(2);
+
+        var q1 = result.Tours[0].Questions[0];
+        var q2 = result.Tours[0].Questions[1];
+
+        q1.HandoutAssetFileName.Should().Be("handout1.jpg", "Q1 should have its own handout");
+        q1.CommentAssetFileName.Should().Be("comment1.png", "Q1 should have its own comment image");
+        q2.HandoutAssetFileName.Should().Be("handout2.jpg", "Q2 should have its own handout, not shifted");
+        q2.CommentAssetFileName.Should().Be("comment2.jpg", "Q2 should have its own comment image");
+        result.Warnings.Should().NotContain(w => w.Contains("extra comment asset ignored"));
     }
 
     /// <summary>
