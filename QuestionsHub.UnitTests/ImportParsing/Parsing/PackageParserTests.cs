@@ -4092,6 +4092,111 @@ public class PackageParserTests
     }
 
     /// <summary>
+    /// Regression: When a block starts with "Запитання N." and contains an asset,
+    /// the asset should be associated with the NEW question (N), not with the previous
+    /// question from a prior block. PreviousQuestionInBlock must not be set when the
+    /// previous question has no content in the current block.
+    /// </summary>
+    [Fact]
+    public void Parse_BlockStartsWithQuestionAndHasAsset_ShouldAssociateWithNewQuestion()
+    {
+        var commentAsset = new AssetReference
+        {
+            FileName = "comment.png", RelativeUrl = "/media/comment.png",
+            ContentType = "image/png", SizeBytes = 1024
+        };
+
+        // Q2's entire content is in a single block; Q1 ended in previous blocks
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1."),
+            Block("Запитання 1."),
+            Block("Question one text.\nВідповідь: Answer1.\nАвтор: Автор1."),
+            Block(""),
+            Block("Запитання 2.\n" +
+                  "Question two text.\n\n" +
+                  "Коментар: Comment for Q2.\n" +
+                  "Відповідь: Answer2.\n" +
+                  "Автор: Автор2.", [commentAsset])
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        var q1 = result.Tours[0].Questions[0];
+        var q2 = result.Tours[0].Questions[1];
+
+        q1.CommentAssetFileName.Should().BeNull("Q1 should not steal Q2's asset");
+        q2.CommentAssetFileName.Should().Be("comment.png",
+            "asset in Q2's block should be Q2's comment (Authors section is answer-related)");
+    }
+
+    /// <summary>
+    /// Regression: When a multiline handout bracket [Роздатковий матеріал: ...] spans two
+    /// DOCX paragraphs, the handout image and comment image in the closing paragraph should
+    /// be correctly separated: first image → handout, second image → comment.
+    /// </summary>
+    [Fact]
+    public void Parse_MultilineHandoutBracketAcrossBlocks_ShouldSeparateHandoutAndComment()
+    {
+        var handoutAsset = new AssetReference
+        {
+            FileName = "handout.jpg", RelativeUrl = "/media/handout.jpg",
+            ContentType = "image/jpeg", SizeBytes = 1024
+        };
+        var commentAsset = new AssetReference
+        {
+            FileName = "comment.png", RelativeUrl = "/media/comment.png",
+            ContentType = "image/png", SizeBytes = 2048
+        };
+
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1."),
+            // Opening bracket in one block (mimics DOCX paragraph split)
+            Block("Запитання 1.\n[Роздатковий матеріал:"),
+            // Closing bracket + question text + answer in another block, with both assets
+            Block("]\nQuestion text here.\n\n" +
+                  "Коментар: explanation.\n" +
+                  "Відповідь: answer.", [handoutAsset, commentAsset])
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        var q1 = result.Tours[0].Questions[0];
+
+        q1.HandoutAssetFileName.Should().Be("handout.jpg",
+            "first asset should be handout (from handout bracket section)");
+        q1.CommentAssetFileName.Should().Be("comment.png",
+            "second asset should be comment (from answer-related section)");
+    }
+
+    /// <summary>
+    /// Regression: TrimQuestionBlankLines must also process questions inside blocks,
+    /// not just direct tour questions. Trailing blank lines in text fields must be trimmed.
+    /// </summary>
+    [Fact]
+    public void Parse_QuestionsInBlocks_ShouldTrimBlankLines()
+    {
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1."),
+            Block("Блок 1."),
+            // Question text in one block, answer in next — blank line between sections in same block
+            Block("Запитання 1.\nSome question.\n\n" +
+                  "Коментар: Explanation.\nВідповідь: Answer.\n" +
+                  "Залік: alt answer.\n\nДжерело: url\nАвтор: Author.")
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        result.Tours[0].Blocks.Should().HaveCount(1);
+        var q1 = result.Tours[0].Blocks[0].Questions[0];
+
+        q1.Text.Should().Be("Some question.", "trailing blank line should be trimmed");
+        q1.AcceptedAnswers.Should().Be("alt answer.", "trailing blank line should be trimmed");
+    }
+
+    /// <summary>
     /// Edge case: Handout text is surrounded with standalone [] brackets on separate lines.
     /// Format:
     /// Роздатковий матеріал:

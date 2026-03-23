@@ -57,10 +57,14 @@ public partial class PackageParser
         // (In practice, assets after a question starts are directly associated, not pending)
         FlushPendingAssetsToCurrentQuestion(ctx);
 
-        // When a new question is detected, save reference to current question as previous.
-        // This allows end-of-block processing to associate assets with the correct question.
-        // The previous question could have been created in a prior block or earlier in this block.
-        if (ctx.HasCurrentQuestion)
+        // When a new question is detected, save current as previous for asset distribution.
+        // Only set when the current question has active content in this block — either it was
+        // created in this block, or earlier lines in this block added content to it (answer,
+        // comment, etc.). A question from a prior block with no content here must not receive
+        // assets from this block. Note: tour/block starts set CurrentQuestion = null, so
+        // HasCurrentQuestion correctly guards against cross-tour associations.
+        if (ctx.HasCurrentQuestion &&
+            (ctx.QuestionCreatedInCurrentBlock || ctx.HasProcessedContentInBlock))
         {
             ctx.PreviousQuestionInBlock = ctx.CurrentQuestion;
         }

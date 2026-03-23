@@ -83,6 +83,13 @@ public partial class PackageParser
         /// </summary>
         public QuestionDto? PreviousQuestionInBlock { get; set; }
 
+        /// <summary>
+        /// Tracks whether any non-blank line has been processed in the current block.
+        /// Used to determine if the current question has active content in this block
+        /// when deciding whether to set PreviousQuestionInBlock.
+        /// </summary>
+        public bool HasProcessedContentInBlock { get; set; }
+
         public bool HasCurrentQuestion => CurrentQuestion != null;
         public bool HasCurrentTour => CurrentTour != null;
         public bool HasCurrentBlock => CurrentBlockDto != null;
@@ -151,8 +158,10 @@ public partial class PackageParser
         ctx.QuestionCreatedInCurrentBlock = false;
         ctx.CurrentBlock = block;
         ctx.AssociatedAssetFileNames.Clear();
-        ctx.HandoutMarkerDetectedInCurrentBlock = false;
+        // Preserve handout marker flag when continuing a multiline bracket from the previous block
+        ctx.HandoutMarkerDetectedInCurrentBlock = ctx.InsideMultilineHandoutBracket;
         ctx.PreviousQuestionInBlock = null;
+        ctx.HasProcessedContentInBlock = false;
         ctx.SectionBeforeAnswerRelated = IsAnswerRelatedSection(ctx.CurrentSection)
             ? ParserSection.QuestionText
             : ctx.CurrentSection;
@@ -180,6 +189,7 @@ public partial class PackageParser
 
             var sectionBeforeLine = ctx.CurrentSection;
             ProcessLine(line, ctx);
+            ctx.HasProcessedContentInBlock = true;
 
             // When transitioning to an answer-related section AND a handout marker was detected,
             // associate any remaining block assets with the pre-answer section (handout or question text).

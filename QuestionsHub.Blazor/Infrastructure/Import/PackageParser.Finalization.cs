@@ -111,7 +111,9 @@ public partial class PackageParser
             return;
         }
 
-        var allQuestions = result.Tours.SelectMany(t => t.Questions).ToList();
+        var allQuestions = result.Tours
+            .SelectMany(t => t.Questions.Concat(t.Blocks.SelectMany(b => b.Questions)))
+            .ToList();
 
         var questionsWithAnswer = allQuestions.Count(q => q.HasAnswer);
         var questionsWithText = allQuestions.Count(q => q.HasText);
@@ -130,7 +132,15 @@ public partial class PackageParser
     {
         foreach (var tour in result.Tours)
         {
-            foreach (var question in tour.Questions)
+            TrimQuestions(tour.Questions);
+
+            foreach (var block in tour.Blocks)
+                TrimQuestions(block.Questions);
+        }
+
+        static void TrimQuestions(List<QuestionDto> questions)
+        {
+            foreach (var question in questions)
             {
                 question.Text = TrimBlankLines(question.Text);
                 question.Answer = TrimBlankLines(question.Answer);

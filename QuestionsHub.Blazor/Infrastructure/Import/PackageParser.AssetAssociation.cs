@@ -6,9 +6,11 @@ namespace QuestionsHub.Blazor.Infrastructure.Import;
 public partial class PackageParser
 {
     /// <summary>
-    /// Associates block assets with handout section when transitioning to answer-related sections.
-    /// This ensures assets appearing before answers/comments in the same block are correctly
-    /// associated with the handout rather than the comment.
+    /// Associates the first unassociated block asset with handout section when transitioning
+    /// to answer-related sections. Only the first asset is associated here — it is the one
+    /// from the pre-answer area (handout or question text). Remaining assets are left for
+    /// end-of-block processing, where the answer-related section context will associate them
+    /// as comment assets.
     /// </summary>
     private static void AssociateBlockAssetsBeforeAnswerSection(List<AssetReference> assets, ParserContext ctx)
     {
@@ -33,6 +35,10 @@ public partial class PackageParser
                 ctx.PendingAssets.Add((asset, ctx.SectionBeforeAnswerRelated));
                 ctx.AssociatedAssetFileNames.Add(asset.FileName);
             }
+
+            // Only associate the first unassociated asset as handout/pre-answer;
+            // remaining assets belong to later sections (typically comment).
+            break;
         }
     }
 
