@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # WARNING:
@@ -18,7 +18,7 @@ sudo ufw logging low
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 
-# Custom port
+# Custom SSH port
 sudo ufw allow 55055/tcp
 
 sudo ufw --force enable
