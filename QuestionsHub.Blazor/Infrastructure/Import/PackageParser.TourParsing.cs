@@ -102,7 +102,7 @@ public partial class PackageParser
         var match = ParserPatterns.BlockStart().Match(line);
         if (match.Success)
         {
-            blockName = match.Groups[1].Success ? match.Groups[1].Value : null;
+            blockName = null;
         }
         else
         {

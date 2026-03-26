@@ -856,12 +856,12 @@ public class PackageParserTests
     #region Block Detection
 
     [Theory]
-    [InlineData("Блок 1", "1")]
-    [InlineData("Блок 2", "2")]
-    [InlineData("  Блок 3  ", "3")]
-    [InlineData("Блок 1.", "1")]
-    [InlineData("Блок 2:", "2")]
-    public void Parse_BlockStart_DetectsBlock(string blockLine, string expectedName)
+    [InlineData("Блок 1")]
+    [InlineData("Блок 2")]
+    [InlineData("  Блок 3  ")]
+    [InlineData("Блок 1.")]
+    [InlineData("Блок 2:")]
+    public void Parse_BlockStart_DetectsBlock(string blockLine)
     {
         // Arrange
         var blocks = new List<DocBlock>
@@ -879,7 +879,7 @@ public class PackageParserTests
         // Assert
         result.Tours.Should().HaveCount(1);
         result.Tours[0].Blocks.Should().HaveCount(1);
-        result.Tours[0].Blocks[0].Name.Should().Be(expectedName);
+        result.Tours[0].Blocks[0].Name.Should().BeNull();
     }
 
     [Fact]
@@ -926,9 +926,9 @@ public class PackageParserTests
         // Assert
         result.Tours.Should().HaveCount(1);
         result.Tours[0].Blocks.Should().HaveCount(2);
-        result.Tours[0].Blocks[0].Name.Should().Be("1");
+        result.Tours[0].Blocks[0].Name.Should().BeNull();
         result.Tours[0].Blocks[0].Editors.Should().Contain("Анатолій Матвєєвський");
-        result.Tours[0].Blocks[1].Name.Should().Be("2");
+        result.Tours[0].Blocks[1].Name.Should().BeNull();
         result.Tours[0].Blocks[1].Editors.Should().Contain("Ірина Кречетова");
     }
 
@@ -1012,13 +1012,13 @@ public class PackageParserTests
         result.Tours[0].Blocks.Should().HaveCount(2);
 
         var block1 = result.Tours[0].Blocks[0];
-        block1.Name.Should().Be("1");
+        block1.Name.Should().BeNull();
         block1.Editors.Should().Contain("Анатолій Матвєєвський");
         block1.Questions.Should().HaveCount(1);
         block1.Questions[0].Number.Should().Be("1");
 
         var block2 = result.Tours[0].Blocks[1];
-        block2.Name.Should().Be("2");
+        block2.Name.Should().BeNull();
         block2.Editors.Should().Contain("Ірина Кречетова");
         block2.Questions.Should().HaveCount(1);
         block2.Questions[0].Number.Should().Be("2");
