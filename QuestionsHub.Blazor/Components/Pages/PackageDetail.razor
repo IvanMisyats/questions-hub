@@ -144,7 +144,7 @@ else
                             @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
                             {
                                 blockNumberInPackage++;
-                                <div id="block-@block.Id" class="block-section ms-3">
+                                <div id="block-@block.Id" class="block-section">
                                     <h4 class="block-header">
                                         @block.GetDisplayName(blockNumberInPackage)
                                     </h4>
@@ -183,7 +183,7 @@ else
                             var orphanQuestions = tour.Questions.Where(q => q.BlockId == null).OrderBy(q => q.OrderIndex).ToList();
                             if (orphanQuestions.Any())
                             {
-                                <div class="orphan-questions-section ms-3">
+                                <div class="orphan-questions-section">
                                     @foreach (var question in orphanQuestions)
                                     {
                                         <div id="question-@question.Id">
