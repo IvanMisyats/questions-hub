@@ -46,6 +46,33 @@ QuestionsHub implements role-based authentication and authorization using **ASP.
 
 ---
 
+## API Key Authentication
+
+External API clients (e.g., mobile apps) authenticate via **API keys** instead of cookies.
+
+### How It Works
+- Client sends `X-API-Key: qh_live_...` header with every request
+- Keys are validated by `ApiKeyAuthenticationHandler` (custom ASP.NET `AuthenticationHandler`)
+- Keys stored as SHA-256 hashes in the `ApiClients` table — raw key shown once at creation
+- Valid keys are cached in memory (5-min TTL) to avoid DB hits per request
+- API clients have **anonymous access only** — only `Published` packages with `AccessLevel = All` are visible
+
+### Key Format
+`qh_live_<32-random-hex-chars>` (40 characters total)
+
+### Key Management
+- Admin page: `/admin/api-keys` — create, view, revoke keys
+- Each key has: name, contact email, created/last-used timestamps, active status
+
+### Rate Limiting
+- **Per API key** (ASP.NET): 60 req/min general, 20 req/min search, 30 req/min package detail
+- **Per IP** (nginx): 30 req/min on `/api/v1/`, 5 req/min on `/api/Auth/`
+
+### Endpoints
+All under `/api/v1/` — see `docs/API.md` for full reference.
+
+---
+
 ## Registration Flow
 
 ### User Registration

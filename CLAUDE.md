@@ -16,7 +16,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 
 ## Project Layout
 
-- `QuestionsHub.Blazor/` — main app (Components, Controllers, Data, Domain, Infrastructure, wwwroot)
+- `QuestionsHub.Blazor/` — main app (Components, Controllers, Controllers/Api/V1, Data, Domain, Infrastructure, wwwroot)
 - `QuestionsHub.UnitTests/` — unit tests
 - `db/` — PostgreSQL scripts and Ukrainian dictionary files
 - `docs/` — detailed documentation (read on demand)
@@ -57,4 +57,5 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/SEARCH.md` | FTS implementation details |
 | `docs/ICONS.md` | Icon system and available icons |
 | `docs/BACKUPS.md` | Backup system overview, schedule, storage, IaC |
+| `docs/API.md` | Public API reference: endpoints, auth, rate limits |
 | `docs/CLOUDFLARE.md` | Cloudflare proxy settings, Blazor gotchas, origin protection |

@@ -1,0 +1,217 @@
+@page "/admin/api-keys"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+
+@using System.Net
+@inject QuestionsHub.Blazor.Infrastructure.Api.ApiKeyService ApiKeyService
+
+<PageTitle>API-ключі - База українських запитань</PageTitle>
+
+<div class="container py-4">
+
+    <h1 class="mb-4">API-ключі</h1>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_isSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            @((MarkupString)_message)
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    @if (_newlyCreatedKey != null)
+    {
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <strong>Збережіть ключ зараз!</strong> Він більше не буде показаний.
+            <div class="mt-2">
+                <code class="user-select-all fs-5">@_newlyCreatedKey</code>
+            </div>
+            <button type="button" class="btn-close" @onclick="() => _newlyCreatedKey = null"></button>
+        </div>
+    }
+
+    <!-- Create form -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <Icon Name="plus" Class="me-2" />Створити новий ключ
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Назва клієнта</label>
+                    <input type="text" class="form-control" placeholder="Mobile App v1"
+                           @bind="_newName" maxlength="200" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Email розробника (необов'язково)</label>
+                    <input type="email" class="form-control" placeholder="dev@example.com"
+                           @bind="_newEmail" maxlength="200" />
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary" @onclick="CreateKey"
+                            disabled="@(string.IsNullOrWhiteSpace(_newName) || _isProcessing)">
+                        <Icon Name="plus" Class="me-1" />Створити
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keys table -->
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header">
+                <Icon Name="list" Class="me-2" />Усі ключі (@_clients.Count)
+            </div>
+            <div class="card-body p-0">
+                @if (_clients.Count == 0)
+                {
+                    <p class="text-muted p-3 mb-0">Ключів ще немає.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Назва</th>
+                                    <th>Префікс</th>
+                                    <th>Email</th>
+                                    <th>Створено</th>
+                                    <th>Останній запит</th>
+                                    <th>Статус</th>
+                                    <th style="width: 120px;">Дії</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var client in _clients)
+                                {
+                                    <tr class="@(!client.IsActive ? "table-secondary" : "")">
+                                        <td>@client.Name</td>
+                                        <td><code>@client.KeyPrefix…</code></td>
+                                        <td>@(client.ContactEmail ?? "—")</td>
+                                        <td>@client.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                        <td>@(client.LastUsedAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+                                        <td>
+                                            @if (client.IsActive)
+                                            {
+                                                <span class="badge bg-success">Активний</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Відкликано</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (client.IsActive)
+                                            {
+                                                <button class="btn btn-outline-danger btn-sm"
+                                                        @onclick="() => RevokeKey(client.Id, client.Name)"
+                                                        disabled="@_isProcessing">
+                                                    <Icon Name="x-circle" Class="me-1" />Відкликати
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<QuestionsHub.Blazor.Domain.ApiClient> _clients = [];
+    private bool _isLoading = true;
+    private bool _isProcessing;
+    private string? _message;
+    private bool _isSuccess;
+
+    private string _newName = "";
+    private string _newEmail = "";
+    private string? _newlyCreatedKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _clients = await ApiKeyService.GetAll();
+        _isLoading = false;
+    }
+
+    private async Task CreateKey()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+            return;
+
+        _isProcessing = true;
+        _message = null;
+        _newlyCreatedKey = null;
+
+        try
+        {
+            var email = string.IsNullOrWhiteSpace(_newEmail) ? null : _newEmail.Trim();
+            var (client, rawKey) = await ApiKeyService.Create(_newName.Trim(), email);
+
+            _newlyCreatedKey = rawKey;
+            _message = $"Ключ <strong>{WebUtility.HtmlEncode(client.Name)}</strong> створено.";
+            _isSuccess = true;
+            _newName = "";
+            _newEmail = "";
+
+            _clients = await ApiKeyService.GetAll();
+        }
+        catch (Exception ex)
+        {
+            _message = $"Помилка: {ex.Message}";
+            _isSuccess = false;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task RevokeKey(int clientId, string clientName)
+    {
+        _isProcessing = true;
+        _message = null;
+        _newlyCreatedKey = null;
+
+        try
+        {
+            var result = await ApiKeyService.Revoke(clientId);
+            if (result)
+            {
+                _message = $"Ключ <strong>{WebUtility.HtmlEncode(clientName)}</strong> відкликано.";
+                _isSuccess = true;
+                _clients = await ApiKeyService.GetAll();
+            }
+            else
+            {
+                _message = "Ключ не знайдено.";
+                _isSuccess = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Помилка: {ex.Message}";
+            _isSuccess = false;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}

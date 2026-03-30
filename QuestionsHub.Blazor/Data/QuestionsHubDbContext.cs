@@ -14,6 +14,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<Author> Authors => Set<Author>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<PackageImportJob> PackageImportJobs => Set<PackageImportJob>();
+    public DbSet<ApiClient> ApiClients => Set<ApiClient>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -154,6 +155,20 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasMany(t => t.Packages)
                 .WithMany(p => p.Tags)
                 .UsingEntity("PackageTags");
+        });
+
+        builder.Entity<ApiClient>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.Name).IsRequired().HasMaxLength(200);
+            entity.Property(a => a.KeyHash).IsRequired().HasMaxLength(64); // SHA-256 hex
+            entity.Property(a => a.KeyPrefix).IsRequired().HasMaxLength(16);
+            entity.Property(a => a.ContactEmail).HasMaxLength(200);
+            entity.Property(a => a.IsActive).HasDefaultValue(true);
+
+            entity.HasIndex(a => a.KeyHash)
+                .IsUnique()
+                .HasDatabaseName("IX_ApiClients_KeyHash");
         });
 
         builder.Entity<PackageImportJob>(entity =>

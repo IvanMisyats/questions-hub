@@ -36,6 +36,17 @@ These must stay as-is or the app will break:
 
 Cloudflare publishes their IP ranges at https://www.cloudflare.com/ips/. If they change, update `set_real_ip_from` directives in `infra/nginx/questions.com.ua.conf`.
 
+## Nginx rate limiting
+
+`infra/nginx/questions.com.ua.conf` defines two rate limit zones using the real visitor IP (restored from `CF-Connecting-IP`):
+
+| Zone | Rate | Burst | Applied to |
+|------|------|-------|------------|
+| `api_zone` | 30 req/min per IP | 10 | `/api/v1/` (public API) |
+| `auth_zone` | 5 req/min per IP | 3 | `/api/Auth/` (login/register) |
+
+These are first-line defenses before requests reach ASP.NET, which has its own per-API-key rate limiting.
+
 ## Do NOT enable
 
 | Setting | Why |

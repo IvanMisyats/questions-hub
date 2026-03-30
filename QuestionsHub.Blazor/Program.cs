@@ -1,13 +1,16 @@
 using System.Globalization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using QuestionsHub.Blazor.Components;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
+using QuestionsHub.Blazor.Infrastructure.Api;
 using QuestionsHub.Blazor.Infrastructure.Auth;
 using QuestionsHub.Blazor.Infrastructure.Email;
 using QuestionsHub.Blazor.Infrastructure.Import;
@@ -27,6 +30,7 @@ builder.Services
     .AddCoreServices()
     .AddDatabase(builder.Configuration)
     .AddIdentityServices()
+    .AddPublicApiServices()
     .AddMediaServices(builder.Configuration, builder.Environment)
     .AddPackageImport(builder.Configuration)
     .AddEmailServices(builder.Configuration)
@@ -99,6 +103,75 @@ internal static class ServiceCollectionExtensions
         services.AddScoped<PackageManagementService>();
         services.AddScoped<AccessControlService>();
         services.AddScoped<PackageListService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddPublicApiServices(this IServiceCollection services)
+    {
+        services.AddScoped<ApiKeyService>();
+
+        services.AddAuthentication()
+            .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+                ApiKeyAuthenticationOptions.Scheme, _ => { });
+
+        services.AddCors(options =>
+        {
+            options.AddPolicy("PublicApi", policy =>
+            {
+                policy.AllowAnyOrigin()
+                      .AllowAnyHeader()
+                      .WithMethods("GET");
+            });
+        });
+
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.AddSlidingWindowLimiter("api_general", opt =>
+            {
+                opt.Window = TimeSpan.FromMinutes(1);
+                opt.SegmentsPerWindow = 6;
+                opt.PermitLimit = 60;
+                opt.QueueLimit = 0;
+            });
+
+            options.AddSlidingWindowLimiter("api_search", opt =>
+            {
+                opt.Window = TimeSpan.FromMinutes(1);
+                opt.SegmentsPerWindow = 6;
+                opt.PermitLimit = 20;
+                opt.QueueLimit = 0;
+            });
+
+            options.AddSlidingWindowLimiter("api_detail", opt =>
+            {
+                opt.Window = TimeSpan.FromMinutes(1);
+                opt.SegmentsPerWindow = 6;
+                opt.PermitLimit = 30;
+                opt.QueueLimit = 0;
+            });
+
+            options.AddFixedWindowLimiter("auth_limit", opt =>
+            {
+                opt.Window = TimeSpan.FromMinutes(1);
+                opt.PermitLimit = 5;
+                opt.QueueLimit = 0;
+            });
+
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                context.HttpContext.Response.ContentType = "application/json";
+                var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterValue)
+                    ? retryAfterValue
+                    : TimeSpan.FromMinutes(1);
+                context.HttpContext.Response.Headers.RetryAfter =
+                    ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+                await context.HttpContext.Response.WriteAsync(
+                    """{"error":"Rate limit exceeded. Please retry later."}""", cancellationToken);
+            };
+        });
 
         return services;
     }
@@ -275,6 +348,8 @@ internal static class ApplicationExtensions
         app.ConfigureMediaFileServing();
 
         app.UseRouting();
+        app.UseCors();
+        app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseAntiforgery();

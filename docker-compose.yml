@@ -16,6 +16,7 @@
       - Email__ApiSecret=${EMAIL_API_SECRET}
       - Email__SenderEmail=noreply@questions.com.ua
       - "Email__SenderName=База запитань ЩДК"
+      - SiteUrl=https://questions.com.ua
       - Email__SiteUrl=https://questions.com.ua
       - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
       - Telegram__ChannelId=@questions_com_ua

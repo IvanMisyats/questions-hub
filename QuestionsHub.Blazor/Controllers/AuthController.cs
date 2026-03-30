@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure.Email;
@@ -12,6 +13,7 @@ namespace QuestionsHub.Blazor.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [ApiController]
+[EnableRateLimiting("auth_limit")]
 public class AuthController : ControllerBase
 {
     private readonly SignInManager<ApplicationUser> _signInManager;

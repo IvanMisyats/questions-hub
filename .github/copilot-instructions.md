@@ -207,6 +207,16 @@ Available icons: check, link, drag, search, close, group, shield-exclamation, pe
 
 ---
 
+## Public API
+
+Read-only API at `/api/v1/` for external clients (mobile app). See `docs/API.md` for full reference.
+
+- **Auth**: `X-API-Key` header — keys managed at `/admin/api-keys`
+- **Access**: Only `Published` + `AccessLevel = All` packages visible (anonymous context)
+- **Rate limiting**: ASP.NET per-key (60/min general, 20/min search) + nginx per-IP (30/min)
+- **Endpoints**: `GET /api/v1/packages`, `/packages/{id}`, `/search`, `/editors`, `/tags/popular`
+- **Key files**: `Controllers/Api/V1/`, `Infrastructure/Api/`, `Domain/ApiClient.cs`
+
 ## Additional Notes
 
 - Maintain backward compatibility when changing database schema
