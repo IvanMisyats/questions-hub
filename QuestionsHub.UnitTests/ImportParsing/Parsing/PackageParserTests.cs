@@ -2361,6 +2361,8 @@ public class PackageParserTests
     [InlineData("[Роздатковий матеріал: Схема] Який результат?", "Схема", "Який результат?")]
     [InlineData("[Роздатка: ] Питання без тексту роздатки", "", "Питання без тексту роздатки")]
     [InlineData("[Роздатковий матеріял: Діаграма] Що зображено?", "Діаграма", "Що зображено?")]
+    [InlineData("[ Роздатка: Таблиця] Питання", "Таблиця", "Питання")]
+    [InlineData("[ Роздатковий матеріал: Схема] Який результат?", "Схема", "Який результат?")]
     public void Parse_BracketedHandoutWithText_SeparatesHandoutAndQuestion(
         string line, string expectedHandout, string expectedQuestionText)
     {
@@ -5420,6 +5422,113 @@ public class PackageParserTests
         result.Tours[3].Questions[0].Number.Should().Be("25");
 
         result.NumberingMode.Should().Be(QuestionNumberingMode.Global);
+    }
+
+    [Fact]
+    public void Parse_MultilineBracketedHandoutWithSpaceAfterBracket_ExtractsHandout()
+    {
+        // Arrange - Real-world Q17 format: "Запитання 17:\n[ Роздатковий матеріал\n\n  ]\n"
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1"),
+            Block("Запитання 1:\n[ Роздатковий матеріал\n\n  ]\n"),
+            Block("Текст питання після роздатки."),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        var question = result.Tours[0].Questions[0];
+        question.Text.Should().NotContain("Роздатковий матеріал");
+        question.Text.Should().NotContain("[");
+        question.Text.Should().NotContain("]");
+        question.Text.Should().Contain("Текст питання після роздатки.");
+    }
+
+    [Theory]
+    [InlineData("Тур 1. Редактор – Євген Коваленко", "1", "Євген Коваленко")]
+    [InlineData("Тур 2. Редактор: Ірина Шевченко", "2", "Ірина Шевченко")]
+    [InlineData("Тур 3. Редакторка – Олена Бондаренко", "3", "Олена Бондаренко")]
+    public void Parse_TourStartWithInlineEditor_ExtractsEditorNotPreamble(
+        string tourLine, string expectedTourNumber, string expectedEditor)
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block(tourLine),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Number.Should().Be(expectedTourNumber);
+        result.Tours[0].Editors.Should().Contain(expectedEditor);
+        result.Tours[0].Preamble.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Parse_TourStartWithInlineMultipleEditors_ExtractsAll()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("ТУР 1. Редактори – Олексій Мельник, Ірина Шевченко"),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Editors.Should().HaveCount(2);
+        result.Tours[0].Editors.Should().Contain("Олексій Мельник");
+        result.Tours[0].Editors.Should().Contain("Ірина Шевченко");
+        result.Tours[0].Preamble.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Parse_TourStartWithInlineEditorAccented_StripsAccents()
+    {
+        // Arrange - Editor name with combining acute accents (U+0301)
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1. Редактор – Євге\u0301н Ковале\u0301нко"),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Editors.Should().Contain("Євген Коваленко");
+        result.Tours[0].Preamble.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Parse_TourStartWithRealPreamble_PreservesPreamble()
+    {
+        // Arrange - Non-editor preamble should still work
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1. Фізики"),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Preamble.Should().Be("Фізики");
+        result.Tours[0].Editors.Should().BeEmpty();
     }
 
     #endregion

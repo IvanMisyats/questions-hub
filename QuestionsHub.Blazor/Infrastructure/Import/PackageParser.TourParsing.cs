@@ -68,6 +68,19 @@ public partial class PackageParser
             ctx.SavedNumberingState = null;
         }
 
+        // If preamble was captured from a tour-start-with-preamble pattern, check whether
+        // it is actually an editor declaration (e.g., "Тур 1. Редактор – Name").
+        List<string>? inlineEditors = null;
+        if (preamble != null)
+        {
+            var editorsMatch = ParserPatterns.EditorsLabel().Match(preamble);
+            if (editorsMatch.Success)
+            {
+                inlineEditors = ParseAuthorList(editorsMatch.Groups[1].Value);
+                preamble = null;
+            }
+        }
+
         var orderIndex = ctx.Result.Tours.Count;
         ctx.CurrentTour = new TourDto
         {
@@ -77,6 +90,9 @@ public partial class PackageParser
             Preamble = preamble
         };
         ctx.Result.Tours.Add(ctx.CurrentTour);
+
+        if (inlineEditors is { Count: > 0 })
+            ctx.CurrentTour.Editors.AddRange(inlineEditors);
         ctx.CurrentBlockDto = null;
         ctx.CurrentQuestion = null;
         ctx.CurrentSection = ParserSection.TourHeader;

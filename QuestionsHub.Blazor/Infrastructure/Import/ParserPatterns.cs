@@ -152,12 +152,12 @@ public static partial class ParserPatterns
 
     // Matches: [Роздатка: ...], [Роздатковий матеріал: ...], [Роздатковий матеріял: ...]
     // Captures the handout text inside brackets and any text after the closing bracket
-    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*([^\]]*)\]\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[\s*(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*([^\]]*)\]\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarkerBracket();
 
     // Matches opening of a multiline bracketed handout (no closing bracket on same line)
     // Captures any text after the colon as handout content
-    [GeneratedRegex(@"^\s*\[(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*\[\s*(?:Роздатка|Роздатковий\s*матері[ая]л)\s*[:\.]?\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex HandoutMarkerBracketOpen();
 
     // Matches a closing bracket with optional text after it (for multiline handouts)
