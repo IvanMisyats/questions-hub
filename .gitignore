@@ -498,3 +498,10 @@ $RECYCLE.BIN/
 .github/upgrades/
 .playwright-mcp/
 .claude/settings.local.json
+
+# BMAD-METHOD — installed by `npx bmad-method install`, regenerable from manifest
+.claude/skills/
+_bmad/*
+!_bmad/_config/
+_bmad/_config/*
+!_bmad/_config/manifest.yaml
