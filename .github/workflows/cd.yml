@@ -92,20 +92,15 @@ jobs:
             # Pull the latest image from GHCR
             docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
 
-            # Create required directories
+            # Create required directories (ownership/permissions for uploads
+            # and keys are applied by the fix-permissions service in
+            # docker-compose, which runs as root inside the container and
+            # therefore does not require sudo on the VPS).
             mkdir -p "$POSTGRES_DATA_PATH" \
                      "$UPLOADS_PATH/handouts" \
                      "$UPLOADS_PATH/packages" \
                      "$UPLOADS_PATH/jobs" \
                      "$KEYS_PATH"
-
-            # Set ownership to match container's appuser (UID/GID 10000)
-            chown -R 10000:10000 "$UPLOADS_PATH" "$KEYS_PATH"
-            chmod 755 "$UPLOADS_PATH" "$UPLOADS_PATH/handouts" "$UPLOADS_PATH/packages" "$UPLOADS_PATH/jobs"
-            # Keys: group-readable so backup user (github-actions in appgroup) can read
-            chmod 750 "$KEYS_PATH"
-            find "$KEYS_PATH" -type f -exec chmod 640 {} +
-            setfacl -d -m g::r "$KEYS_PATH"  # new key files inherit group-read
 
             # Stop existing containers (if any)
             docker compose --profile production down 2>/dev/null || true

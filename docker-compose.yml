@@ -1,4 +1,28 @@
 ﻿services:
+  # One-shot init container: fixes ownership/permissions on bind-mounted
+  # uploads and keys volumes. Runs as root inside the container so it can
+  # chown to UID 10000 (appuser) without requiring sudo/root on the VPS.
+  fix-permissions:
+    profiles: ["production"]
+    image: alpine:3
+    container_name: questions-hub-fix-permissions
+    user: "0:0"
+    volumes:
+      - ${UPLOADS_PATH:-./uploads}:/uploads
+      - ${KEYS_PATH:-./keys}:/keys
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        apk add --no-cache acl >/dev/null
+        mkdir -p /uploads/handouts /uploads/packages /uploads/jobs
+        chown -R 10000:10000 /uploads /keys
+        chmod 755 /uploads /uploads/handouts /uploads/packages /uploads/jobs
+        chmod 750 /keys
+        find /keys -type f -exec chmod 640 {} +
+        setfacl -d -m g::r /keys
+    restart: "no"
+
   # Production web service - uses pre-built image from GHCR
   web:
     profiles: ["production"]
@@ -28,6 +52,8 @@
       postgres:
         condition: service_healthy
       db-setup:
+        condition: service_completed_successfully
+      fix-permissions:
         condition: service_completed_successfully
     restart: unless-stopped
     mem_limit: 512m
