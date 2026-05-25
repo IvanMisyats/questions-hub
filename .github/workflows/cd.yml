@@ -41,7 +41,7 @@ jobs:
 
       # 5. Copy deployment files to VPS
       - name: Copy deployment files to VPS
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           port: 55055
@@ -52,7 +52,7 @@ jobs:
 
       # 6. Deploy to VPS via SSH
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v0.1.7
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           port: 55055
