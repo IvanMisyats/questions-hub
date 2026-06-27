@@ -54,6 +54,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/AUTHENTICATION.md` | Roles, access control, registration flow |
 | `docs/PACKAGE_FORMAT.md` | `.qhub` interchange format schema |
 | `docs/PACKAGE_IMPORT.md` | DOCX import pipeline |
+| `docs/IMPORT_DEBUGGING.md` | Debugging imports: job artifacts, replaying the parser offline, numbering-cascade failure mode |
 | `docs/SEARCH.md` | FTS implementation details |
 | `docs/ICONS.md` | Icon system and available icons |
 | `docs/BACKUPS.md` | Backup system overview, schedule, storage, IaC |

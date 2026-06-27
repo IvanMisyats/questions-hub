@@ -308,6 +308,9 @@ Job folders are kept for debugging. Cleanup is handled separately (not in MVP).
 
 ## Troubleshooting
 
+> For diagnosing parser problems (inspecting job artifacts, replaying the parser offline,
+> the numbering-cascade failure mode), see [`IMPORT_DEBUGGING.md`](IMPORT_DEBUGGING.md).
+
 ### Job stuck in "Running"
 
 If the application restarts during processing, jobs are automatically marked as failed on next startup.
