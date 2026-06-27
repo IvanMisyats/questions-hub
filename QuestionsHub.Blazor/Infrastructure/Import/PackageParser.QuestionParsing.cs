@@ -34,9 +34,19 @@ public partial class PackageParser
             return true;
         }
 
-        // Format consistency validation: if first question used Named format,
-        // require subsequent questions to also use Named format
-        if (ctx.Format == QuestionFormat.Named && detectedFormat == QuestionFormat.Numbered)
+        // Format consistency validation: once a tour established the Named format
+        // (e.g. "Запитання N."), a bare "N." line is normally treated as content rather
+        // than a new question. This keeps duplet/list sub-items like "1." / "2." that
+        // restart numbering inside a question from being parsed as separate questions.
+        //
+        // Exception: a bare "N." that appears after the current question is already
+        // complete (has an answer) is a genuine question that merely used the shorter
+        // format. Letting it fall through to IsValidNextQuestionNumber below recovers it
+        // only when it also continues the tour's running sequence. Duplet sub-items fail
+        // this because they appear before the current question's answer (and restart at 1),
+        // so they are still absorbed as content.
+        if (ctx.Format == QuestionFormat.Named && detectedFormat == QuestionFormat.Numbered &&
+            ctx.CurrentQuestion?.HasAnswer != true)
         {
             ProcessAsRegularContent(line, ctx);
             return true;

@@ -5424,6 +5424,70 @@ public class PackageParserTests
         result.NumberingMode.Should().Be(QuestionNumberingMode.Global);
     }
 
+    /// <summary>
+    /// A tour that uses the Named format ("Запитання N.") throughout, except one
+    /// question written in the bare Numbered form ("5."). Question 4 is a duplet whose
+    /// sub-items ("1.", "2.") must stay as content, while the bare-numbered Q5 must
+    /// still be detected as a real question.
+    /// Regression: previously the format-consistency guard demoted "5." to content,
+    /// which threw off the global counter and caused every later question (Q6-Q12 and
+    /// all of tours 2-3) to be rejected too.
+    /// </summary>
+    [Fact]
+    public void Parse_NamedTourWithDupletAndBareNumberedQuestion_ParsesAllQuestions()
+    {
+        // Arrange
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Запитання 1. Текст питання 1"),
+            Block("Відповідь: В1"),
+            Block("Запитання 2. Текст питання 2"),
+            Block("Відповідь: В2"),
+            Block("Запитання 3. Текст питання 3"),
+            Block("Відповідь: В3"),
+            // Q4 is a duplet — sub-items "1." / "2." must be absorbed as content
+            Block("Запитання 4. Дуплет."),
+            Block("1. Підпитання дуплета А"),
+            Block("2. Підпитання дуплета Б"),
+            Block("Відповідь: 1. А. 2. Б."),
+            // Q5 uses the bare Numbered form inside an otherwise Named tour
+            Block("5. Текст питання 5"),
+            Block("Відповідь: В5"),
+            Block("Запитання 6. Текст питання 6"),
+            Block("Відповідь: В6"),
+            // Second tour must still parse after the cascade is fixed
+            Block("Тур 2"),
+            Block("Запитання 7. Текст питання 7"),
+            Block("Відповідь: В7"),
+            Block("Запитання 8. Текст питання 8"),
+            Block("Відповідь: В8")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours.Should().HaveCount(2);
+
+        // Tour 1: 6 questions (duplet sub-items are part of Q4, not separate questions)
+        result.Tours[0].Questions.Should().HaveCount(6);
+        result.Tours[0].Questions.Select(q => q.Number)
+            .Should().Equal("1", "2", "3", "4", "5", "6");
+
+        var q4 = result.Tours[0].Questions[3];
+        q4.Text.Should().Contain("Підпитання дуплета А");
+        q4.Text.Should().Contain("Підпитання дуплета Б");
+
+        var q5 = result.Tours[0].Questions[4];
+        q5.Text.Should().Contain("Текст питання 5");
+        q5.Answer.Should().Contain("В5");
+
+        // Tour 2: both questions parsed
+        result.Tours[1].Questions.Should().HaveCount(2);
+        result.Tours[1].Questions.Select(q => q.Number).Should().Equal("7", "8");
+    }
+
     [Fact]
     public void Parse_MultilineBracketedHandoutWithSpaceAfterBracket_ExtractsHandout()
     {
