@@ -5577,6 +5577,27 @@ public class PackageParserTests
     }
 
     [Fact]
+    public void Parse_TourEditorWithGraveAccents_StripsAccents()
+    {
+        // Arrange - Editor name with combining grave accents (U+0300), as found in
+        // Chornyy_Gard_ukr.docx. Stress marks must be stripped from editor names.
+        var blocks = new List<DocBlock>
+        {
+            Block("Тур 1"),
+            Block("Редактор: Євген Філа̀тов"),
+            Block("1. Текст питання"),
+            Block("Відповідь: Тест")
+        };
+
+        // Act
+        var result = _parser.Parse(blocks, []);
+
+        // Assert
+        result.Tours[0].Editors.Should().Contain("Євген Філатов");
+        result.Tours[0].Editors.Should().NotContain(e => e.Contains('̀'));
+    }
+
+    [Fact]
     public void Parse_TourStartWithRealPreamble_PreservesPreamble()
     {
         // Arrange - Non-editor preamble should still work

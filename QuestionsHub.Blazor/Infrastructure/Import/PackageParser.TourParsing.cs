@@ -149,7 +149,7 @@ public partial class PackageParser
         if (editorNameGenitive != null)
         {
             var nominativeName = UkrainianNameHelper.ConvertFullNameToNominative(editorNameGenitive);
-            ctx.CurrentBlockDto.Editors.Add(StripAccents(TextNormalizer.NormalizeApostrophes(nominativeName)!));
+            ctx.CurrentBlockDto.Editors.Add(TextNormalizer.RemoveAccents(TextNormalizer.NormalizeApostrophes(nominativeName)!));
         }
 
         ctx.CurrentTour.Blocks.Add(ctx.CurrentBlockDto);

@@ -100,7 +100,7 @@ public partial class PackageParser
         return text
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)
             .SelectMany(s => s.Split([" та ", " і ", " and "], StringSplitOptions.RemoveEmptyEntries))
-            .Select(s => StripAccents(s.Trim().TrimEnd('.', ',', ';')))
+            .Select(s => TextNormalizer.RemoveAccents(s.Trim().TrimEnd('.', ',', ';')))
             .Select(s => TextNormalizer.NormalizeApostrophes(s)!)
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .SelectMany(SplitAuthorOnRedakciya)
@@ -117,15 +117,6 @@ public partial class PackageParser
     {
         var parts = UkrainianNameHelper.SplitAndNormalizeAuthors(author);
         return parts.Where(p => !string.IsNullOrWhiteSpace(p));
-    }
-
-    /// <summary>
-    /// Removes combining acute accent marks from text.
-    /// Used for author and editor names to ensure consistent matching.
-    /// </summary>
-    private static string StripAccents(string text)
-    {
-        return text.Replace("\u0301", "");
     }
 
     private static string AppendText(string? existing, string newText)

@@ -191,9 +191,9 @@ During parsing, certain text normalization is applied:
 |-----------|-------------|------------|
 | Non-breaking space (U+00A0) | Regular space | All text |
 | En dash (–), Em dash (—) | Hyphen (-) | All text |
-| Combining acute accent (U+0301) | Removed | **Author and Editor names only** |
+| Combining stress marks (acute U+0301, grave U+0300, tone variants) | Removed | **Author and Editor names only** |
 
-**Important:** Acute accent marks (stress marks) are **preserved** in question text, answers, comments, and all other fields. They are only stripped from author and editor names to ensure consistent matching in the database.
+**Important:** Stress marks are **preserved** in question text, answers, comments, and all other fields. They are only stripped from author and editor names to ensure consistent matching in the database. All combining (non-spacing) marks are removed regardless of which stress character the source document used; precomposed Cyrillic letters such as `й`/`ї` are letters, not marks, and are kept intact.
 
 ### Numbering Mode Detection
 
