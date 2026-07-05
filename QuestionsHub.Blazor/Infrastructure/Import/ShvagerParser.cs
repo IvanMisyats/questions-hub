@@ -58,6 +58,9 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         /// <summary>Whether a «Теми:» list header was seen (disables the subtitle rule).</summary>
         public bool ThemeListSeen { get; set; }
 
+        /// <summary>Inside a multiline «[Роздатковий матеріал: …]» bracket.</summary>
+        public bool InsideHandoutBracket { get; set; }
+
         /// <summary>How many non-empty header lines were seen (for title/subtitle detection).</summary>
         public int HeaderLinesSeen { get; set; }
     }
@@ -122,6 +125,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             return;
         }
 
+        if (TryProcessHandoutBracketContinuation(line, ctx)) return;
         if (TryProcessThemeStart(lines, index, ctx)) return;
         if (TryProcessQuestionStart(line, ctx)) return;
         if (TryProcessHeaderLine(line, ctx)) return;
@@ -156,8 +160,20 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             return true;
         }
 
+        // Headers may carry a list-style number («5. ПОЛІТИКИ…») — strip it for matching,
+        // but never from question-value lines («10. …»)
+        var candidate = line;
+        if (!IsQuestionStart(line))
+        {
+            var numberMatch = ParserPatterns.ListNumberPrefix().Match(line);
+            if (numberMatch.Success)
+            {
+                candidate = numberMatch.Groups[1].Value.Trim();
+            }
+        }
+
         // A line matching a known anchor is the real theme header
-        var normalized = NormalizeTitle(line);
+        var normalized = NormalizeTitle(candidate);
         if (ctx.Anchors.TryGetValue(normalized, out var anchor))
         {
             ctx.Anchors.Remove(normalized); // consume: each anchor starts at most one theme
@@ -166,7 +182,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         }
 
         // Also try with a trailing «(Автори)» stripped: «Змії (Іван Петренко)» matches anchor «Змії»
-        var (bareTitle, bareAuthors) = SplitTitleAndAuthors(line);
+        var (bareTitle, bareAuthors) = SplitTitleAndAuthors(candidate);
         if (bareAuthors.Count > 0)
         {
             var bareNormalized = NormalizeTitle(bareTitle);
@@ -182,7 +198,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         if (IsPlausibleBareTitle(line) && NextQuestionValueIs10(lines, index)
             && (ctx.CurrentTheme == null || ctx.CurrentTheme.Questions.Count > 0))
         {
-            var (title, authors) = SplitTitleAndAuthors(line);
+            var (title, authors) = SplitTitleAndAuthors(candidate);
             StartTheme(ctx, title, authors);
             return true;
         }
@@ -447,7 +463,8 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         var remainder = match.Groups[2].Value.Trim();
         if (!string.IsNullOrEmpty(remainder))
         {
-            AppendToCurrentSection(remainder, ctx);
+            // Full pipeline: the value line may carry a handout bracket or inline labels
+            ProcessLabelOrContent(remainder, ctx);
         }
 
         return true;
@@ -559,6 +576,9 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             }
         }
 
+        // «[Роздатковий матеріал: …]» bracket — its content is the handout text
+        if (ctx.CurrentQuestion != null && TryProcessHandoutBracket(line, ctx)) return;
+
         var (section, remainder) = DetectLabel(line);
         if (section != null)
         {
@@ -575,7 +595,134 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
         if (string.IsNullOrWhiteSpace(line)) return;
 
+        // Inline labels mid-line: «Відповідь: Індіра Ганді. Залік: за прізвищем.»
+        var inlineIndex = FindInlineLabelStart(line);
+        if (inlineIndex > 0 && ctx.CurrentQuestion != null)
+        {
+            var before = line[..inlineIndex].Trim();
+            if (before.Length > 0)
+            {
+                AppendToCurrentSection(before, ctx);
+            }
+
+            ProcessLabelOrContent(line[inlineIndex..], ctx);
+            return;
+        }
+
         AppendToCurrentSection(line, ctx);
+    }
+
+    /// <summary>
+    /// Finds the start of an inline label within content. Only Залік/Незалік/Форма may
+    /// appear mid-line (other labels must be at line start — phrases like «дайте
+    /// відповідь:» in question text must not be treated as labels).
+    /// </summary>
+    private static int FindInlineLabelStart(string text)
+    {
+        string[] inlineKeywords =
+        [
+            "Залік:",
+            "Заліки:",
+            "Зараховується:",
+            "Незалік:",
+            "Не залік:",
+            "Не приймається:",
+            "Форма:"
+        ];
+
+        var minIndex = int.MaxValue;
+        foreach (var keyword in inlineKeywords)
+        {
+            var index = text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+            if (index > 0 && index < minIndex)
+            {
+                minIndex = index;
+            }
+        }
+
+        return minIndex == int.MaxValue ? -1 : minIndex;
+    }
+
+    // ==================== Bracketed handouts ====================
+
+    /// <summary>
+    /// Handles «[Роздатковий матеріал: текст]» (single line) and the opening of a
+    /// multiline bracket. Content inside the bracket becomes the handout text; content
+    /// after the closing bracket continues as question text.
+    /// </summary>
+    private bool TryProcessHandoutBracket(string line, Context ctx)
+    {
+        var question = ctx.CurrentQuestion!;
+
+        var singleLine = ParserPatterns.HandoutMarkerBracket().Match(line);
+        if (singleLine.Success)
+        {
+            var handout = singleLine.Groups[1].Value.Trim();
+            if (handout.Length > 0)
+            {
+                question.HandoutText = Append(question.HandoutText, Normalize(handout));
+            }
+
+            ctx.CurrentSection = Section.QuestionText;
+
+            var rest = singleLine.Groups[2].Value.Trim();
+            if (rest.Length > 0)
+            {
+                ProcessLabelOrContent(rest, ctx);
+            }
+            return true;
+        }
+
+        var multilineOpen = ParserPatterns.HandoutMarkerBracketOpen().Match(line);
+        if (multilineOpen.Success && !line.Contains(']'))
+        {
+            ctx.InsideHandoutBracket = true;
+            var handout = multilineOpen.Groups[1].Value.Trim();
+            if (handout.Length > 0)
+            {
+                question.HandoutText = Append(question.HandoutText, Normalize(handout));
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Consumes lines inside a multiline «[Роздатковий матеріал: …» bracket until the
+    /// closing «]»; content after the bracket continues as question text.
+    /// </summary>
+    private bool TryProcessHandoutBracketContinuation(string line, Context ctx)
+    {
+        if (!ctx.InsideHandoutBracket) return false;
+
+        var question = ctx.CurrentQuestion;
+        var closeIndex = line.IndexOf(']');
+
+        if (closeIndex < 0)
+        {
+            if (question != null)
+            {
+                question.HandoutText = Append(question.HandoutText, Normalize(line));
+            }
+            return true;
+        }
+
+        var inside = line[..closeIndex].Trim();
+        if (question != null && inside.Length > 0)
+        {
+            question.HandoutText = Append(question.HandoutText, Normalize(inside));
+        }
+
+        ctx.InsideHandoutBracket = false;
+        ctx.CurrentSection = Section.QuestionText;
+
+        var rest = line[(closeIndex + 1)..].Trim();
+        if (rest.Length > 0)
+        {
+            ProcessLabelOrContent(rest, ctx);
+        }
+        return true;
     }
 
     private void AppendToCurrentSection(string text, Context ctx)

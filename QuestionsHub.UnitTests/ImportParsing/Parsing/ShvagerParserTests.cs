@@ -522,6 +522,131 @@ public class ShvagerParserTests
 
     #endregion
 
+    #region Numbered bare titles
+
+    [Fact]
+    public void Parse_NumberedBareTitleInListAndBody_StripsNumberPrefix()
+    {
+        // Real-world format: the «Теми:» list AND the body headers are numbered «N. Назва»
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "5. ПОЛІТИКИ З П'ЯТИБУКВЕНИМИ ПРІЗВИЩАМИ",
+            ""
+        };
+        lines.AddRange(Theme("5. ПОЛІТИКИ З П'ЯТИБУКВЕНИМИ ПРІЗВИЩАМИ"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Title.Should().Be("ПОЛІТИКИ З П'ЯТИБУКВЕНИМИ ПРІЗВИЩАМИ");
+    }
+
+    [Fact]
+    public void Parse_NumberedBareTitleWithoutList_StripsNumberPrefix()
+    {
+        // Fallback path (no «Теми:» list): a numbered title right before «10.»
+        var result = Parse(Theme("5. ПОЛІТИКИ З П'ЯТИБУКВЕНИМИ ПРІЗВИЩАМИ"));
+
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Title.Should().Be("ПОЛІТИКИ З П'ЯТИБУКВЕНИМИ ПРІЗВИЩАМИ");
+    }
+
+    #endregion
+
+    #region Inline labels
+
+    [Fact]
+    public void Parse_InlineZalik_SplitsAnswerAndAcceptedAnswers()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. Хто ця жінка?",
+            "Відповідь: Інді́ра Га́нді. Залік: за прізвищем.");
+
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("Інді́ра Га́нді.");
+        q.AcceptedAnswers.Should().Be("за прізвищем.");
+    }
+
+    [Fact]
+    public void Parse_InlineNezalikAndForma_Split()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. Питання?",
+            "Відповідь: соломинка. Незалік: трубочка. Форма: одним словом");
+
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("соломинка.");
+        q.RejectedAnswers.Should().Be("трубочка.");
+        q.Form.Should().Be("одним словом");
+    }
+
+    [Fact]
+    public void Parse_ZalikAtLineStart_StillWorks()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. Питання?",
+            "Відповідь: а",
+            "Залік: б");
+
+        var q = result.Tours[0].Questions[0];
+        q.Answer.Should().Be("а");
+        q.AcceptedAnswers.Should().Be("б");
+    }
+
+    #endregion
+
+    #region Bracketed handouts
+
+    [Fact]
+    public void Parse_BracketedHandout_OwnLine_ParsedAsHandoutText()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. [Роздатковий матеріал: фаресімі ]",
+            "Фа́ресімі - ЦЕ.",
+            "Відповідь: факсиміле");
+
+        var q = result.Tours[0].Questions[0];
+        q.HandoutText.Should().Be("фаресімі");
+        q.Text.Should().Be("Фа́ресімі - ЦЕ.");
+        q.Text.Should().NotContain("Роздатковий");
+    }
+
+    [Fact]
+    public void Parse_BracketedHandout_WithTextAfterBracket_SplitsCorrectly()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. [Роздатка: слово] Що це?",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HandoutText.Should().Be("слово");
+        q.Text.Should().Be("Що це?");
+    }
+
+    [Fact]
+    public void Parse_BracketedHandout_Multiline_Collected()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. [Роздатковий матеріал: перший рядок",
+            "другий рядок]",
+            "Текст запитання?",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HandoutText.Should().Be("перший рядок\nдругий рядок");
+        q.Text.Should().Be("Текст запитання?");
+    }
+
+    #endregion
+
     #region Picture brackets
 
     [Fact]
