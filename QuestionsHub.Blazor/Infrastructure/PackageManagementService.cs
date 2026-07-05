@@ -178,6 +178,18 @@ public class PackageManagementService(
 
             var packageId = tour.PackageId;
 
+            // Special tour types are a Що?Де?Коли? concept; Своя гра themes are always Regular
+            if (newType != TourType.Regular)
+            {
+                var packageType = await context.Packages
+                    .Where(p => p.Id == packageId)
+                    .Select(p => p.Type)
+                    .FirstAsync();
+
+                if (packageType == PackageType.Shvager)
+                    return OperationResult.Fail("Special tour types are not supported in Svoya Gra packages");
+            }
+
             var allTours = await context.Tours
                 .Where(t => t.PackageId == packageId)
                 .ToListAsync();
@@ -456,10 +468,14 @@ public class PackageManagementService(
             var tour = await context.Tours
                 .Include(t => t.Questions)
                 .Include(t => t.Blocks)
+                .Include(t => t.Package)
                 .FirstOrDefaultAsync(t => t.Id == tourId);
 
             if (tour == null)
                 return CreateResult.Fail<List<Block>>("Tour not found");
+
+            if (tour.Package.Type == PackageType.Shvager)
+                return CreateResult.Fail<List<Block>>("Blocks are not supported in Svoya Gra packages");
 
             if (tour.Blocks.Count > 0)
                 return CreateResult.Fail<List<Block>>("Tour already has blocks");

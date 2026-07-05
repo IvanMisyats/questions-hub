@@ -32,18 +32,26 @@ public class SearchController : ControllerBase
     /// Full-text search across published public questions.
     /// Supports AND (default), OR, "phrase", -exclude syntax.
     /// </summary>
+    /// <param name="q">Search query.</param>
+    /// <param name="limit">Maximum number of results (1-100).</param>
+    /// <param name="type">Optional game-type filter: "www" or "shvager".</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     [HttpGet]
     public async Task<ActionResult<ApiSearchResponse>> Search(
         [FromQuery] string? q = null,
         [FromQuery] int limit = 50,
+        [FromQuery] PackageType? type = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(q))
             return BadRequest(new { error = "Query parameter 'q' is required." });
 
+        if (type.HasValue && !Enum.IsDefined(type.Value))
+            return BadRequest(new { error = "Invalid 'type' value. Allowed: www, shvager." });
+
         limit = Math.Clamp(limit, 1, 100);
 
-        var results = await _searchService.Search(q, AnonymousContext, limit, cancellationToken);
+        var results = await _searchService.Search(q, AnonymousContext, limit, type, cancellationToken);
 
         var siteBaseUrl = _configuration["SiteUrl"] ?? "https://questions.com.ua";
 
@@ -52,7 +60,9 @@ public class SearchController : ControllerBase
             TourId: r.TourId,
             PackageId: r.PackageId,
             PackageTitle: r.PackageTitle,
+            GameType: ToGameTypeString(r.PackageType),
             TourNumber: r.TourNumber,
+            TourTitle: r.TourTitle,
             QuestionNumber: r.QuestionNumber,
             Text: r.Text,
             Answer: r.Answer,
@@ -60,6 +70,7 @@ public class SearchController : ControllerBase
             HandoutUrl: PackagesController.ToAbsoluteUrl(r.HandoutUrl, siteBaseUrl),
             AcceptedAnswers: r.AcceptedAnswers,
             RejectedAnswers: r.RejectedAnswers,
+            AnswerForm: r.AnswerForm,
             Comment: r.Comment,
             CommentAttachmentUrl: PackagesController.ToAbsoluteUrl(r.CommentAttachmentUrl, siteBaseUrl),
             Source: r.Source,
@@ -77,6 +88,15 @@ public class SearchController : ControllerBase
 
         return Ok(new ApiSearchResponse(q, dtos.Count, dtos));
     }
+
+    /// <summary>
+    /// Converts a <see cref="PackageType"/> to its public API string representation.
+    /// </summary>
+    internal static string ToGameTypeString(PackageType type) => type switch
+    {
+        PackageType.Shvager => "shvager",
+        _ => "www"
+    };
 
     /// <summary>
     /// Parses the pipe-separated "id:name" author string from SearchResult into structured DTOs.

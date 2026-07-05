@@ -19,9 +19,14 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Мої пакети</h1>
-        <button class="btn btn-success" @onclick="CreateNewPackage">
-            <Icon Name="plus" Class="me-2" />Створити пакет
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" @onclick="() => CreateNewPackage(PackageType.Www)">
+                <Icon Name="plus" Class="me-2" />Пакет ЩДК
+            </button>
+            <button class="btn btn-success" @onclick="() => CreateNewPackage(PackageType.Shvager)">
+                <Icon Name="plus" Class="me-2" />Пакет Своєї гри
+            </button>
+        </div>
     </div>
 
     @if (_userId != null)
@@ -43,19 +48,36 @@
             <Icon Name="exclamation-triangle" Class="me-2" />@_errorMessage
         </div>
     }
-    else if (_packages == null || _packages.Count == 0)
-    {
-        <div class="alert alert-info" role="alert">
-            <Icon Name="info-circle" Class="me-2" />У вас ще немає пакетів. Натисніть "Створити пакет", щоб почати.
-        </div>
-    }
     else
     {
+        @if (_packages?.Count > 0 || _typeFilter != null)
+        {
+            <div class="d-flex justify-content-end mb-2">
+                <select class="form-select form-select-sm" style="max-width: 200px;"
+                        value="@(_typeFilter?.ToString() ?? "")" @onchange="OnTypeFilterChanged">
+                    <option value="">Всі типи</option>
+                    <option value="@PackageType.Www">@PackageType.Www.DisplayName()</option>
+                    <option value="@PackageType.Shvager">@PackageType.Shvager.DisplayName()</option>
+                </select>
+            </div>
+        }
+        @if (_packages == null || _packages.Count == 0)
+        {
+            <div class="alert alert-info" role="alert">
+                <Icon Name="info-circle" Class="me-2" />
+                @(_typeFilter != null
+                    ? "Немає пакетів обраного типу."
+                    : "У вас ще немає пакетів. Натисніть \"Пакет ЩДК\" або \"Пакет Своєї гри\", щоб почати.")
+            </div>
+        }
+        else
+        {
         <div class="table-responsive">
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
                         <th>Назва</th>
+                        <th>Тип</th>
                         <th>Дата проведення</th>
                         <th>Турів</th>
                         <th>Питань</th>
@@ -76,6 +98,7 @@
                                     @package.Title
                                 </a>
                             </td>
+                            <td><PackageTypeBadge Type="package.Type" /></td>
                             <td>@(PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo) is var period && !string.IsNullOrEmpty(period) ? period : "—")</td>
                             <td>@package.TourCount</td>
                             <td>@package.QuestionCount</td>
@@ -101,6 +124,7 @@
         </div>
 
         <Pagination CurrentPage="CurrentPage" TotalPages="_totalPages" BaseUrl="/manage/packages" />
+        }
     }
 </div>
 
@@ -139,6 +163,7 @@
     private record PackageListItem(
         int Id,
         string Title,
+        PackageType Type,
         DateOnly? PlayedFrom,
         DateOnly? PlayedTo,
         int TourCount,
@@ -168,6 +193,9 @@
     private bool _showDeleteModal;
     private PackageListItem? _packageToDelete;
     private bool _isDeleting;
+
+    // Game-type filter (null = all types)
+    private PackageType? _typeFilter;
 
     // Component reference
     private PackageImportSection? _importSection;
@@ -208,6 +236,12 @@
                 query = query.Where(p => p.OwnerId == _userId);
             }
 
+            if (_typeFilter.HasValue)
+            {
+                var type = _typeFilter.Value;
+                query = query.Where(p => p.Type == type);
+            }
+
             // Get total count for pagination
             _totalCount = await query.CountAsync();
             _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
@@ -220,6 +254,7 @@
                 .Select(p => new PackageListItem(
                     p.Id,
                     p.Title,
+                    p.Type,
                     p.PlayedFrom,
                     p.PlayedTo,
                     p.Tours.Count,
@@ -241,7 +276,22 @@
         }
     }
 
-    private async Task CreateNewPackage()
+    private async Task OnTypeFilterChanged(ChangeEventArgs e)
+    {
+        _typeFilter = Enum.TryParse<PackageType>(e.Value?.ToString(), out var type) ? type : null;
+
+        if (CurrentPage != 1)
+        {
+            // Reset pagination; OnParametersSetAsync reloads with the new filter
+            Navigation.NavigateTo("/manage/packages");
+        }
+        else
+        {
+            await LoadPackages();
+        }
+    }
+
+    private async Task CreateNewPackage(PackageType type)
     {
         try
         {
@@ -250,6 +300,7 @@
             var newPackage = new Package
             {
                 Title = "Новий пакет",
+                Type = type,
                 Description = null,
                 PlayedFrom = null,
                 PlayedTo = null,

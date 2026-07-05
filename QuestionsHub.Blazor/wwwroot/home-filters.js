@@ -13,6 +13,9 @@
     const POPULAR_TAGS_API_URL = '/api/packages/popular-tags';
     const TAG_PAGE_SIZE = 10;
 
+    // Game type of Своя гра packages (PackageType enum is serialized as a number)
+    const SHVAGER_TYPE = 1;
+
     // State
     let state = {
         search: null,
@@ -20,6 +23,7 @@
         editorName: 'Всі редактори',
         tagId: null,
         tagName: '',
+        type: 'Www',
         sort: 'PublicationDate',
         dir: 'Desc',
         page: 1,
@@ -83,6 +87,7 @@
             state.editorName = pageState.dataset.editorName || 'Всі редактори';
             state.tagId = pageState.dataset.tagId ? parseInt(pageState.dataset.tagId) : null;
             state.tagName = pageState.dataset.tagName || '';
+            state.type = pageState.dataset.type || 'Www';
             const section = document.getElementById('popular-tags-section');
             totalTags = section ? parseInt(section.dataset.totalTags) || 0 : 0;
             visibleTagCount = TAG_PAGE_SIZE;
@@ -335,6 +340,7 @@
             if (state.search) params.set('search', state.search);
             if (state.editorId) params.set('editor', state.editorId);
             if (state.tagId) params.set('tag', state.tagId);
+            params.set('type', state.type);
             if (state.sort && state.sort !== 'PublicationDate') params.set('sort', state.sort);
             if (state.dir && state.dir !== 'Desc') params.set('dir', state.dir);
             if (state.page > 1) params.set('page', state.page);
@@ -459,6 +465,14 @@
                </div>`
             : '';
 
+        const isShvager = pkg.type === SHVAGER_TYPE;
+        const typeBadge = isShvager
+            ? '<span class="badge bg-success me-1" title="Своя гра">Своя гра</span>'
+            : '<span class="badge bg-primary me-1" title="Що?Де?Коли?">ЩДК</span>';
+        const countsHtml = isShvager
+            ? `<strong>${pkg.toursCount}</strong> тем · <strong>${pkg.questionsCount}</strong> запитань`
+            : `<strong>${pkg.questionsCount}</strong> запитань`;
+
         return `
             <div class="col">
                 <a href="/package/${pkg.id}" class="text-decoration-none text-reset">
@@ -467,7 +481,7 @@
                             <h5 class="card-title">${escapeHtml(pkg.title)}</h5>
                             <p class="card-text text-muted mb-2">
                                 <small>
-                                    <strong>${pkg.questionsCount}</strong> запитань${playedPeriod ? ` · ${playedPeriod}` : ''}
+                                    ${typeBadge}${countsHtml}${playedPeriod ? ` · ${playedPeriod}` : ''}
                                 </small>
                             </p>
                             ${publicationDateHtml}
@@ -609,6 +623,7 @@
      */
     function buildBaseUrl() {
         const params = new URLSearchParams();
+        if (state.type && state.type !== 'Www') params.set('type', state.type.toLowerCase());
         if (state.search) params.set('search', state.search);
         if (state.editorId) params.set('editor', state.editorId);
         if (state.sort && state.sort !== 'PublicationDate') params.set('sort', state.sort);
@@ -671,6 +686,7 @@
         pageState.dataset.editorName = state.editorName;
         pageState.dataset.tagId = state.tagId || '';
         pageState.dataset.tagName = state.tagName;
+        pageState.dataset.type = state.type;
         pageState.dataset.sort = state.sort;
         pageState.dataset.dir = state.dir;
         pageState.dataset.page = state.page;
@@ -693,6 +709,7 @@
      */
     function buildBrowserUrl() {
         const params = new URLSearchParams();
+        if (state.type && state.type !== 'Www') params.set('type', state.type.toLowerCase());
         if (state.search) params.set('search', state.search);
         if (state.editorId) params.set('editor', state.editorId);
         if (state.tagId) params.set('tag', state.tagId);
@@ -774,10 +791,10 @@
         if (!editorList) return;
 
         try {
-            let url = EDITORS_API_URL;
-            if (searchTerm) {
-                url += '?search=' + encodeURIComponent(searchTerm);
-            }
+            const params = new URLSearchParams();
+            if (searchTerm) params.set('search', searchTerm);
+            params.set('type', state.type);
+            const url = `${EDITORS_API_URL}?${params.toString()}`;
 
             const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to load editors');

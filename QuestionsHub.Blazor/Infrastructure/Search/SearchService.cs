@@ -14,7 +14,9 @@ public record SearchResult(
     int TourId,
     int PackageId,
     string PackageTitle,
+    PackageType PackageType,
     string TourNumber,
+    string? TourTitle,
     string QuestionNumber,
     string Text,
     string Answer,
@@ -22,6 +24,7 @@ public record SearchResult(
     string? HandoutUrl,
     string? AcceptedAnswers,
     string? RejectedAnswers,
+    string? AnswerForm,
     string? Comment,
     string? CommentAttachmentUrl,
     string? Source,
@@ -61,12 +64,14 @@ public class SearchService
     /// <param name="query">Search query string</param>
     /// <param name="accessContext">User access context for filtering by access level</param>
     /// <param name="limit">Maximum number of results (default 50, max 100)</param>
+    /// <param name="typeFilter">Optional game-type filter (null = both types)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of search results ordered by relevance</returns>
     public async Task<List<SearchResult>> Search(
         string query,
         PackageAccessContext accessContext,
         int limit = 50,
+        PackageType? typeFilter = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -98,6 +103,7 @@ public class SearchService
         var isEditor = accessContext.IsEditor;
         var hasVerifiedEmail = accessContext.HasVerifiedEmail;
         var userId = accessContext.UserId ?? "";
+        var typeValue = (int?)typeFilter;
 
         var results = await context.Database
             .SqlQuery<SearchResult>($@"
@@ -114,7 +120,9 @@ public class SearchService
                     qu.""TourId"",
                     t.""PackageId"",
                     p.""Title"" AS ""PackageTitle"",
+                    p.""Type"" AS ""PackageType"",
                     t.""Number"" AS ""TourNumber"",
+                    t.""Title"" AS ""TourTitle"",
                     qu.""Number"" AS ""QuestionNumber"",
                     qu.""Text"",
                     qu.""Answer"",
@@ -122,6 +130,7 @@ public class SearchService
                     qu.""HandoutUrl"",
                     qu.""AcceptedAnswers"",
                     qu.""RejectedAnswers"",
+                    qu.""AnswerForm"",
                     qu.""Comment"",
                     qu.""CommentAttachmentUrl"",
                     qu.""Source"",
@@ -166,6 +175,7 @@ public class SearchService
                 JOIN ""Packages"" p ON t.""PackageId"" = p.""Id""
                 CROSS JOIN q
                 WHERE p.""Status"" = 1
+                  AND ({typeValue}::int IS NULL OR p.""Type"" = {typeValue})
                   AND (
                        qu.""SearchVector"" @@ q.tsq
                        OR (q.tsq_prefix IS NOT NULL AND qu.""SearchVector"" @@ q.tsq_prefix)

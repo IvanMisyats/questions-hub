@@ -54,6 +54,7 @@ Browse and filter packages with pagination.
 | `search` | string | — | Title search (case-insensitive, partial match) |
 | `editor` | int | — | Filter by editor ID |
 | `tag` | int | — | Filter by tag ID |
+| `type` | string | — | Game-type filter: `www` (Що?Де?Коли?) or `shvager` (Своя гра). Omit for both. Invalid values → `400` |
 | `sort` | string | `publicationDate` | Sort field: `publicationDate` or `playedFrom` |
 | `dir` | string | `desc` | Sort direction: `asc` or `desc` |
 | `page` | int | 1 | Page number (1-based) |
@@ -67,10 +68,12 @@ Browse and filter packages with pagination.
     {
       "id": 42,
       "title": "Кубок Львова 2025",
+      "type": 0,
       "description": "Опис пакету...",
       "publicationDate": "2025-12-15T10:30:00Z",
       "playedFrom": "2025-12-01",
       "playedTo": "2025-12-02",
+      "toursCount": 6,
       "questionsCount": 72,
       "editors": [
         { "id": 1, "firstName": "Іван", "lastName": "Петренко" }
@@ -86,6 +89,8 @@ Browse and filter packages with pagination.
 }
 ```
 
+`type` in list items is numeric: `0` = Що?Де?Коли?, `1` = Своя гра. `toursCount` is the number of tours (ЩДК) or themes (Своя гра).
+
 ---
 
 ### `GET /api/v1/packages/{id}`
@@ -100,6 +105,7 @@ Returns `404` if the package does not exist or is not public.
 {
   "id": 42,
   "title": "Кубок Львова 2025",
+  "gameType": "www",
   "description": "Опис пакету...",
   "preamble": "Редактори дякують тестерам...",
   "playedFrom": "2025-12-01",
@@ -118,6 +124,7 @@ Returns `404` if the package does not exist or is not public.
     {
       "id": 101,
       "number": "1",
+      "title": null,
       "type": "regular",
       "preamble": null,
       "comment": null,
@@ -136,6 +143,7 @@ Returns `404` if the package does not exist or is not public.
           "handoutUrl": "https://questions.com.ua/media/handout_q501.jpg",
           "acceptedAnswers": "Залік",
           "rejectedAnswers": null,
+          "answerForm": null,
           "comment": "Коментар з поясненням",
           "commentAttachmentUrl": null,
           "source": "Вікіпедія",
@@ -153,8 +161,12 @@ Returns `404` if the package does not exist or is not public.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `numberingMode` | `global`, `perTour`, `manual` | How question numbers are assigned |
-| `tours[].type` | `regular`, `warmup`, `shootout` | Tour type. Warmup is always first, shootout always last |
+| `gameType` | `www`, `shvager` | Game type: Що?Де?Коли? or Своя гра |
+| `numberingMode` | `global`, `perTour`, `manual` | How question numbers are assigned (ЩДК only; ignore for Своя гра) |
+| `tours[].title` | string or `null` | Theme title (Своя гра). `null` for ЩДК tours |
+| `tours[].type` | `regular`, `warmup`, `shootout` | Tour type. Warmup is always first, shootout always last. Always `regular` for Своя гра |
+| `questions[].number` | string | Question number (ЩДК) or value `"10"`–`"50"` (Своя гра) |
+| `questions[].answerForm` | string or `null` | «Форма» hint (Своя гра). `null` for ЩДК |
 | `isAdult` | boolean | `true` if package is tagged "18+" |
 | `handoutUrl`, `commentAttachmentUrl` | absolute URL or `null` | Media files (images, video, audio) |
 | `hostInstructions` | string or `null` | Instructions for the game host |
@@ -176,6 +188,7 @@ Full-text search across questions from published public packages.
 |-----------|------|---------|-------------|
 | `q` | string | **required** | Search query |
 | `limit` | int | 50 | Max results (1–100) |
+| `type` | string | — | Game-type filter: `www` (Що?Де?Коли?) or `shvager` (Своя гра). Omit for both. Invalid values → `400` |
 
 **Query syntax:**
 
@@ -200,7 +213,9 @@ Supports Ukrainian morphology (word forms), accent-insensitive matching, prefix 
       "tourId": 101,
       "packageId": 42,
       "packageTitle": "Кубок Львова 2025",
+      "gameType": "www",
       "tourNumber": "1",
+      "tourTitle": null,
       "questionNumber": "3",
       "text": "Текст запитання...",
       "answer": "Відповідь",
@@ -208,6 +223,7 @@ Supports Ukrainian morphology (word forms), accent-insensitive matching, prefix 
       "handoutUrl": null,
       "acceptedAnswers": null,
       "rejectedAnswers": null,
+      "answerForm": null,
       "comment": "Коментар",
       "commentAttachmentUrl": null,
       "source": "Лем С. Зоряні щоденники",
@@ -229,6 +245,8 @@ Supports Ukrainian morphology (word forms), accent-insensitive matching, prefix 
 ```
 
 Highlighted fields contain `<mark>` tags around matched terms. Use these for rendering search result previews.
+
+For Своя гра results (`"gameType": "shvager"`): `tourTitle` holds the theme name, `questionNumber` holds the value (`"10"`–`"50"`), and `answerForm` holds the «Форма» hint. These fields are `null` for Що?Де?Коли? results.
 
 ---
 

@@ -45,6 +45,13 @@
         </div>
     }
 
+    @if (!string.IsNullOrEmpty(Question.AnswerForm))
+    {
+        <div class="answer-field">
+            <span class="answer-label">Форма:</span> @Question.AnswerForm
+        </div>
+    }
+
     @if (!string.IsNullOrEmpty(Question.Comment))
     {
         <div class="answer-field">

@@ -127,6 +127,65 @@ public class PackageDbImporterTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_ShvagerPackage_MapsTypeTitleAndForm()
+    {
+        var importer = CreateImporter();
+        var parseResult = new ParseResult
+        {
+            Type = PackageType.Shvager,
+            Title = "Швагер-пакет",
+            Tours = new List<TourDto>
+            {
+                new()
+                {
+                    Number = "1",
+                    Title = "Жереб",
+                    OrderIndex = 0,
+                    Editors = ["Євген Шляхов"],
+                    Questions = new List<QuestionDto>
+                    {
+                        new()
+                        {
+                            Number = "10",
+                            Text = "Питання за 10",
+                            Answer = "Відповідь",
+                            Form = "таку назву"
+                        }
+                    }
+                }
+            }
+        };
+
+        var package = await importer.Import(parseResult, OwnerId, Guid.NewGuid(), _tempDir, CancellationToken.None);
+
+        package.Type.Should().Be(PackageType.Shvager);
+
+        using var db = _dbFactory.CreateDbContext();
+        var tour = db.Tours.Include(t => t.Editors).Single();
+        tour.Title.Should().Be("Жереб");
+        tour.Editors.Should().ContainSingle().Which.LastName.Should().Be("Шляхов");
+
+        var question = db.Questions.Single();
+        question.Number.Should().Be("10");
+        question.AnswerForm.Should().Be("таку назву");
+    }
+
+    [Fact]
+    public async Task Import_WwwPackage_LeavesTitleAndFormNull()
+    {
+        var importer = CreateImporter();
+        var parseResult = MinimalParseResult();
+
+        var package = await importer.Import(parseResult, OwnerId, Guid.NewGuid(), _tempDir, CancellationToken.None);
+
+        package.Type.Should().Be(PackageType.Www);
+
+        using var db = _dbFactory.CreateDbContext();
+        db.Tours.Single().Title.Should().BeNull();
+        db.Questions.Single().AnswerForm.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Import_SetsSourceUrl()
     {
         var importer = CreateImporter();

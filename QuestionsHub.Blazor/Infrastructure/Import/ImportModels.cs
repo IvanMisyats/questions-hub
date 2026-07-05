@@ -59,6 +59,9 @@ public record ExtractionResult(
 /// </summary>
 public class ParseResult
 {
+    /// <summary>Game type of the parsed package.</summary>
+    public PackageType Type { get; set; } = PackageType.Www;
+
     public string? Title { get; set; }
     public string? Description { get; set; }
     public string? Preamble { get; set; }
@@ -98,6 +101,9 @@ public class ParseResult
 public class TourDto
 {
     public required string Number { get; set; }
+
+    /// <summary>Theme title (Своя гра packages). Null for Що?Де?Коли? tours.</summary>
+    public string? Title { get; set; }
 
     /// <summary>Order index within the package (0-based).</summary>
     public int OrderIndex { get; set; }
@@ -146,6 +152,10 @@ public class QuestionDto
     public string Answer { get; set; } = "";
     public string? AcceptedAnswers { get; set; }
     public string? RejectedAnswers { get; set; }
+
+    /// <summary>Answer-form hint (Форма). Своя гра questions only.</summary>
+    public string? Form { get; set; }
+
     public string? Comment { get; set; }
     public string? CommentAssetFileName { get; set; }
     public string? CommentAssetUrl { get; set; }

@@ -38,22 +38,28 @@ public class PackagesController : ControllerBase
     /// <summary>
     /// Browse/filter published public packages with pagination.
     /// </summary>
+    /// <param name="type">Optional game-type filter: "www" or "shvager".</param>
     [HttpGet]
     public async Task<ActionResult<PackageListResult>> List(
         [FromQuery] string? search = null,
         [FromQuery] int? editor = null,
         [FromQuery] int? tag = null,
+        [FromQuery] PackageType? type = null,
         [FromQuery] PackageSortField sort = PackageSortField.PublicationDate,
         [FromQuery] SortDirection dir = SortDirection.Desc,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        if (type.HasValue && !Enum.IsDefined(type.Value))
+            return BadRequest(new { error = "Invalid 'type' value. Allowed: www, shvager." });
+
         pageSize = Math.Clamp(pageSize, 1, 50);
 
         var filter = new PackageListFilter(
             TitleSearch: search,
             EditorId: editor,
             TagId: tag,
+            Type: type,
             SortField: sort,
             SortDir: dir,
             Page: page,
@@ -132,6 +138,7 @@ public class PackagesController : ControllerBase
         return new ApiPackageDetailDto(
             Id: package.Id,
             Title: package.Title,
+            GameType: SearchController.ToGameTypeString(package.Type),
             Description: package.Description,
             Preamble: package.Preamble,
             PlayedFrom: package.PlayedFrom,
@@ -174,6 +181,7 @@ public class PackagesController : ControllerBase
         return new ApiTourDto(
             Id: tour.Id,
             Number: tour.Number,
+            Title: tour.Title,
             Type: tourType,
             Preamble: tour.Preamble,
             Comment: tour.Comment,
@@ -217,6 +225,7 @@ public class PackagesController : ControllerBase
             HandoutUrl: ToAbsoluteUrl(question.HandoutUrl, siteBaseUrl),
             AcceptedAnswers: question.AcceptedAnswers,
             RejectedAnswers: question.RejectedAnswers,
+            AnswerForm: question.AnswerForm,
             Comment: question.Comment,
             CommentAttachmentUrl: ToAbsoluteUrl(question.CommentAttachmentUrl, siteBaseUrl),
             Source: question.Source,

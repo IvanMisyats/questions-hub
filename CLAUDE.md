@@ -1,6 +1,6 @@
 # CLAUDE.md — Questions Hub
 
-Online database of Ukrainian "Що?Де?Коли?" game questions. All UI is in **Ukrainian (uk-UA)**.
+Online database of Ukrainian intellectual-game questions: "Що?Де?Коли?" (tours of numbered questions) and "Своя гра"/Shvager (themes of 5 questions valued 10–50). Every package has a `PackageType`. All UI is in **Ukrainian (uk-UA)**.
 
 ## Build & Run
 
@@ -50,7 +50,9 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | Doc | Content |
 |-----|---------|
 | `.github/copilot-instructions.md` | Full dev guidelines, domain model, common tasks |
-| `docs/SITE_SPECIFICATION.md` | Complete feature spec, routes, UI details |
+| `docs/SITE_SPECIFICATION.md` | Complete feature spec (both game types), routes, UI details |
+| `docs/SHVAGER_PLAN.md` | Своя гра (Shvager) feature: design decisions, subsystem designs, phased implementation plan |
+| `docs/shvager.md` | Своя гра game rules and DOCX source-format reference |
 | `docs/AUTHENTICATION.md` | Roles, access control, registration flow |
 | `docs/PACKAGE_FORMAT.md` | `.qhub` interchange format schema |
 | `docs/PACKAGE_IMPORT.md` | DOCX import pipeline |

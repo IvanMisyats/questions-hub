@@ -104,14 +104,17 @@ public class TagService
 
     /// <summary>
     /// Returns the most popular tags across published packages, ordered by usage count.
-    /// Results are cached for 1 hour. Returns TagBriefDto for API/display use.
+    /// Results are cached for 1 hour (per game type). Returns TagBriefDto for API/display use.
     /// </summary>
     /// <param name="limit">Maximum number of results to return.</param>
+    /// <param name="type">Optional game-type filter (null = both types).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of popular tags with their IDs and names.</returns>
-    public async Task<List<TagBriefDto>> GetPopularPublished(int limit = 100, CancellationToken ct = default)
+    public async Task<List<TagBriefDto>> GetPopularPublished(int limit = 100, PackageType? type = null, CancellationToken ct = default)
     {
-        if (_cache.TryGetValue(PopularTagsCacheKey, out List<TagBriefDto>? cached) && cached != null)
+        var cacheKey = GetPopularTagsCacheKey(type);
+
+        if (_cache.TryGetValue(cacheKey, out List<TagBriefDto>? cached) && cached != null)
         {
             return cached;
         }
@@ -120,12 +123,12 @@ public class TagService
 
         var popularTags = await context.Tags
             .AsNoTracking()
-            .Where(t => t.Packages.Any(p => p.Status == PackageStatus.Published))
+            .Where(t => t.Packages.Any(p => p.Status == PackageStatus.Published && (type == null || p.Type == type)))
             .Select(t => new
             {
                 t.Id,
                 t.Name,
-                Count = t.Packages.Count(p => p.Status == PackageStatus.Published)
+                Count = t.Packages.Count(p => p.Status == PackageStatus.Published && (type == null || p.Type == type))
             })
             .OrderByDescending(t => t.Count)
             .ThenBy(t => t.Name)
@@ -133,7 +136,7 @@ public class TagService
             .Select(t => new TagBriefDto(t.Id, t.Name))
             .ToListAsync(ct);
 
-        _cache.Set(PopularTagsCacheKey, popularTags, new MemoryCacheEntryOptions
+        _cache.Set(cacheKey, popularTags, new MemoryCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = CacheDuration
         });
@@ -147,8 +150,15 @@ public class TagService
     /// </summary>
     public void InvalidatePopularTagsCache()
     {
-        _cache.Remove(PopularTagsCacheKey);
+        _cache.Remove(GetPopularTagsCacheKey(null));
+        _cache.Remove(GetPopularTagsCacheKey(PackageType.Www));
+        _cache.Remove(GetPopularTagsCacheKey(PackageType.Shvager));
         _cache.Remove(AdultTagIdCacheKey);
+    }
+
+    private static string GetPopularTagsCacheKey(PackageType? type)
+    {
+        return type == null ? PopularTagsCacheKey : $"{PopularTagsCacheKey}_{type}";
     }
 
     /// <summary>

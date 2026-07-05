@@ -7,7 +7,12 @@
         var tourElementId = $"tour-{tour.Id}";
         <div class="tour-group mb-3">
             <a href="#@tourElementId" class="nav-link tour-link" onclick="scrollToElement('@tourElementId'); return false;">
-                @if (tour.IsWarmup)
+                @if (Package.Type == PackageType.Shvager)
+                {
+                    @* Sidebar is narrow: theme title alone (no «Тема N.» prefix), fallback to «Тема N» *@
+                    @(string.IsNullOrWhiteSpace(tour.Title) ? $"Тема {tour.Number}" : tour.Title)
+                }
+                else if (tour.IsWarmup)
                 {
                     <text>Розминка</text>
                 }

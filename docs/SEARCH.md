@@ -2,7 +2,9 @@
 
 ## Overview
 
-Questions Hub provides full-text search across all published questions using PostgreSQL's built-in search capabilities with Ukrainian language support.
+Questions Hub provides full-text search across all published questions of **both game types** (Що?Де?Коли? and Своя гра) using PostgreSQL's built-in search capabilities with Ukrainian language support.
+
+A three-state game-type filter («Усі» / «Що?Де?Коли?» / «Своя гра») is available on `/search` (persisted in `?type=`) and via `type=www|shvager` on the API. Своя гра results show the theme context («Тема N. Назва» + value) and the «Форма» field; theme titles and «Форма» are **displayed** but not FTS-indexed (possible future upgrade — indexing the theme title requires denormalizing it onto questions because the tsvector generated column cannot reference the Tours table).
 
 ## Features
 
@@ -116,8 +118,8 @@ Access the search at: `/search` or `/search/{query}`
 // Inject the service
 @inject SearchService SearchService
 
-// Perform search
-var results = await SearchService.Search("query", limit: 50);
+// Perform search (typeFilter: null = both game types)
+var results = await SearchService.Search("query", accessContext, limit: 50, typeFilter: PackageType.Shvager);
 ```
 
 ### SearchResult
@@ -128,23 +130,30 @@ public record SearchResult(
     int TourId,
     int PackageId,
     string PackageTitle,
+    PackageType PackageType,           // Game type (Www / Shvager)
     string TourNumber,
-    string QuestionNumber,
+    string? TourTitle,                 // Theme title (Своя гра)
+    string QuestionNumber,             // Number (ЩДК) or value 10..50 (Своя гра)
     string Text,
     string Answer,
     string? HandoutText,
+    string? HandoutUrl,
     string? AcceptedAnswers,
     string? RejectedAnswers,
+    string? AnswerForm,                // «Форма» (Своя гра), display-only
     string? Comment,
+    string? CommentAttachmentUrl,
     string? Source,
-    string TextHighlighted,           // Text with <mark> tags around matched terms
+    string TextHighlighted,            // Text with <mark> tags around matched terms
     string AnswerHighlighted,
     string? HandoutTextHighlighted,
     string? AcceptedAnswersHighlighted,
     string? RejectedAnswersHighlighted,
     string? CommentHighlighted,
     string? SourceHighlighted,
-    double Rank                        // Relevance score
+    double Rank,                       // Relevance score
+    string? Authors,                   // Pipe-delimited "id:First Last"
+    bool IsAdult                       // Package has the 18+ tag
 );
 ```
 

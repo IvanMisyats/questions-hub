@@ -26,6 +26,9 @@ public class PackageImportJob
 
     // Status tracking
 
+    /// <summary>Game type of the package being imported. Chosen by the user at upload; selects the parser.</summary>
+    public PackageType Type { get; set; } = PackageType.Www;
+
     /// <summary>Current job status.</summary>
     public ImportJobStatus Status { get; set; } = ImportJobStatus.Queued;
 

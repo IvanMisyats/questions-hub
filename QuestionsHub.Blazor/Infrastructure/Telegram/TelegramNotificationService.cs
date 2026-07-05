@@ -4,6 +4,7 @@ using System.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
+using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Infrastructure.Telegram;
 
@@ -77,6 +78,7 @@ public class TelegramNotificationService(
             t.Name.Equals("18+", StringComparison.OrdinalIgnoreCase));
 
         sb.Append(CultureInfo.InvariantCulture, $"Опубліковано: <a href=\"{packageUrl}\">{titleText}</a>");
+        sb.Append(CultureInfo.InvariantCulture, $" [{package.Type.DisplayName()}]");
         if (has18Plus)
         {
             sb.Append(" (18+)");

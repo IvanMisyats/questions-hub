@@ -36,6 +36,9 @@ public class Question
     /// <summary>Answers that are explicitly not accepted.</summary>
     public string? RejectedAnswers { get; set; }
 
+    /// <summary>Answer-form hint (Форма), e.g. «таку назву». Used by Своя гра questions.</summary>
+    public string? AnswerForm { get; set; }
+
     /// <summary>Commentary explaining the answer.</summary>
     public string? Comment { get; set; }
 

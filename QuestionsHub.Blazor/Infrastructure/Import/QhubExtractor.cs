@@ -156,10 +156,13 @@ public class QhubExtractor
         {
             warnings.Add("Відсутнє поле formatVersion");
         }
-        else if (package.FormatVersion != "1.0")
+        else if (package.FormatVersion is not ("1.0" or "1.1"))
         {
-            warnings.Add($"Невідома версія формату: {package.FormatVersion}. Очікувалося 1.0");
+            warnings.Add($"Невідома версія формату: {package.FormatVersion}. Очікувалося 1.0 або 1.1");
         }
+
+        // Parse game type (added in format 1.1; absent means Що?Де?Коли?)
+        var gameType = ParseGameType(package.GameType, warnings);
 
         // Validate required fields
         if (string.IsNullOrWhiteSpace(package.Title))
@@ -188,6 +191,21 @@ public class QhubExtractor
             tours.Add(tourDto);
         }
 
+        // Своя гра invariants: no special tours, no blocks
+        if (gameType == PackageType.Shvager)
+        {
+            if (tours.Any(t => t.Blocks.Count > 0))
+            {
+                throw new ExtractionException("Пакет Своєї гри не може містити блоки");
+            }
+
+            foreach (var tour in tours.Where(t => t.Type != TourType.Regular))
+            {
+                warnings.Add($"Тема {tour.Number}: розминка/перестрілка не підтримуються у Своїй грі — тип скинуто");
+                tour.Type = TourType.Regular;
+            }
+        }
+
         // Determine editors
         var sharedEditors = package.SharedEditors ?? false;
         var packageEditors = package.Editors ?? [];
@@ -208,6 +226,7 @@ public class QhubExtractor
 
         return new ParseResult
         {
+            Type = gameType,
             Title = package.Title,
             Description = package.Description,
             Preamble = package.Preamble,
@@ -246,6 +265,7 @@ public class QhubExtractor
         var tourDto = new TourDto
         {
             Number = qhubTour.Number ?? (index + 1).ToString(),
+            Title = qhubTour.Title,
             OrderIndex = index,
             Type = qhubTour.IsShootout == true ? TourType.Shootout
                  : qhubTour.IsWarmup == true ? TourType.Warmup
@@ -353,11 +373,30 @@ public class QhubExtractor
             Answer = qhubQuestion.Answer ?? "",
             AcceptedAnswers = NullIfEmpty(qhubQuestion.AcceptedAnswers),
             RejectedAnswers = NullIfEmpty(qhubQuestion.RejectedAnswers),
+            Form = NullIfEmpty(qhubQuestion.Form),
             Comment = NullIfEmpty(qhubQuestion.Comment),
             CommentAssetFileName = commentAssetFileName,
             Source = NullIfEmpty(qhubQuestion.Source),
             Authors = qhubQuestion.Authors ?? []
         };
+    }
+
+    /// <summary>
+    /// Parses the gameType field ("www" / "shvager", case-insensitive). Absent → Що?Де?Коли?.
+    /// </summary>
+    private static PackageType ParseGameType(string? gameType, List<string> warnings)
+    {
+        if (string.IsNullOrWhiteSpace(gameType))
+            return PackageType.Www;
+
+        if (gameType.Equals("www", StringComparison.OrdinalIgnoreCase))
+            return PackageType.Www;
+
+        if (gameType.Equals("shvager", StringComparison.OrdinalIgnoreCase))
+            return PackageType.Shvager;
+
+        warnings.Add($"Невідомий тип гри: {gameType}. Очікувалося www або shvager. Використано www");
+        return PackageType.Www;
     }
 
     /// <summary>

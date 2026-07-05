@@ -30,6 +30,17 @@ public class Tour
     /// <summary>Tour number for display (e.g., "1", "2"). For main tours, assigned sequentially. For warmup, may be "0" or empty.</summary>
     public required string Number { get; set; }
 
+    /// <summary>Theme title (Своя гра packages). Null for Що?Де?Коли? tours.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Display name for a Своя гра theme: «Тема {Number}. {Title}», or «Тема {Number}» when untitled.
+    /// </summary>
+    [NotMapped]
+    public string ThemeDisplayName => string.IsNullOrWhiteSpace(Title)
+        ? $"Тема {Number}"
+        : $"Тема {Number}. {Title}";
+
     /// <summary>Tour editors/authors.</summary>
     public List<Author> Editors { get; set; } = [];
 

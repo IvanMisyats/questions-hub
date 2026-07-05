@@ -144,29 +144,51 @@ public class AuthorService
         // Build the base query for accessible packages based on access context
         var accessiblePackageIds = GetAccessiblePackageIdsQuery(context, accessContext);
 
-        // Build the query for authors with counts
+        // Build the query for authors with per-game-type counts
         var query = context.Authors
             .Select(a => new
             {
                 a.Id,
                 a.FirstName,
                 a.LastName,
-                // Count questions from accessible published packages
-                QuestionCount = a.Questions.Count(q =>
+                // Count questions from accessible published packages, split by game type
+                WwwQuestionCount = a.Questions.Count(q =>
                     q.Tour.Package.Status == PackageStatus.Published &&
+                    q.Tour.Package.Type == PackageType.Www &&
                     accessiblePackageIds.Contains(q.Tour.PackageId)),
-                // Count unique packages from tours, blocks, and package-level editors
-                PackageCount = a.Tours
+                ShvagerQuestionCount = a.Questions.Count(q =>
+                    q.Tour.Package.Status == PackageStatus.Published &&
+                    q.Tour.Package.Type == PackageType.Shvager &&
+                    accessiblePackageIds.Contains(q.Tour.PackageId)),
+                // Count unique packages from tours, blocks, and package-level editors, split by game type
+                WwwPackageCount = a.Tours
                     .Where(t => t.Package.Status == PackageStatus.Published &&
+                               t.Package.Type == PackageType.Www &&
                                accessiblePackageIds.Contains(t.PackageId))
                     .Select(t => t.PackageId)
                     .Union(a.Blocks
                         .Where(b => b.Tour.Package.Status == PackageStatus.Published &&
+                                   b.Tour.Package.Type == PackageType.Www &&
                                    accessiblePackageIds.Contains(b.Tour.PackageId))
                         .Select(b => b.Tour.PackageId))
                     .Union(a.Packages
                         .Where(p => p.SharedEditors &&
                                    p.Status == PackageStatus.Published &&
+                                   p.Type == PackageType.Www &&
+                                   accessiblePackageIds.Contains(p.Id))
+                        .Select(p => p.Id))
+                    .Distinct()
+                    .Count(),
+                // No Blocks union here: Своя гра packages cannot contain blocks (guarded at write paths)
+                ShvagerPackageCount = a.Tours
+                    .Where(t => t.Package.Status == PackageStatus.Published &&
+                               t.Package.Type == PackageType.Shvager &&
+                               accessiblePackageIds.Contains(t.PackageId))
+                    .Select(t => t.PackageId)
+                    .Union(a.Packages
+                        .Where(p => p.SharedEditors &&
+                                   p.Status == PackageStatus.Published &&
+                                   p.Type == PackageType.Shvager &&
                                    accessiblePackageIds.Contains(p.Id))
                         .Select(p => p.Id))
                     .Distinct()
@@ -184,15 +206,17 @@ public class AuthorService
         }
 
         // Filter to only authors with accessible content
-        query = query.Where(a => a.QuestionCount > 0 || a.PackageCount > 0);
+        query = query.Where(a =>
+            a.WwwQuestionCount > 0 || a.WwwPackageCount > 0 ||
+            a.ShvagerQuestionCount > 0 || a.ShvagerPackageCount > 0);
 
         // Get total count for pagination
         var totalCount = await query.CountAsync();
 
-        // Sort by package count first, then by question count (both descending)
+        // Sort by total package count first, then by total question count (both descending)
         var orderedQuery = query
-            .OrderByDescending(a => a.PackageCount)
-            .ThenByDescending(a => a.QuestionCount)
+            .OrderByDescending(a => a.WwwPackageCount + a.ShvagerPackageCount)
+            .ThenByDescending(a => a.WwwQuestionCount + a.ShvagerQuestionCount)
             .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName);
 
@@ -210,8 +234,10 @@ public class AuthorService
                 Id = a.Id,
                 FirstName = a.FirstName,
                 LastName = a.LastName,
-                QuestionCount = a.QuestionCount,
-                PackageCount = a.PackageCount
+                WwwQuestionCount = a.WwwQuestionCount,
+                WwwPackageCount = a.WwwPackageCount,
+                ShvagerQuestionCount = a.ShvagerQuestionCount,
+                ShvagerPackageCount = a.ShvagerPackageCount
             })
             .ToList();
 
@@ -258,11 +284,27 @@ public class AuthorService
 
         var accessiblePackageIds = GetAccessiblePackageIdsQuery(context, accessContext);
 
+        var (wwwQuestions, wwwPackages) = await CountForType(context, authorId, accessiblePackageIds, PackageType.Www);
+        var (shvagerQuestions, shvagerPackages) = await CountForType(context, authorId, accessiblePackageIds, PackageType.Shvager);
+
+        return new AuthorStatistics(wwwQuestions, wwwPackages, shvagerQuestions, shvagerPackages);
+    }
+
+    /// <summary>
+    /// Counts an author's questions and packages of the given game type.
+    /// </summary>
+    private static async Task<(int Questions, int Packages)> CountForType(
+        QuestionsHubDbContext context,
+        int authorId,
+        IQueryable<int> accessiblePackageIds,
+        PackageType type)
+    {
         // Count questions from all accessible published packages where author is a question author
         var questionCount = await context.Questions
             .AsNoTracking()
             .Where(q => q.Authors.Any(a => a.Id == authorId))
             .Where(q => q.Tour.Package.Status == PackageStatus.Published)
+            .Where(q => q.Tour.Package.Type == type)
             .Where(q => accessiblePackageIds.Contains(q.Tour.PackageId))
             .CountAsync();
 
@@ -271,6 +313,7 @@ public class AuthorService
             .AsNoTracking()
             .Where(t => t.Editors.Any(e => e.Id == authorId))
             .Where(t => t.Package.Status == PackageStatus.Published)
+            .Where(t => t.Package.Type == type)
             .Where(t => accessiblePackageIds.Contains(t.PackageId))
             .Select(t => t.PackageId)
             .Union(
@@ -278,6 +321,7 @@ public class AuthorService
                     .AsNoTracking()
                     .Where(b => b.Editors.Any(e => e.Id == authorId))
                     .Where(b => b.Tour.Package.Status == PackageStatus.Published)
+                    .Where(b => b.Tour.Package.Type == type)
                     .Where(b => accessiblePackageIds.Contains(b.Tour.PackageId))
                     .Select(b => b.Tour.PackageId)
             )
@@ -286,13 +330,14 @@ public class AuthorService
                     .AsNoTracking()
                     .Where(p => p.SharedEditors && p.PackageEditors.Any(e => e.Id == authorId))
                     .Where(p => p.Status == PackageStatus.Published)
+                    .Where(p => p.Type == type)
                     .Where(p => accessiblePackageIds.Contains(p.Id))
                     .Select(p => p.Id)
             )
             .Distinct()
             .CountAsync();
 
-        return new AuthorStatistics(questionCount, packageCount);
+        return (questionCount, packageCount);
     }
 
     /// <summary>
@@ -317,8 +362,10 @@ public class AuthorService
             {
                 t.Id,
                 t.Number,
+                t.Title,
                 t.PackageId,
-                PackageTitle = t.Package.Title
+                PackageTitle = t.Package.Title,
+                PackageType = t.Package.Type
             })
             .ToListAsync();
 
@@ -335,7 +382,8 @@ public class AuthorService
                 TourId = b.Tour.Id,
                 TourNumber = b.Tour.Number,
                 b.Tour.PackageId,
-                PackageTitle = b.Tour.Package.Title
+                PackageTitle = b.Tour.Package.Title,
+                PackageType = b.Tour.Package.Type
             })
             .ToListAsync();
 
@@ -345,7 +393,7 @@ public class AuthorService
             .Where(p => p.Status == PackageStatus.Published)
             .Where(p => accessiblePackageIds.Contains(p.Id))
             .Where(p => p.SharedEditors && p.PackageEditors.Any(e => e.Id == authorId))
-            .Select(p => new { p.Id, p.Title })
+            .Select(p => new { p.Id, p.Title, p.Type })
             .ToListAsync();
 
         // Build packages list
@@ -357,8 +405,10 @@ public class AuthorService
             {
                 t.PackageId,
                 t.PackageTitle,
+                t.PackageType,
                 TourId = t.Id,
                 TourNumber = (string?)t.Number,
+                TourTitle = t.Title,
                 BlockId = (int?)null,
                 BlockOrderIndex = (int?)null,
                 IsGlobalEditor = false
@@ -370,8 +420,10 @@ public class AuthorService
             {
                 b.PackageId,
                 b.PackageTitle,
+                b.PackageType,
                 b.TourId,
                 TourNumber = (string?)b.TourNumber,
+                TourTitle = (string?)null,
                 BlockId = (int?)b.Id,
                 BlockOrderIndex = (int?)b.OrderIndex,
                 IsGlobalEditor = false
@@ -382,8 +434,10 @@ public class AuthorService
             {
                 PackageId = p.Id,
                 PackageTitle = p.Title,
+                PackageType = p.Type,
                 TourId = 0,
                 TourNumber = (string?)null,
+                TourTitle = (string?)null,
                 BlockId = (int?)null,
                 BlockOrderIndex = (int?)null,
                 IsGlobalEditor = true
@@ -392,11 +446,12 @@ public class AuthorService
         return tourItems
             .Union(blockItems)
             .Union(globalEditorPackageItems)
-            .GroupBy(x => new { x.PackageId, x.PackageTitle })
+            .GroupBy(x => new { x.PackageId, x.PackageTitle, x.PackageType })
             .Select(g => new AuthorPackageListItem
             {
                 PackageId = g.Key.PackageId,
                 PackageTitle = g.Key.PackageTitle,
+                Type = g.Key.PackageType,
                 IsGlobalEditor = g.Any(x => x.IsGlobalEditor),
                 Tours = g
                     .Where(x => !x.IsGlobalEditor && x.TourNumber != null)
@@ -405,6 +460,7 @@ public class AuthorService
                     {
                         TourId = tg.Key.TourId,
                         TourNumber = tg.Key.TourNumber!,
+                        TourTitle = tg.Select(x => x.TourTitle).FirstOrDefault(t => t != null),
                         Blocks = tg
                             .Where(x => x.BlockId.HasValue)
                             .OrderBy(x => x.BlockOrderIndex)
@@ -616,8 +672,15 @@ public class AuthorListItem
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
     public string FullName => $"{FirstName} {LastName}";
-    public int QuestionCount { get; set; }
-    public int PackageCount { get; set; }
+
+    // Per-game-type counts (Www / Shvager)
+    public int WwwQuestionCount { get; set; }
+    public int WwwPackageCount { get; set; }
+    public int ShvagerQuestionCount { get; set; }
+    public int ShvagerPackageCount { get; set; }
+
+    public int QuestionCount => WwwQuestionCount + ShvagerQuestionCount;
+    public int PackageCount => WwwPackageCount + ShvagerPackageCount;
 }
 
 /// <summary>
@@ -649,17 +712,24 @@ public class AuthorListResult
 }
 
 /// <summary>
-/// Statistics for an author, including question count and package count.
+/// Statistics for an author, including per-game-type question and package counts.
 /// </summary>
 public class AuthorStatistics
 {
-    public int QuestionCount { get; }
-    public int PackageCount { get; }
+    public int WwwQuestionCount { get; }
+    public int WwwPackageCount { get; }
+    public int ShvagerQuestionCount { get; }
+    public int ShvagerPackageCount { get; }
 
-    public AuthorStatistics(int questionCount, int packageCount)
+    public int QuestionCount => WwwQuestionCount + ShvagerQuestionCount;
+    public int PackageCount => WwwPackageCount + ShvagerPackageCount;
+
+    public AuthorStatistics(int wwwQuestionCount, int wwwPackageCount, int shvagerQuestionCount, int shvagerPackageCount)
     {
-        QuestionCount = questionCount;
-        PackageCount = packageCount;
+        WwwQuestionCount = wwwQuestionCount;
+        WwwPackageCount = wwwPackageCount;
+        ShvagerQuestionCount = shvagerQuestionCount;
+        ShvagerPackageCount = shvagerPackageCount;
     }
 }
 
@@ -670,6 +740,7 @@ public class AuthorPackageListItem
 {
     public int PackageId { get; set; }
     public string PackageTitle { get; set; } = "";
+    public PackageType Type { get; set; }
     public bool IsGlobalEditor { get; set; }
     public List<AuthorTourListItem> Tours { get; set; } = new();
 }
@@ -681,6 +752,10 @@ public class AuthorTourListItem
 {
     public int TourId { get; set; }
     public string TourNumber { get; set; } = "";
+
+    /// <summary>Theme title (Своя гра packages).</summary>
+    public string? TourTitle { get; set; }
+
     public List<AuthorBlockListItem> Blocks { get; set; } = new();
 }
 

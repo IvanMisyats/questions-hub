@@ -1,7 +1,9 @@
 # Package Interchange Format (`.qhub`)
 
-**Version**: 1.0  
-**Last Updated**: February 7, 2026
+**Version**: 1.1  
+**Last Updated**: July 3, 2026
+
+**Changes in 1.1**: added `gameType` (package), `title` (tour = theme name for Своя гра), `form` (question «Форма» hint). Files declaring `formatVersion: "1.0"` remain valid — the new fields are optional and absent `gameType` means Що?Де?Коли?.
 
 ---
 
@@ -59,7 +61,8 @@ When all media is available via external URLs, the `assets/` folder can be omitt
 
 ```jsonc
 {
-  "formatVersion": "1.0",
+  "formatVersion": "1.1",
+  "gameType": "www",                        // optional: "www" (default) | "shvager" (Своя гра)
 
   // Optional metadata
   "sourceUrl": "https://example.com/pkg/42", // where the package was obtained
@@ -84,6 +87,7 @@ When all media is available via external URLs, the `assets/` folder can be omitt
 ```jsonc
 {
   "number": "1",                            // display number (string)
+  "title": "Жереб",                         // theme title (Своя гра), optional
   "isWarmup": false,                        // optional, default false
   "editors": ["Ім'я Прізвище"],             // tour editors (when sharedEditors=false)
   "preamble": "Преамбула туру",             // optional
@@ -92,6 +96,8 @@ When all media is available via external URLs, the `assets/` folder can be omitt
   "blocks": [ /* ... */ ]                   // optional blocks within tour
 }
 ```
+
+**Своя гра** (`"gameType": "shvager"`): tours represent themes — each should have a `title` and 5 questions whose `number` holds the value (`"10"`…`"50"`). Warmup/shootout tours and blocks are **not allowed** (blocks fail the import; special tour types are coerced to regular with a warning).
 
 **Ordering**: Tours are ordered by their position in the `tours` array (index 0 = first tour). No explicit `orderIndex` field is needed — array position is the source of truth.
 
@@ -128,6 +134,7 @@ When all media is available via external URLs, the `assets/` folder can be omitt
   "answer": "Відповідь",                    // required
   "acceptedAnswers": "Залік",               // optional
   "rejectedAnswers": "Незалік",             // optional
+  "form": "таку назву",                     // optional, «Форма» hint (Своя гра)
   "comment": "Коментар",                    // optional
   "source": "Джерело",                      // optional
   "authors": ["Ім'я Прізвище"],             // question authors
@@ -158,7 +165,8 @@ If both local and URL variants are provided for the same slot, the local file ta
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `formatVersion` | string | ✅ | Always `"1.0"` |
+| `formatVersion` | string | ✅ | `"1.0"` or `"1.1"` |
+| `gameType` | string | — | `"www"` (default) or `"shvager"` (Своя гра). Added in 1.1 |
 | `sourceUrl` | string | — | URL where the package was obtained |
 | `title` | string | ✅ | Package title |
 | `description` | string | — | Package description or notes |
@@ -176,7 +184,8 @@ If both local and URL variants are provided for the same slot, the local file ta
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `number` | string | ✅ | Display number (`"0"` for warmup, `"1"`, `"2"`, …) |
-| `isWarmup` | boolean | — | `true` if this is a warmup tour. Default: `false` |
+| `title` | string | — | Theme title (Своя гра). Added in 1.1 |
+| `isWarmup` | boolean | — | `true` if this is a warmup tour. Default: `false`. Not allowed for Своя гра |
 | `editors` | string[] | — | Tour editors (when `sharedEditors=false`) |
 | `preamble` | string | — | Preamble text |
 | `comment` | string | — | Tour-level commentary |
@@ -196,7 +205,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `number` | string | ✅ | Display number (`"1"`, `"13"`, `"F"`, etc.) |
+| `number` | string | ✅ | Display number (`"1"`, `"13"`, `"F"`, etc.). For Своя гра — the value (`"10"`…`"50"`) |
 | `hostInstructions` | string | — | Instructions for the host (not read aloud) |
 | `handoutText` | string | — | Text portion of handout material |
 | `handoutAssetFileName` | string | — | Filename in `assets/` for handout media |
@@ -205,6 +214,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 | `answer` | string | ✅ | Correct answer |
 | `acceptedAnswers` | string | — | Alternative accepted answers (залік) |
 | `rejectedAnswers` | string | — | Explicitly rejected answers (незалік) |
+| `form` | string | — | Answer-form hint «Форма» (Своя гра). Added in 1.1 |
 | `comment` | string | — | Commentary explaining the answer |
 | `commentAssetFileName` | string | — | Filename in `assets/` for comment media |
 | `commentAssetUrl` | string | — | External URL for comment media |

@@ -38,11 +38,13 @@ public class PackageImportService
     /// <summary>
     /// Creates a new import job for the given file.
     /// </summary>
+    /// <param name="type">Game type chosen by the user at upload; selects the DOCX parser.</param>
     public async Task<PackageImportJob> Enqueue(
         string ownerId,
         string fileName,
         Stream fileStream,
-        long fileSize)
+        long fileSize,
+        PackageType type = PackageType.Www)
     {
         // Validate
         if (!_options.IsExtensionAllowed(fileName))
@@ -85,6 +87,7 @@ public class PackageImportService
         {
             Id = jobId,
             OwnerId = ownerId,
+            Type = type,
             CreatedAt = DateTime.UtcNow,
             Status = ImportJobStatus.Queued,
             InputFileName = fileName,
@@ -136,6 +139,13 @@ public class PackageImportService
             if (extension == ".qhub")
             {
                 parseResult = await ProcessQhub(scope, inputPath, assetsFolder, outputFolder, db, job, ct);
+
+                // For .qhub the gameType in package.json is authoritative; the upload zone is only a hint
+                if (parseResult.Type != job.Type)
+                {
+                    parseResult.Warnings.Insert(0,
+                        $"Тип гри у файлі ({parseResult.Type.DisplayName()}) відрізняється від обраного поля імпорту — використано тип з файлу");
+                }
             }
             else
             {
@@ -224,7 +234,6 @@ public class PackageImportService
         CancellationToken ct)
     {
         var extractor = scope.ServiceProvider.GetRequiredService<DocxExtractor>();
-        var parser = scope.ServiceProvider.GetRequiredService<PackageParser>();
 
         // Step 1: Extract content from DOCX
         await UpdateProgress(db, job, "Extracting", 20, ct);
@@ -235,10 +244,14 @@ public class PackageImportService
         var extractedJsonPath = Path.Combine(workingFolder, "extracted.json");
         await File.WriteAllTextAsync(extractedJsonPath, JsonSerializer.Serialize(extractionResult, JsonOptions), ct);
 
-        // Step 2: Parse structure
+        // Step 2: Parse structure with the parser matching the game type chosen at upload
         await UpdateProgress(db, job, "Parsing", 50, ct);
 
-        var parseResult = parser.Parse(extractionResult.Blocks, extractionResult.Assets);
+        var parseResult = job.Type == PackageType.Shvager
+            ? scope.ServiceProvider.GetRequiredService<ShvagerParser>()
+                .Parse(extractionResult.Blocks, extractionResult.Assets)
+            : scope.ServiceProvider.GetRequiredService<PackageParser>()
+                .Parse(extractionResult.Blocks, extractionResult.Assets);
 
         // Merge extraction warnings into parse result (so they're saved with the job)
         if (extractionResult.Warnings.Count > 0)

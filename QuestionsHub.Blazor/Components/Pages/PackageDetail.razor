@@ -39,7 +39,10 @@ else
             <div class="col-lg-10 main-content">
                 <div id="top">
                     <div class="d-flex justify-content-between align-items-start mb-2">
-                        <h1 class="mb-0">@_package.Title</h1>
+                        <div>
+                            <h1 class="mb-0 d-inline align-middle">@_package.Title</h1>
+                            <PackageTypeBadge Type="_package.Type" Class="ms-2 align-middle" />
+                        </div>
                         @if (_canEdit)
                         {
                             <a href="/manage/package/@_package.Id" class="btn btn-outline-primary btn-sm ms-3">
@@ -124,7 +127,11 @@ else
                 {
                     <div id="tour-@tour.Id" class="tour-section">
                         <h2>
-                            @if (tour.IsWarmup)
+                            @if (_package.Type == PackageType.Shvager)
+                            {
+                                @tour.ThemeDisplayName
+                            }
+                            else if (tour.IsWarmup)
                             {
                                 <text>Розминка</text>
                             }
@@ -173,7 +180,7 @@ else
                                     @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" IsBlurred="_isAdult" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" />
                                         </div>
                                     }
                                 </div>
@@ -187,7 +194,7 @@ else
                                     @foreach (var question in orphanQuestions)
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" IsBlurred="_isAdult" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" />
                                         </div>
                                     }
                                 </div>
@@ -200,7 +207,7 @@ else
                             {
                                 <p>
                                     <small>
-                                        <strong>Редактори туру:</strong>
+                                        <strong>@(_package.Type == PackageType.Shvager ? "Автори теми:" : "Редактори туру:")</strong>
                                         @for (var i = 0; i < tour.Editors.Count; i++)
                                         {
                                             var editor = tour.Editors[i];
@@ -225,7 +232,7 @@ else
                             @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                             {
                                 <div id="question-@question.Id">
-                                    <QuestionCard Question="@question" IsBlurred="_isAdult" />
+                                    <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" />
                                 </div>
                             }
                         }
@@ -282,11 +289,14 @@ else
         // Check if the package has 18+ content tag
         _isAdult = TagService.IsAdultContent(_package.Tags);
 
-        // Sort tours by Number, blocks by OrderIndex, and questions by OrderIndex
-        _package.Tours = _package.Tours
-            .OrderBy(t => int.TryParse(t.Number, out var num) ? num : int.MaxValue)
-            .ThenBy(t => t.Number)
-            .ToList();
+        // Sort tours by Number (ЩДК: warmup "0" first, shootout "П" last) or by OrderIndex (Своя гра),
+        // blocks by OrderIndex, and questions by OrderIndex
+        _package.Tours = _package.Type == PackageType.Shvager
+            ? _package.Tours.OrderBy(t => t.OrderIndex).ToList()
+            : _package.Tours
+                .OrderBy(t => int.TryParse(t.Number, out var num) ? num : int.MaxValue)
+                .ThenBy(t => t.Number)
+                .ToList();
 
         foreach (var tour in _package.Tours)
         {

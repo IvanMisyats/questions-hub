@@ -43,6 +43,12 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
     /// </summary>
     public void RenumberPackageInMemory(Package package)
     {
+        if (package.Type == PackageType.Shvager)
+        {
+            RenumberShvagerPackage(package);
+            return;
+        }
+
         // 1. Ensure special tours are in correct positions (warmup first, shootout last)
         EnforceSpecialTourPositions(package);
 
@@ -51,6 +57,30 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
 
         // 3. Renumber questions based on numbering mode
         RenumberQuestions(package);
+    }
+
+    /// <summary>
+    /// Renumbers a Своя гра package: themes get sequential numbers 1..N by OrderIndex,
+    /// questions get values derived from position — (index + 1) × 10 (10, 20, 30, 40, 50...).
+    /// NumberingMode, special tour types, and blocks are not applicable and are ignored.
+    /// </summary>
+    private static void RenumberShvagerPackage(Package package)
+    {
+        var orderedTours = package.Tours.OrderBy(t => t.OrderIndex).ToList();
+
+        for (int i = 0; i < orderedTours.Count; i++)
+        {
+            var tour = orderedTours[i];
+            tour.OrderIndex = i;
+            tour.Number = (i + 1).ToString(CultureInfo.InvariantCulture);
+
+            var orderedQuestions = tour.Questions.OrderBy(q => q.OrderIndex).ToList();
+            for (int j = 0; j < orderedQuestions.Count; j++)
+            {
+                orderedQuestions[j].OrderIndex = j;
+                orderedQuestions[j].Number = ((j + 1) * 10).ToString(CultureInfo.InvariantCulture);
+            }
+        }
     }
 
     /// <summary>
@@ -216,6 +246,10 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
     /// <param name="newType">The new tour type to set.</param>
     public void SetTourType(Package package, int tourId, TourType newType)
     {
+        // Special tour types are a Що?Де?Коли? concept; Своя гра themes are always Regular
+        if (package.Type == PackageType.Shvager && newType != TourType.Regular)
+            return;
+
         var tour = package.Tours.FirstOrDefault(t => t.Id == tourId);
         if (tour == null)
             return;

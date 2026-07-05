@@ -59,8 +59,14 @@
                         <table class="table table-hover mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Ім'я</th>
-                                    <th class="text-end">Пакети</th>
+                                    <th rowspan="2" class="align-middle">Ім'я</th>
+                                    <th colspan="2" class="text-center border-start">Що?Де?Коли?</th>
+                                    <th colspan="2" class="text-center border-start">Своя гра</th>
+                                </tr>
+                                <tr>
+                                    <th class="text-end border-start">Пакети</th>
+                                    <th class="text-end">Запитання</th>
+                                    <th class="text-end border-start">Пакети</th>
                                     <th class="text-end">Запитання</th>
                                 </tr>
                             </thead>
@@ -71,8 +77,10 @@
                                         <td>
                                             <a href="/editor/@author.Id">@author.FullName</a>
                                         </td>
-                                        <td class="text-end">@author.PackageCount</td>
-                                        <td class="text-end">@author.QuestionCount</td>
+                                        <td class="text-end border-start">@CountOrDash(author.WwwPackageCount)</td>
+                                        <td class="text-end">@CountOrDash(author.WwwQuestionCount)</td>
+                                        <td class="text-end border-start">@CountOrDash(author.ShvagerPackageCount)</td>
+                                        <td class="text-end">@CountOrDash(author.ShvagerQuestionCount)</td>
                                     </tr>
                                 }
                             </tbody>
@@ -125,4 +133,6 @@
 
         return $"/editors?q={Uri.EscapeDataString(Query)}";
     }
+
+    private static string CountOrDash(int count) => count > 0 ? count.ToString() : "—";
 }

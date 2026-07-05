@@ -95,7 +95,7 @@ public partial class PackageParser
         return true;
     }
 
-    private static List<string> ParseAuthorList(string text)
+    internal static List<string> ParseAuthorList(string text)
     {
         return text
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)

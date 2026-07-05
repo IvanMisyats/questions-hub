@@ -46,6 +46,9 @@ Practical workflow: drop the snippet into a throwaway xUnit `[Fact]` with `ITest
 run it with `--filter`, confirm the fix, then delete the test. Once the behaviour is
 understood, encode it as a permanent synthetic-block test (see below).
 
+The same replay works for Своя гра imports — substitute `ShvagerParser` for `PackageParser`
+(the job's parser is chosen by `PackageImportJob.Type`, i.e. the upload zone the user picked).
+
 ## Parser structure
 
 `PackageParser` is a **`partial class`** under `QuestionsHub.Blazor/Infrastructure/Import/`,
@@ -60,7 +63,13 @@ split by concern:
 | `PackageParser.AssetAssociation.cs` | Attaching images to questions |
 | `PackageParser.Finalization.cs` | Numbering validation, header parsing, cleanup |
 | `PackageParser.Utilities.cs` | Shared helpers |
-| `ParserPatterns.cs` | All regexes |
+| `ParserPatterns.cs` | All regexes (both parsers, incl. the Своя гра section) |
+
+`ShvagerParser` (Своя гра) is a **single-file sibling** consuming the same `DocBlock` stream.
+It is much simpler: no numbering cascade, no blocks, no format locking. Its failure modes are
+theme-boundary detection (see the «Теми:» anchor rules in [PACKAGE_IMPORT.md](PACKAGE_IMPORT.md))
+and value-order warnings. Tests: `ImportParsing/Parsing/ShvagerParserTests.cs` (synthetic) and
+`ImportParsing/Golden/ShvagerGoldenTests.cs` (runs both real samples from `TestData/Shvager/`).
 
 ## Common failure mode: the numbering cascade
 

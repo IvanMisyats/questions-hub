@@ -9,15 +9,16 @@
 @inject AccessControlService AccessControl
 @inject NavigationManager NavigationManager
 
-<PageTitle>База українських запитань Що?Де?Коли?</PageTitle>
+<PageTitle>База українських запитань</PageTitle>
 
 @* Hidden state for JavaScript *@
-<div id="page-state" 
-     data-search="@_searchTerm" 
-     data-editor-id="@_editorId" 
+<div id="page-state"
+     data-search="@_searchTerm"
+     data-editor-id="@_editorId"
      data-editor-name="@_selectedEditorName"
      data-tag-id="@_tagId"
      data-tag-name="@_selectedTagName"
+     data-type="@_type"
      data-sort="@_sortField"
      data-dir="@_sortDir"
      data-page="@CurrentPage"
@@ -27,6 +28,16 @@
      style="display:none;"></div>
 
 <div class="container-fluid">
+    @* Game-type tabs *@
+    <ul class="nav nav-tabs mb-3" id="type-tabs">
+        <li class="nav-item">
+            <a class="nav-link @(_type == PackageType.Www ? "active" : "")" href="/">@PackageType.Www.DisplayName()</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_type == PackageType.Shvager ? "active" : "")" href="/?type=shvager">@PackageType.Shvager.DisplayName()</a>
+        </li>
+    </ul>
+
     @* Popular tags *@
     @if (_popularTags?.Count > 0)
     {
@@ -187,6 +198,11 @@
                                     <h5 class="card-title">@package.Title</h5>
                                     <p class="card-text text-muted mb-2">
                                         <small>
+                                            <PackageTypeBadge Type="package.Type" Class="me-1" />
+                                            @if (package.Type == PackageType.Shvager)
+                                            {
+                                                <strong>@package.ToursCount</strong><span> тем · </span>
+                                            }
                                             <strong>@package.QuestionsCount</strong> запитань
                                             @{ var playedPeriod = PlayedPeriodFormatter.Format(package.PlayedFrom, package.PlayedTo); }
                                             @if (!string.IsNullOrEmpty(playedPeriod))
@@ -256,6 +272,9 @@
     [SupplyParameterFromQuery(Name = "tag")]
     public int? TagParam { get; set; }
 
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeParam { get; set; }
+
     [SupplyParameterFromQuery(Name = "sort")]
     public string? SortParam { get; set; }
 
@@ -275,6 +294,7 @@
     private int? _tagId;
     private string _selectedTagName = "";
     private List<TagBriefDto>? _popularTags;
+    private PackageType _type = PackageType.Www;
     private PackageSortField _sortField = PackageSortField.PublicationDate;
     private SortDirection _sortDir = SortDirection.Desc;
     private string _paginationBaseUrl = "";
@@ -295,6 +315,11 @@
         _searchTerm = SearchParam;
         _editorId = EditorParam;
         _tagId = TagParam;
+
+        // Active game-type tab (default: Що?Де?Коли?)
+        _type = Enum.TryParse<PackageType>(TypeParam, ignoreCase: true, out var type) && Enum.IsDefined(type)
+            ? type
+            : PackageType.Www;
 
         // Parse sort field
         if (!string.IsNullOrEmpty(SortParam) &&
@@ -324,6 +349,9 @@
     {
         var queryParams = new List<string>();
 
+        if (_type != PackageType.Www)
+            queryParams.Add("type=shvager");
+
         if (!string.IsNullOrEmpty(_searchTerm))
             queryParams.Add($"search={Uri.EscapeDataString(_searchTerm)}");
 
@@ -342,28 +370,6 @@
         _paginationBaseUrl = queryParams.Count > 0 ? $"?{string.Join("&", queryParams)}" : "";
     }
 
-    private string GetUrlWithoutParam(string paramToRemove)
-    {
-        var queryParams = new List<string>();
-
-        if (paramToRemove != "search" && !string.IsNullOrEmpty(_searchTerm))
-            queryParams.Add($"search={Uri.EscapeDataString(_searchTerm)}");
-
-        if (paramToRemove != "editor" && _editorId.HasValue)
-            queryParams.Add($"editor={_editorId.Value}");
-
-        if (paramToRemove != "tag" && _tagId.HasValue)
-            queryParams.Add($"tag={_tagId.Value}");
-
-        if (_sortField != PackageSortField.PublicationDate)
-            queryParams.Add($"sort={_sortField}");
-
-        if (_sortDir != SortDirection.Desc)
-            queryParams.Add($"dir={_sortDir}");
-
-        return queryParams.Count > 0 ? $"/?{string.Join("&", queryParams)}" : "/";
-    }
-
     private async Task LoadPackages()
     {
         var accessContext = await AccessControl.GetPackageAccessContext();
@@ -372,6 +378,7 @@
             TitleSearch: _searchTerm,
             EditorId: _editorId,
             TagId: _tagId,
+            Type: _type,
             SortField: _sortField,
             SortDir: _sortDir,
             Page: CurrentPage,
@@ -387,7 +394,7 @@
 
     private async Task LoadPopularTags()
     {
-        _popularTags = await TagService.GetPopularPublished();
+        _popularTags = await TagService.GetPopularPublished(type: _type);
 
         // Resolve selected tag name from popular tags or DB
         if (_tagId.HasValue && _popularTags != null)

@@ -6,6 +6,31 @@ This document describes the automatic import feature for question packages from 
 
 Editors can upload tournament packages in DOCX format. The system automatically parses the document structure, extracts questions, answers, comments, and images, then creates a new package in Draft status for review and editing.
 
+Both game types are supported via **two separate upload zones** on `/manage/packages`:
+
+- **Імпорт Що?Де?Коли?** — tour-based packages, parsed by `PackageParser`
+- **Імпорт Своя гра** — theme-based packages, parsed by `ShvagerParser`
+
+The chosen zone is stored on the job (`PackageImportJob.Type`) and selects the parser — there is no content sniffing for DOCX. `.qhub` files are accepted in either zone but are currently always imported as Що?Де?Коли? (a `gameType` field is planned for the format); uploading a `.qhub` in the Своя гра zone produces a warning.
+
+## Своя гра (Shvager) format recognition
+
+`ShvagerParser` (`Infrastructure/Import/ShvagerParser.cs`) recognizes two source-format generations (samples in `_shvager/`, mirrored in `QuestionsHub.UnitTests/TestData/Shvager/`):
+
+- **Named-theme format** (2026-style): «Тема: {Назва} ({Автори})» headers (also «Тема.»), «Форма:» label
+- **Bare-title format** (2021-style): theme headers are plain title lines; per-question «Автор: Ім'я Прізвище (Місто)» (city stripped); inline «[Малюнок N {url}]» references are moved to handout text with a warning
+
+Key rules:
+
+- **Package header**: first line → title; a short second line → subtitle appended to the title; an editor line — «Редактор …», «Автор тем - …», «Редактор та автор тем — …» (with optional prefix like «Коло 1.») → package editors (`SharedEditors`); everything else → preamble
+- **Theme headers**: «Тема: Назва (Автори)», «Тема. Назва», numbered «Тема 1. Назва» (the document's own number is ignored — themes are numbered by position), or a bare title line standing right before a «10.» question. A trailing single period is stripped; ellipses in titles («…С…Я…Н…») are preserved. Lines after the header and before «10.» (e.g. «Пояснення: …») become the theme preamble
+- **«Теми:» list**: entries (optionally numbered «1.») become *anchors* — they anchor detection of bare-title theme headers later in the document and stay in the preamble. The real content is detected by a duplicate title or a title line standing right before the first «10.» question
+- **Questions**: start at «10.»/«20.»/… lines; values must be multiples of 10 (10–100); reserve themes may use ranges («30-50.»). Non-canonical value order and themes with ≠5 questions produce warnings, not failures
+- **Labels**: Відповідь, Залік, Незалік, **Форма**, Коментар, Джерело, Автор — same tolerance as the ЩДК parser (Latin-і, dot separators)
+- **Author cascade**: a question without an explicit «Автор:» inherits the theme authors (from the header parens), or the package-level editor when the theme has none — most packages have one global author. An explicit «Автор:» always wins
+- Themes are imported as `Tour` rows with `Title`; values land in `Question.Number`; «Форма» lands in `Question.AnswerForm`
+- **Handouts**: a question can have both a text handout (`HandoutText`, from a «Роздатка:» label or an inline «[Малюнок N url]» reference) and an image handout (`HandoutUrl`, from an embedded image) at the same time
+
 ## Supported Formats
 
 | Format | Support |

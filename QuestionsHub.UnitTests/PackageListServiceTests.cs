@@ -76,13 +76,15 @@ public class PackageListServiceTests : IDisposable
         PackageAccessLevel accessLevel = PackageAccessLevel.All,
         DateTime? publicationDate = null,
         DateOnly? playedFrom = null,
-        string? ownerId = null)
+        string? ownerId = null,
+        PackageType type = PackageType.Www)
     {
         using var context = _dbFactory.CreateDbContext();
 
         var package = new Package
         {
             Title = title,
+            Type = type,
             Status = status,
             AccessLevel = accessLevel,
             PublicationDate = publicationDate ?? DateTime.UtcNow,
@@ -999,6 +1001,73 @@ public class PackageListServiceTests : IDisposable
         var result = await _service.SearchPackages(filter, CreateAnonymousAccessContext());
 
         result.TotalCount.Should().Be(2);
+    }
+
+    #endregion
+
+    #region Game-Type Filter
+
+    [Fact]
+    public async Task SearchPackages_TypeFilter_ReturnsOnlyMatchingType()
+    {
+        await CreatePackage("ЩДК пакет");
+        await CreatePackage("Швагер пакет", type: PackageType.Shvager);
+
+        var wwwResult = await _service.SearchPackages(
+            new PackageListFilter(Type: PackageType.Www), CreateAnonymousAccessContext());
+        var shvagerResult = await _service.SearchPackages(
+            new PackageListFilter(Type: PackageType.Shvager), CreateAnonymousAccessContext());
+        var allResult = await _service.SearchPackages(
+            new PackageListFilter(), CreateAnonymousAccessContext());
+
+        wwwResult.Packages.Should().ContainSingle().Which.Title.Should().Be("ЩДК пакет");
+        shvagerResult.Packages.Should().ContainSingle().Which.Title.Should().Be("Швагер пакет");
+        allResult.TotalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task SearchPackages_CardDto_CarriesTypeAndToursCount()
+    {
+        var package = await CreatePackage("Швагер пакет", type: PackageType.Shvager);
+
+        using (var context = _dbFactory.CreateDbContext())
+        {
+            context.Tours.Add(new Tour { PackageId = package.Id, Number = "1", Title = "Жереб", OrderIndex = 0 });
+            context.Tours.Add(new Tour { PackageId = package.Id, Number = "2", Title = "Змії", OrderIndex = 1 });
+            await context.SaveChangesAsync();
+        }
+
+        var result = await _service.SearchPackages(new PackageListFilter(), CreateAnonymousAccessContext());
+
+        var card = result.Packages.Should().ContainSingle().Subject;
+        card.Type.Should().Be(PackageType.Shvager);
+        card.ToursCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetEditorsForFilter_TypeFilter_ReturnsOnlyEditorsOfThatType()
+    {
+        var wwwPackage = await CreatePackage("ЩДК пакет");
+        var shvagerPackage = await CreatePackage("Швагер пакет", type: PackageType.Shvager);
+
+        using (var context = _dbFactory.CreateDbContext())
+        {
+            var wwwEditor = new Author { FirstName = "Іван", LastName = "ЩДКівський" };
+            var shvagerEditor = new Author { FirstName = "Петро", LastName = "Швагерський" };
+            context.Authors.AddRange(wwwEditor, shvagerEditor);
+
+            context.Tours.Add(new Tour { PackageId = wwwPackage.Id, Number = "1", OrderIndex = 0, Editors = [wwwEditor] });
+            context.Tours.Add(new Tour { PackageId = shvagerPackage.Id, Number = "1", OrderIndex = 0, Editors = [shvagerEditor] });
+            await context.SaveChangesAsync();
+        }
+
+        var wwwEditors = await _service.GetEditorsForFilter(type: PackageType.Www);
+        var shvagerEditors = await _service.GetEditorsForFilter(type: PackageType.Shvager);
+        var allEditors = await _service.GetEditorsForFilter();
+
+        wwwEditors.Should().ContainSingle().Which.FullName.Should().Contain("ЩДКівський");
+        shvagerEditors.Should().ContainSingle().Which.FullName.Should().Contain("Швагерський");
+        allEditors.Should().HaveCount(2);
     }
 
     #endregion

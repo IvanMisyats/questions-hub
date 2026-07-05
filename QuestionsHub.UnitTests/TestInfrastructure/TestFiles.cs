@@ -10,9 +10,13 @@ public static class TestFiles
 
     public static string PackagesDir => Path.Combine(TestDataRoot, "Packages");
     public static string ExpectedDir => Path.Combine(TestDataRoot, "Expected");
+    public static string ShvagerDir => Path.Combine(TestDataRoot, "Shvager");
 
     public static string GetPackagePath(string fileName) =>
         Path.Combine(PackagesDir, fileName);
+
+    public static string GetShvagerPath(string fileName) =>
+        Path.Combine(ShvagerDir, fileName);
 
     public static string GetExpectedPath(string fileName) =>
         Path.Combine(ExpectedDir, fileName);

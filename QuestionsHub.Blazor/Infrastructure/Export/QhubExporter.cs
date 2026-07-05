@@ -85,7 +85,8 @@ public class QhubExporter
 
         return new QhubPackage
         {
-            FormatVersion = "1.0",
+            FormatVersion = "1.1",
+            GameType = package.Type == PackageType.Shvager ? "shvager" : null,
             SourceUrl = NullIfEmpty(package.SourceUrl),
             Title = package.Title,
             Description = NullIfEmpty(package.Description),
@@ -114,6 +115,7 @@ public class QhubExporter
         return new QhubTour
         {
             Number = tour.Number,
+            Title = NullIfEmpty(tour.Title),
             IsWarmup = tour.IsWarmup ? true : null,
             IsShootout = tour.IsShootout ? true : null,
             Editors = editors,
@@ -172,6 +174,7 @@ public class QhubExporter
             Answer = question.Answer,
             AcceptedAnswers = NullIfEmpty(question.AcceptedAnswers),
             RejectedAnswers = NullIfEmpty(question.RejectedAnswers),
+            Form = NullIfEmpty(question.AnswerForm),
             Comment = NullIfEmpty(question.Comment),
             CommentAssetFileName = commentAssetFileName,
             CommentAssetUrl = commentAssetUrl,

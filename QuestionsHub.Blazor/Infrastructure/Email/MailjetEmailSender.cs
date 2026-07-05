@@ -32,7 +32,7 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #0d6efd;">Вітаємо, {user.FirstName}!</h2>
-                    <p>Дякуємо за реєстрацію на сайті «База українських запитань ЩДК».</p>
+                    <p>Дякуємо за реєстрацію на сайті «База українських запитань».</p>
                     <p>Для підтвердження вашої електронної адреси натисніть на кнопку нижче:</p>
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="{confirmationLink}"
@@ -48,7 +48,7 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
                         Якщо ви не реєструвались на нашому сайті, просто проігноруйте цей лист.
                     </p>
                     <p style="color: #999; font-size: 12px;">
-                        База українських запитань «Що? Де? Коли?»<br>
+                        База українських запитань<br>
                         <a href="{_settings.SiteUrl}" style="color: #0d6efd;">{_settings.SiteUrl}</a>
                     </p>
                 </div>
@@ -91,7 +91,7 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
                         Ваш пароль залишиться без змін.
                     </p>
                     <p style="color: #999; font-size: 12px;">
-                        База українських запитань «Що? Де? Коли?»<br>
+                        База українських запитань<br>
                         <a href="{_settings.SiteUrl}" style="color: #0d6efd;">{_settings.SiteUrl}</a>
                     </p>
                 </div>

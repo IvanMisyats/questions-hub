@@ -3,6 +3,7 @@ namespace QuestionsHub.Blazor.Controllers.Api.V1.Dto;
 public record ApiPackageDetailDto(
     int Id,
     string Title,
+    string GameType,
     string? Description,
     string? Preamble,
     DateOnly? PlayedFrom,
@@ -19,6 +20,7 @@ public record ApiPackageDetailDto(
 public record ApiTourDto(
     int Id,
     string Number,
+    string? Title,
     string Type,
     string? Preamble,
     string? Comment,
@@ -45,6 +47,7 @@ public record ApiQuestionDto(
     string? HandoutUrl,
     string? AcceptedAnswers,
     string? RejectedAnswers,
+    string? AnswerForm,
     string? Comment,
     string? CommentAttachmentUrl,
     string? Source,

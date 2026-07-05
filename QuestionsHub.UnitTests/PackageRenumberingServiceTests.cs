@@ -323,6 +323,204 @@ public class PackageRenumberingServiceTests
 
     #endregion
 
+    #region Shvager (Своя гра) Tests
+
+    private static Package CreateShvagerPackage()
+    {
+        return new Package
+        {
+            Id = 1,
+            Title = "Test Shvager Package",
+            Type = PackageType.Shvager,
+            Tours = []
+        };
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_AssignsValuesByPosition()
+    {
+        // Arrange
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme = CreateTour(1, 0);
+        theme.Title = "Змії";
+        theme.Questions.Add(CreateQuestion(1, 0, "999"));
+        theme.Questions.Add(CreateQuestion(2, 1, "999"));
+        theme.Questions.Add(CreateQuestion(3, 2, "999"));
+        theme.Questions.Add(CreateQuestion(4, 3, "999"));
+        theme.Questions.Add(CreateQuestion(5, 4, "999"));
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        Assert.Equal("1", theme.Number);
+        var questions = theme.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal("10", questions[0].Number);
+        Assert.Equal("20", questions[1].Number);
+        Assert.Equal("30", questions[2].Number);
+        Assert.Equal("40", questions[3].Number);
+        Assert.Equal("50", questions[4].Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_NumbersThemesSequentially()
+    {
+        // Arrange
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme1 = CreateTour(1, 5); // Gaps in OrderIndex
+        var theme2 = CreateTour(2, 10);
+        var theme3 = CreateTour(3, 20);
+
+        package.Tours.Add(theme3);
+        package.Tours.Add(theme1);
+        package.Tours.Add(theme2);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert - ordered by OrderIndex, numbered 1..N, indices normalized
+        Assert.Equal(0, theme1.OrderIndex);
+        Assert.Equal("1", theme1.Number);
+        Assert.Equal(1, theme2.OrderIndex);
+        Assert.Equal("2", theme2.Number);
+        Assert.Equal(2, theme3.OrderIndex);
+        Assert.Equal("3", theme3.Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_ValuesRestartInEachTheme()
+    {
+        // Values must restart at 10 in every theme — never continue globally across themes
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme1 = CreateTour(1, 0);
+        theme1.Questions.Add(CreateQuestion(1, 0));
+        theme1.Questions.Add(CreateQuestion(2, 1));
+        theme1.Questions.Add(CreateQuestion(3, 2));
+
+        var theme2 = CreateTour(2, 1);
+        theme2.Questions.Add(CreateQuestion(4, 0));
+        theme2.Questions.Add(CreateQuestion(5, 1));
+
+        package.Tours.Add(theme1);
+        package.Tours.Add(theme2);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        Assert.Equal("10", theme1.Questions.First(q => q.Id == 1).Number);
+        Assert.Equal("20", theme1.Questions.First(q => q.Id == 2).Number);
+        Assert.Equal("30", theme1.Questions.First(q => q.Id == 3).Number);
+
+        // Theme 2 restarts at 10
+        Assert.Equal("10", theme2.Questions.First(q => q.Id == 4).Number);
+        Assert.Equal("20", theme2.Questions.First(q => q.Id == 5).Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_ReorderWithinTheme_ReassignsValues()
+    {
+        // Arrange - question with value 50 dragged to first position
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme = CreateTour(1, 0);
+        theme.Questions.Add(CreateQuestion(5, 0, "50"));
+        theme.Questions.Add(CreateQuestion(1, 1, "10"));
+        theme.Questions.Add(CreateQuestion(2, 2, "20"));
+        theme.Questions.Add(CreateQuestion(3, 3, "30"));
+        theme.Questions.Add(CreateQuestion(4, 4, "40"));
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert - values follow the new positions
+        Assert.Equal("10", theme.Questions.First(q => q.Id == 5).Number);
+        Assert.Equal("20", theme.Questions.First(q => q.Id == 1).Number);
+        Assert.Equal("30", theme.Questions.First(q => q.Id == 2).Number);
+        Assert.Equal("40", theme.Questions.First(q => q.Id == 3).Number);
+        Assert.Equal("50", theme.Questions.First(q => q.Id == 4).Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_MoreThanFiveQuestions_ContinuesValues()
+    {
+        // Non-canonical theme with 6 questions must not fail — validation is the editor's job
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme = CreateTour(1, 0);
+        for (int i = 0; i < 6; i++)
+        {
+            theme.Questions.Add(CreateQuestion(i + 1, i));
+        }
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        var questions = theme.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal("50", questions[4].Number);
+        Assert.Equal("60", questions[5].Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_IgnoresNumberingMode()
+    {
+        // Manual mode must not disable auto-values for Shvager packages
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+        package.NumberingMode = QuestionNumberingMode.Manual;
+
+        var theme = CreateTour(1, 0);
+        theme.Questions.Add(CreateQuestion(1, 0, "X"));
+        theme.Questions.Add(CreateQuestion(2, 1, "Y"));
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        Assert.Equal("10", theme.Questions.First(q => q.Id == 1).Number);
+        Assert.Equal("20", theme.Questions.First(q => q.Id == 2).Number);
+    }
+
+    [Fact]
+    public void SetTourType_Shvager_NonRegularType_IsIgnored()
+    {
+        // Arrange
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme1 = CreateTour(1, 0);
+        var theme2 = CreateTour(2, 1);
+        package.Tours.Add(theme1);
+        package.Tours.Add(theme2);
+
+        // Act - attempt to mark a theme as warmup
+        service.SetTourType(package, 2, TourType.Warmup);
+
+        // Assert - type unchanged, order unchanged
+        Assert.Equal(TourType.Regular, theme2.Type);
+        Assert.Equal(0, theme1.OrderIndex);
+        Assert.Equal(1, theme2.OrderIndex);
+    }
+
+    #endregion
+
     #region Warmup Tour With Existing Questions Tests
 
     [Fact]

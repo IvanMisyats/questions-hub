@@ -10,6 +10,10 @@ public class QhubPackage
     [JsonPropertyName("formatVersion")]
     public string? FormatVersion { get; set; }
 
+    /// <summary>Game type: "www" (Що?Де?Коли?, default) or "shvager" (Своя гра). Added in format 1.1.</summary>
+    [JsonPropertyName("gameType")]
+    public string? GameType { get; set; }
+
     [JsonPropertyName("sourceUrl")]
     public string? SourceUrl { get; set; }
 
@@ -51,6 +55,10 @@ public class QhubTour
 {
     [JsonPropertyName("number")]
     public string? Number { get; set; }
+
+    /// <summary>Theme title (Своя гра packages). Added in format 1.1.</summary>
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
 
     [JsonPropertyName("isWarmup")]
     public bool? IsWarmup { get; set; }
@@ -123,6 +131,10 @@ public class QhubQuestion
 
     [JsonPropertyName("rejectedAnswers")]
     public string? RejectedAnswers { get; set; }
+
+    /// <summary>Answer-form hint «Форма» (Своя гра questions). Added in format 1.1.</summary>
+    [JsonPropertyName("form")]
+    public string? Form { get; set; }
 
     [JsonPropertyName("comment")]
     public string? Comment { get; set; }

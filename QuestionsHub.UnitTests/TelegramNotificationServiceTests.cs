@@ -53,7 +53,18 @@ public class TelegramNotificationServiceTests : IDisposable
 
         var message = _service.BuildMessage(package);
 
-        message.Should().Contain("Дорослий пакет</a> (18+)");
+        message.Should().Contain("Дорослий пакет</a> [Що?Де?Коли?] (18+)");
+    }
+
+    [Fact]
+    public void BuildMessage_ShvagerPackage_ContainsTypeLabel()
+    {
+        var package = CreatePackage("Швагер-ліга", id: 11);
+        package.Type = PackageType.Shvager;
+
+        var message = _service.BuildMessage(package);
+
+        message.Should().Contain("Швагер-ліга</a> [Своя гра]");
     }
 
     [Fact]

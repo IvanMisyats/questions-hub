@@ -35,13 +35,15 @@ public class PackageManagementServiceTests : IDisposable
     private async Task<Package> CreatePackage(
         QuestionNumberingMode numberingMode = QuestionNumberingMode.Global,
         int tourCount = 0,
-        int questionsPerTour = 0)
+        int questionsPerTour = 0,
+        PackageType type = PackageType.Www)
     {
         using var context = _dbFactory.CreateDbContext();
 
         var package = new Package
         {
             Title = "Test Package",
+            Type = type,
             NumberingMode = numberingMode,
             TotalQuestions = tourCount * questionsPerTour,
             Tours = []
@@ -1111,6 +1113,76 @@ public class PackageManagementServiceTests : IDisposable
         // Assert
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Be("Tour not found");
+    }
+
+    #endregion
+
+    #region Shvager (Своя гра) Guard Tests
+
+    [Fact]
+    public async Task SplitTourIntoBlocks_ShvagerPackage_ReturnsFail()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 5, type: PackageType.Shvager);
+        var theme = package.Tours.First();
+
+        // Act
+        var result = await _service.SplitTourIntoBlocks(theme.Id);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("not supported");
+
+        using var context = _dbFactory.CreateDbContext();
+        (await context.Blocks.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task SetTourType_ShvagerPackage_NonRegularType_ReturnsFail()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 2, questionsPerTour: 5, type: PackageType.Shvager);
+        var theme = package.Tours.First();
+
+        // Act
+        var result = await _service.SetTourType(theme.Id, TourType.Warmup);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("not supported");
+
+        using var context = _dbFactory.CreateDbContext();
+        var reloaded = await context.Tours.FindAsync(theme.Id);
+        reloaded!.Type.Should().Be(TourType.Regular);
+    }
+
+    [Fact]
+    public async Task SetTourType_ShvagerPackage_RegularType_Succeeds()
+    {
+        // Setting Regular on a Shvager theme is a no-op but must not fail
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 5, type: PackageType.Shvager);
+        var theme = package.Tours.First();
+
+        // Act
+        var result = await _service.SetTourType(theme.Id, TourType.Regular);
+
+        // Assert
+        result.Success.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateQuestion_ShvagerPackage_AssignsValueByPosition()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 2, type: PackageType.Shvager);
+        var theme = package.Tours.First();
+
+        // Act - add a third question
+        var result = await _service.CreateQuestion(theme.Id);
+
+        // Assert - renumbering assigns the value 30 (position 3)
+        result.Success.Should().BeTrue();
+        result.Entity!.Number.Should().Be("30");
     }
 
     #endregion

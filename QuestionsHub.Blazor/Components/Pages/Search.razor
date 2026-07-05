@@ -1,6 +1,7 @@
 @page "/search"
 @page "/search/{Query}"
 @attribute [StreamRendering]
+@using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @using static QuestionsHub.Blazor.Infrastructure.Search.HighlightSanitizer
 @using static QuestionsHub.Blazor.Infrastructure.SourceLinkifier
@@ -29,6 +30,17 @@
                 <code>"точна фраза"</code>, <code>-виключити</code>
             </small>
         </div>
+    </div>
+
+    @* Game-type filter chips *@
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <span class="small text-muted">Тип гри:</span>
+        <a class="btn btn-sm rounded-pill @(_typeFilter == null ? "btn-secondary" : "btn-outline-secondary")"
+           href="@BuildTypeUrl(null)">Усі</a>
+        <a class="btn btn-sm rounded-pill @(_typeFilter == PackageType.Www ? "btn-primary" : "btn-outline-primary")"
+           href="@BuildTypeUrl(PackageType.Www)">@PackageType.Www.DisplayName()</a>
+        <a class="btn btn-sm rounded-pill @(_typeFilter == PackageType.Shvager ? "btn-success" : "btn-outline-success")"
+           href="@BuildTypeUrl(PackageType.Shvager)">@PackageType.Shvager.DisplayName()</a>
     </div>
 
     @if (!string.IsNullOrEmpty(_errorMessage))
@@ -64,11 +76,21 @@
                         <div class="card search-result-card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <div>
+                                    <PackageTypeBadge Type="result.PackageType" Class="me-2" />
                                     <a href="/package/@result.PackageId" class="text-decoration-none fw-bold">@result.PackageTitle</a>
                                     <span class="text-muted mx-2">·</span>
-                                    <span class="text-muted">Тур @result.TourNumber</span>
-                                    <span class="text-muted mx-2">·</span>
-                                    <span class="text-muted">Запитання @result.QuestionNumber</span>
+                                    @if (result.PackageType == PackageType.Shvager)
+                                    {
+                                        <span class="text-muted">@ThemeLabel(result)</span>
+                                        <span class="text-muted mx-2">·</span>
+                                        <span class="text-muted">@result.QuestionNumber</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Тур @result.TourNumber</span>
+                                        <span class="text-muted mx-2">·</span>
+                                        <span class="text-muted">Запитання @result.QuestionNumber</span>
+                                    }
                                 </div>
                                 <a href="/package/@result.PackageId#question-@result.QuestionId"
                                    class="btn btn-sm btn-outline-primary">
@@ -126,6 +148,13 @@
                                             </div>
                                         }
 
+                                        @if (!string.IsNullOrEmpty(result.AnswerForm))
+                                        {
+                                            <div class="answer-field">
+                                                <span class="answer-label">Форма:</span> @result.AnswerForm
+                                            </div>
+                                        }
+
                                         @if (!string.IsNullOrEmpty(result.Comment))
                                         {
                                             <div class="answer-field">
@@ -177,14 +206,22 @@
     [Parameter]
     public string? Query { get; set; }
 
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeParam { get; set; }
+
     private List<SearchResult>? _results;
     private bool _isLoading = true;
     private bool _hasSearched;
     private string? _errorMessage;
     private string? _searchedQuery;
+    private PackageType? _typeFilter;
 
     protected override async Task OnInitializedAsync()
     {
+        _typeFilter = Enum.TryParse<PackageType>(TypeParam, ignoreCase: true, out var type) && Enum.IsDefined(type)
+            ? type
+            : null;
+
         // If query passed via URL parameter, perform search
         if (!string.IsNullOrWhiteSpace(Query))
         {
@@ -208,7 +245,7 @@
         try
         {
             var accessContext = await AccessControl.GetPackageAccessContext();
-            _results = await SearchService.Search(_searchedQuery.Trim(), accessContext);
+            _results = await SearchService.Search(_searchedQuery.Trim(), accessContext, typeFilter: _typeFilter);
             _hasSearched = true;
         }
         catch (Exception)
@@ -221,6 +258,29 @@
             _isLoading = false;
         }
     }
+
+    /// <summary>
+    /// Builds the URL for a game-type filter chip, preserving the current query.
+    /// Query is the decoded route value, so it must be re-encoded (e.g. «Хто це?», «100%»).
+    /// </summary>
+    private string BuildTypeUrl(PackageType? type)
+    {
+        var basePath = string.IsNullOrWhiteSpace(Query) ? "/search" : $"/search/{Uri.EscapeDataString(Query)}";
+        return type switch
+        {
+            PackageType.Www => $"{basePath}?type=www",
+            PackageType.Shvager => $"{basePath}?type=shvager",
+            _ => basePath
+        };
+    }
+
+    /// <summary>
+    /// Theme context for a Своя гра result: «Тема N. Назва» (or «Тема N» when untitled).
+    /// </summary>
+    private static string ThemeLabel(SearchResult result)
+        => string.IsNullOrWhiteSpace(result.TourTitle)
+            ? $"Тема {result.TourNumber}"
+            : $"Тема {result.TourNumber}. {result.TourTitle}";
 
     /// <summary>
     /// Parses the authors string from search results into individual author tuples.

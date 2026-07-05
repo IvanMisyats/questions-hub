@@ -98,8 +98,9 @@
                         <Icon Name="box" Class="me-2" />Пакети
                     </div>
                     <div class="card-body">
-                        <h3 class="card-title">@_packagesCount</h3>
-                        <p class="card-text text-muted">пакетів, де @_author.FirstName є редактором</p>
+                        <h3 class="card-title">@(_stats?.PackageCount ?? 0)</h3>
+                        <p class="card-text text-muted mb-1">пакетів, де @_author.FirstName є редактором</p>
+                        <p class="card-text small text-muted mb-0">@TypeBreakdown(_stats?.WwwPackageCount ?? 0, _stats?.ShvagerPackageCount ?? 0)</p>
                     </div>
                 </div>
             </div>
@@ -109,8 +110,9 @@
                         <Icon Name="question-circle" Class="me-2" />Запитання
                     </div>
                     <div class="card-body">
-                        <h3 class="card-title">@_questionsCount</h3>
-                        <p class="card-text text-muted">запитань, де @_author.FirstName є автором</p>
+                        <h3 class="card-title">@(_stats?.QuestionCount ?? 0)</h3>
+                        <p class="card-text text-muted mb-1">запитань, де @_author.FirstName є автором</p>
+                        <p class="card-text small text-muted mb-0">@TypeBreakdown(_stats?.WwwQuestionCount ?? 0, _stats?.ShvagerQuestionCount ?? 0)</p>
                     </div>
                 </div>
             </div>
@@ -124,26 +126,35 @@
                     <Icon Name="list-ul" Class="me-2" />Список пакетів
                 </div>
                 <div class="card-body">
-                    <ul class="list-unstyled">
-                        @foreach (var packageItem in _packagesList.Take(_displayedPackagesCount))
+                    @foreach (var group in PackageGroups())
+                    {
+                        @if (_hasBothTypes)
                         {
-                            <li class="mb-2">
-                                <a href="/package/@packageItem.PackageId">@packageItem.PackageTitle</a>
-                                @if (!packageItem.IsGlobalEditor && packageItem.Tours.Any())
-                                {
-                                    @TourSeparator
-                                    @foreach (var (entry, isLast) in GetPackageEntries(packageItem))
+                            <h6 class="mt-2">
+                                <PackageTypeBadge Type="group.Key" FullName="true" />
+                            </h6>
+                        }
+                        <ul class="list-unstyled">
+                            @foreach (var packageItem in group)
+                            {
+                                <li class="mb-2">
+                                    <a href="/package/@packageItem.PackageId">@packageItem.PackageTitle</a>
+                                    @if (!packageItem.IsGlobalEditor && packageItem.Tours.Any())
                                     {
-                                        <a href="@entry.Href">@entry.Text</a>
-                                        @if (!isLast)
+                                        @TourSeparator
+                                        @foreach (var (entry, isLast) in GetPackageEntries(packageItem))
                                         {
-                                            @(" | ")
+                                            <a href="@entry.Href">@entry.Text</a>
+                                            @if (!isLast)
+                                            {
+                                                @(" | ")
+                                            }
                                         }
                                     }
-                                }
-                            </li>
-                        }
-                    </ul>
+                                </li>
+                            }
+                        </ul>
+                    }
                     @if (_packagesList.Count > _displayedPackagesCount)
                     {
                         <button type="button" class="btn btn-link" @onclick="ShowMorePackages" @onclick:preventDefault>
@@ -210,9 +221,9 @@
     private bool _isProcessing;
     private string? _linkMessage;
     private bool _linkSuccess;
-    private int _packagesCount;
-    private int _questionsCount;
+    private AuthorStatistics? _stats;
     private List<AuthorPackageListItem> _packagesList = [];
+    private bool _hasBothTypes;
     private const int PackagesPerPage = 20;
     private int _displayedPackagesCount = PackagesPerPage;
     private const string TourSeparator = " → ";
@@ -251,15 +262,11 @@
         var accessContext = await AccessControl.GetPackageAccessContext();
 
         // Get statistics using the centralized AuthorService
-        var stats = await AuthorService.GetAuthorStatistics(Id, accessContext);
-        if (stats != null)
-        {
-            _questionsCount = stats.QuestionCount;
-            _packagesCount = stats.PackageCount;
-        }
+        _stats = await AuthorService.GetAuthorStatistics(Id, accessContext);
 
         // Get packages list using the centralized AuthorService
         _packagesList = await AuthorService.GetAuthorPackages(Id, accessContext);
+        _hasBothTypes = _packagesList.Select(p => p.Type).Distinct().Count() > 1;
 
         // Load linked user info
         _linkedUser = await AuthorService.GetLinkedUser(Id);
@@ -276,13 +283,34 @@
         _displayedPackagesCount += PackagesPerPage;
     }
 
+    /// <summary>
+    /// Groups the visible packages by game type: Що?Де?Коли? first, then Своя гра.
+    /// </summary>
+    private IEnumerable<IGrouping<PackageType, AuthorPackageListItem>> PackageGroups()
+        => _packagesList
+            .Take(_displayedPackagesCount)
+            .GroupBy(p => p.Type)
+            .OrderBy(g => g.Key);
+
+    /// <summary>Per-type breakdown line for the statistics cards, e.g. «ЩДК: 5 · Своя гра: 2».</summary>
+    private static string TypeBreakdown(int wwwCount, int shvagerCount)
+        => $"{PackageType.Www.ShortName()}: {wwwCount} · {PackageType.Shvager.ShortName()}: {shvagerCount}";
+
     private IEnumerable<((string Text, string Href) Entry, bool IsLast)> GetPackageEntries(AuthorPackageListItem packageItem)
     {
         var allEntries = new List<(string Text, string Href)>();
 
         foreach (var tour in packageItem.Tours)
         {
-            if (tour.Blocks.Any())
+            if (packageItem.Type == PackageType.Shvager)
+            {
+                // Своя гра theme - show its title (fallback to «Тема N»)
+                allEntries.Add((
+                    string.IsNullOrWhiteSpace(tour.TourTitle) ? $"Тема {tour.TourNumber}" : tour.TourTitle,
+                    $"/package/{packageItem.PackageId}#tour-{tour.TourId}"
+                ));
+            }
+            else if (tour.Blocks.Any())
             {
                 // Tour has blocks - show tour => block N for each block
                 foreach (var block in tour.Blocks)

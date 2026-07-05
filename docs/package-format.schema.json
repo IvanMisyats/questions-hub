@@ -1,15 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://questions.com.ua/schemas/package-format/1.0",
+  "$id": "https://questions.com.ua/schemas/package-format/1.1",
   "title": "Questions Hub Package Format",
-  "description": "Interchange format for Що?Де?Коли? question packages (v1.0)",
+  "description": "Interchange format for Що?Де?Коли? and Своя гра question packages (v1.1)",
   "type": "object",
   "required": ["formatVersion", "title", "tours"],
   "properties": {
     "formatVersion": {
       "type": "string",
-      "const": "1.0",
-      "description": "Format version. Must be \"1.0\"."
+      "enum": ["1.0", "1.1"],
+      "description": "Format version (\"1.0\" or \"1.1\")."
+    },
+    "gameType": {
+      "type": "string",
+      "enum": ["www", "shvager"],
+      "default": "www",
+      "description": "Game type: \"www\" (Що?Де?Коли?, default) or \"shvager\" (Своя гра). Added in 1.1. Своя гра packages must not contain warmup/shootout tours or blocks."
     },
     "sourceUrl": {
       "type": "string",
@@ -87,6 +93,11 @@
           "minLength": 1,
           "maxLength": 50,
           "description": "Display number (\"0\" for warmup, \"1\", \"2\", …)."
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Theme title (Своя гра packages). Added in 1.1."
         },
         "isWarmup": {
           "type": "boolean",
@@ -207,6 +218,11 @@
           "type": "string",
           "maxLength": 1000,
           "description": "Explicitly rejected answers (незалік)."
+        },
+        "form": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Answer-form hint «Форма» (Своя гра questions). Added in 1.1."
         },
         "comment": {
           "type": "string",

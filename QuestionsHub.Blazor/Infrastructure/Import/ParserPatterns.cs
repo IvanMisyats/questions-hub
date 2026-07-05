@@ -184,4 +184,46 @@ public static partial class ParserPatterns
     // Also matches: "Редактор - Name", "Редакторка - Name" (with dash instead of colon)
     [GeneratedRegex(@"^\s*(?:Редактор(?:и|ка|ки)?(?:\s*блоку)?)\s*[-–—:]\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex BlockEditorsLabel();
+
+    // ==================== Своя гра (Shvager) patterns ====================
+
+    // Form label: "Форма: ..." / "Форма. ..." (answer-form hint)
+    [GeneratedRegex(@"^\s*Форма\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
+    public static partial Regex FormLabel();
+
+    // Theme header: "Тема: Назва (Автор)", "Тема. Назва", "Тема – Назва"
+    [GeneratedRegex(@"^\s*Тема\s*[:.\-–—]\s*(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShvagerThemeStart();
+
+    // Numbered theme header: "Тема 1. Назва", "Тема №2: Назва", "Тема 3 — Назва"
+    [GeneratedRegex(@"^\s*Тема\s+№?\s*\d+\s*[:.\-–—]\s*(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShvagerNumberedThemeStart();
+
+    // Theme list header in the package preamble: "Теми:"
+    [GeneratedRegex(@"^\s*Теми\s*:?\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShvagerThemeListHeader();
+
+    // Question start by value: "10. text", "20 . text", "30: text" (value is a multiple of 10).
+    // Also matches value ranges used by reserve themes: "30-50. text".
+    // Whitespace (or end of line) is REQUIRED after the separator so that dates ("20.05.1986"),
+    // times ("10:00") and DOIs ("10.1038/...") are not mistaken for question starts.
+    [GeneratedRegex(@"^\s*(\d{2,3}(?:\s*[-–—]\s*\d{2,3})?)\s*[.:](?:\s+(.*))?$")]
+    public static partial Regex ShvagerQuestionStart();
+
+    // Numbered entry in the «Теми:» list: "1.\tАвіація", "2) Тема: Жереб"
+    [GeneratedRegex(@"^\s*\d{1,2}\s*[.)]\s*(.+)$")]
+    public static partial Regex ListNumberPrefix();
+
+    // Trailing author list in parentheses on a theme title: "Жереб (Євген Шляхов)"
+    [GeneratedRegex(@"^(.*?)\s*\(([^()]+)\)\s*\.?\s*$")]
+    public static partial Regex TitleWithTrailingParens();
+
+    // Package-header editor line with optional prefix: "Редактор Євген Шляхов", "Коло 1. Редактор Євген Шляхов",
+    // "Редактор та автор тем - Олександр Мерзликін", "Автор тем: Ім'я Прізвище", "Авторка та редакторка тем — Ім'я Прізвище"
+    [GeneratedRegex(@"^\s*(?:(.*?)[.,:]\s*)?(?:Редактор|Автор)(?:и|ка|ки)?(?:\s+та\s+(?:автор|редактор)(?:и|ка|ки)?)?(?:\s+тем\w*)?\s*[-–—:]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShvagerHeaderEditors();
+
+    // Bracketed picture reference inside question text: "[Малюнок 1 https://...]", "[Рисунок 2]"
+    [GeneratedRegex(@"\[\s*((?:Малюнок|Рисунок|Зображення|Фото)[^\]]*)\]", RegexOptions.IgnoreCase)]
+    public static partial Regex PictureBracket();
 }

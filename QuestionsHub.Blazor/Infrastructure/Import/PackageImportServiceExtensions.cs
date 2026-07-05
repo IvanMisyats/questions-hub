@@ -22,6 +22,7 @@ public static class PackageImportServiceExtensions
         // Register import services
         services.AddScoped<DocxExtractor>();
         services.AddScoped<PackageParser>();
+        services.AddScoped<ShvagerParser>();
         services.AddScoped<PackageDbImporter>();
         services.AddScoped<QhubExtractor>();
         services.AddScoped<PackageImportService>();

@@ -104,6 +104,13 @@ public class PackageListService
             query = query.Where(p => p.Tags.Any(t => t.Id == tagId));
         }
 
+        // Apply game-type filter
+        if (filter.Type.HasValue)
+        {
+            var type = filter.Type.Value;
+            query = query.Where(p => p.Type == type);
+        }
+
         // Get total count before pagination
         var totalCount = await query.CountAsync();
         var totalPages = (int)Math.Ceiling((double)totalCount / filter.PageSize);
@@ -120,10 +127,12 @@ public class PackageListService
             {
                 p.Id,
                 p.Title,
+                p.Type,
                 p.Description,
                 p.PublicationDate,
                 p.PlayedFrom,
                 p.PlayedTo,
+                ToursCount = p.Tours.Count,
                 QuestionsCount = p.Tours.SelectMany(t => t.Questions).Count()
             })
             .ToListAsync();
@@ -176,10 +185,12 @@ public class PackageListService
                 return new PackageCardDto(
                     p.Id,
                     p.Title,
+                    p.Type,
                     p.Description,
                     p.PublicationDate,
                     p.PlayedFrom,
                     p.PlayedTo,
+                    p.ToursCount,
                     p.QuestionsCount,
                     editors,
                     tags);
@@ -191,13 +202,15 @@ public class PackageListService
 
     /// <summary>
     /// Gets all editors who are associated with published packages.
-    /// Can optionally filter by name (partial match).
-    /// Results are cached for 1 hour.
+    /// Can optionally filter by name (partial match) and by game type.
+    /// Results are cached for 1 hour (per game type).
     /// </summary>
-    public async Task<List<EditorFilterDto>> GetEditorsForFilter(string? searchTerm = null)
+    public async Task<List<EditorFilterDto>> GetEditorsForFilter(string? searchTerm = null, PackageType? type = null)
     {
+        var cacheKey = GetEditorsCacheKey(type);
+
         // Get all editors from cache first
-        if (!_cache.TryGetValue(EditorsCacheKey, out List<EditorFilterDto>? allEditors) || allEditors == null)
+        if (!_cache.TryGetValue(cacheKey, out List<EditorFilterDto>? allEditors) || allEditors == null)
         {
             await using var context = await _dbContextFactory.CreateDbContextAsync();
 
@@ -205,6 +218,7 @@ public class PackageListService
             var packageEditorIds = await context.Packages
                 .AsNoTracking()
                 .Where(p => p.Status == PackageStatus.Published)
+                .Where(p => type == null || p.Type == type)
                 .SelectMany(p => p.PackageEditors)
                 .Select(a => a.Id)
                 .ToListAsync();
@@ -212,6 +226,7 @@ public class PackageListService
             var tourEditorIds = await context.Tours
                 .AsNoTracking()
                 .Where(t => t.Package.Status == PackageStatus.Published)
+                .Where(t => type == null || t.Package.Type == type)
                 .SelectMany(t => t.Editors)
                 .Select(a => a.Id)
                 .ToListAsync();
@@ -219,6 +234,7 @@ public class PackageListService
             var blockEditorIds = await context.Blocks
                 .AsNoTracking()
                 .Where(b => b.Tour.Package.Status == PackageStatus.Published)
+                .Where(b => type == null || b.Tour.Package.Type == type)
                 .SelectMany(b => b.Editors)
                 .Select(a => a.Id)
                 .ToListAsync();
@@ -237,7 +253,7 @@ public class PackageListService
                 .Select(a => new EditorFilterDto(a.Id, a.FirstName + " " + a.LastName))
                 .ToListAsync();
 
-            _cache.Set(EditorsCacheKey, allEditors, new MemoryCacheEntryOptions
+            _cache.Set(cacheKey, allEditors, new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = CacheDuration
             });
@@ -271,7 +287,9 @@ public class PackageListService
     {
         // Remove all access cache entries by using a pattern
         // Since MemoryCache doesn't support pattern removal, we use a token-based approach
-        _cache.Remove(EditorsCacheKey);
+        _cache.Remove(GetEditorsCacheKey(null));
+        _cache.Remove(GetEditorsCacheKey(PackageType.Www));
+        _cache.Remove(GetEditorsCacheKey(PackageType.Shvager));
 
         // Remove known access cache keys for each role type
         // Note: This approach clears common role-based keys but may not catch user-specific keys
@@ -369,5 +387,10 @@ public class PackageListService
     private static string GetAccessCacheKeyForRole(string role)
     {
         return $"{AccessiblePackagesCachePrefix}{role}";
+    }
+
+    private static string GetEditorsCacheKey(PackageType? type)
+    {
+        return type == null ? EditorsCacheKey : $"{EditorsCacheKey}_{type}";
     }
 }

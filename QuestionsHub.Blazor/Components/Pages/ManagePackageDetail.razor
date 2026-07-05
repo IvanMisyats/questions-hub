@@ -66,7 +66,10 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Інформація про пакет</h5>
-                <span class="badge @GetStatusBadgeClass(_package.Status)">@GetStatusDisplayName(_package.Status)</span>
+                <div class="d-flex gap-2">
+                    <PackageTypeBadge Type="_package.Type" />
+                    <span class="badge @GetStatusBadgeClass(_package.Status)">@GetStatusDisplayName(_package.Status)</span>
+                </div>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -102,9 +105,11 @@
                     </div>
                     <div class="col-md-4">
                         <label for="packageStatus" class="form-label">Статус</label>
+                        @* @bind:get/@bind:set (not @onchange) so the DOM select reverts when the
+                           setter declines the change — e.g. cancelling the publish-warnings modal *@
                         <select class="form-select" id="packageStatus"
-                                value="@_package.Status"
-                                @onchange="OnStatusChanged">
+                                @bind:get="_package.Status"
+                                @bind:set="OnStatusSet">
                             <option value="@PackageStatus.Draft">Чернетка</option>
                             <option value="@PackageStatus.Published">Опубліковано</option>
                             <option value="@PackageStatus.Archived">Архів</option>
@@ -138,16 +143,19 @@
                             <option value="@PackageAccessLevel.EditorsOnly">Лише редактори</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label for="packageNumberingMode" class="form-label">Нумерація запитань</label>
-                        <select class="form-select" id="packageNumberingMode"
-                                value="@_package.NumberingMode"
-                                @onchange="OnNumberingModeChanged">
-                            <option value="@QuestionNumberingMode.Global">Наскрізна</option>
-                            <option value="@QuestionNumberingMode.PerTour">Потурова</option>
-                            <option value="@QuestionNumberingMode.Manual">Ручна</option>
-                        </select>
-                    </div>
+                    @if (!IsShvager)
+                    {
+                        <div class="col-md-4">
+                            <label for="packageNumberingMode" class="form-label">Нумерація запитань</label>
+                            <select class="form-select" id="packageNumberingMode"
+                                    value="@_package.NumberingMode"
+                                    @onchange="OnNumberingModeChanged">
+                                <option value="@QuestionNumberingMode.Global">Наскрізна</option>
+                                <option value="@QuestionNumberingMode.PerTour">Потурова</option>
+                                <option value="@QuestionNumberingMode.Manual">Ручна</option>
+                            </select>
+                        </div>
+                    }
                     @if (_package.Editors.Any())
                     {
                         <div class="col-12">
@@ -201,16 +209,16 @@
         <!-- Tours Section -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Тури <span class="badge bg-secondary ms-2">@_package.Tours.Count(t => t.Type == TourType.Regular)</span></h5>
+                <h5 class="mb-0">@(IsShvager ? "Теми" : "Тури") <span class="badge bg-secondary ms-2">@_package.Tours.Count(t => t.Type == TourType.Regular)</span></h5>
                 <div class="d-flex gap-2">
-                    @if (!_package.Tours.Any(t => t.Type == TourType.Warmup))
+                    @if (!IsShvager && !_package.Tours.Any(t => t.Type == TourType.Warmup))
                     {
                         <button class="btn btn-outline-success btn-sm" @onclick="AddWarmupTourAsync">
                             <Icon Name="plus" Class="me-1" />Додати розминку
                         </button>
                     }
                     <button class="btn btn-success btn-sm" @onclick="AddTourAsync">
-                        <Icon Name="plus" Class="me-1" />Додати тур
+                        <Icon Name="plus" Class="me-1" />@AddTourLabel
                     </button>
                 </div>
             </div>
@@ -219,7 +227,7 @@
                 {
                     <div class="text-center py-4 text-muted">
                         <Icon Name="collection" Size="40" Class="d-block mb-2" />
-                        <p>Пакет ще не має турів. Натисніть "Додати тур", щоб почати.</p>
+                        <p>@(IsShvager ? "Пакет ще не має тем. Натисніть \"Додати тему\", щоб почати." : "Пакет ще не має турів. Натисніть \"Додати тур\", щоб почати.")</p>
                     </div>
                 }
                 else
@@ -235,7 +243,11 @@
                                     <button class="accordion-button flex-grow-1 @(IsExpanded(tour.Id) ? "" : "collapsed")" type="button"
                                             @onclick="() => ToggleExpand(tour.Id)">
                                         <span class="me-2">
-                                            @if (tour.IsWarmup)
+                                            @if (IsShvager)
+                                            {
+                                                <strong>@tour.ThemeDisplayName</strong>
+                                            }
+                                            else if (tour.IsWarmup)
                                             {
                                                 <span class="badge bg-warning text-dark me-1">Розминка</span>
                                             }
@@ -256,19 +268,31 @@
                                     <div class="accordion-body">
                                         <!-- Tour Edit Controls -->
                                         <div class="row g-2 mb-3 pb-3 border-bottom">
-                                            <div class="col-md-2">
-                                                <label class="form-label small">&nbsp;</label>
-                                                <select class="form-select form-select-sm"
-                                                        @onchange="e => OnTourTypeChanged(tour, Enum.Parse<TourType>((string)e.Value!))">
-                                                    <option value="Regular" selected="@(tour.Type == TourType.Regular)">Звичайний тур</option>
-                                                    <option value="Warmup" selected="@(tour.Type == TourType.Warmup)">Розминка</option>
-                                                    <option value="Shootout" selected="@(tour.Type == TourType.Shootout)">Перестрілка</option>
-                                                </select>
-                                            </div>
+                                            @if (IsShvager)
+                                            {
+                                                <div class="col-md-4">
+                                                    <label class="form-label small">Назва теми</label>
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           @bind="tour.Title" @onblur="() => SaveTourAsync(tour)"
+                                                           placeholder="Назва теми" />
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">&nbsp;</label>
+                                                    <select class="form-select form-select-sm"
+                                                            @onchange="e => OnTourTypeChanged(tour, Enum.Parse<TourType>((string)e.Value!))">
+                                                        <option value="Regular" selected="@(tour.Type == TourType.Regular)">Звичайний тур</option>
+                                                        <option value="Warmup" selected="@(tour.Type == TourType.Warmup)">Розминка</option>
+                                                        <option value="Shootout" selected="@(tour.Type == TourType.Shootout)">Перестрілка</option>
+                                                    </select>
+                                                </div>
+                                            }
                                             @if (_package!.SharedEditors)
                                             {
-                                                <div class="col-md-8">
-                                                    <label class="form-label small text-muted">Редактори туру</label>
+                                                <div class="@TourEditorsColumnClass">
+                                                    <label class="form-label small text-muted">@TourEditorsLabel</label>
                                                     <div class="text-muted small">
                                                         @string.Join(", ", _package.PackageEditors.Select(e => e.FullName))
                                                         <span class="text-muted ms-2">(спільні для пакету)</span>
@@ -277,18 +301,18 @@
                                             }
                                             else if (!tour.HasBlocks)
                                             {
-                                                <div class="col-md-8">
-                                                    <label class="form-label small">Редактори туру</label>
+                                                <div class="@TourEditorsColumnClass">
+                                                    <label class="form-label small">@TourEditorsLabel</label>
                                                     <AuthorSelector SelectedAuthors="tour.Editors"
                                                                     OnSelectionChanged="() => SaveTourAsync(tour)"
                                                                     OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
-                                                                    Placeholder="Введіть прізвище редактора..." />
+                                                                    Placeholder="@(IsShvager ? "Введіть прізвище автора..." : "Введіть прізвище редактора...")" />
                                                 </div>
                                             }
                                             else
                                             {
-                                                <div class="col-md-8">
-                                                    <label class="form-label small">Редактори туру</label>
+                                                <div class="@TourEditorsColumnClass">
+                                                    <label class="form-label small">@TourEditorsLabel</label>
                                                     <div class="text-muted small">
                                                         @string.Join(", ", tour.AllEditors.Select(e => e.FullName))
                                                         <span class="text-muted ms-2">(визначаються з блоків)</span>
@@ -476,18 +500,21 @@
                                         else
                                         {
                                             <!-- No blocks - show questions directly and "Add Block" button -->
-                                            <div class="mb-3">
-                                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => SplitIntoTwoBlocksAsync(tour)">
-                                                    ☰ Розділити на 2 блоки
-                                                </button>
-                                            </div>
+                                            @if (!IsShvager)
+                                            {
+                                                <div class="mb-3">
+                                                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => SplitIntoTwoBlocksAsync(tour)">
+                                                        ☰ Розділити на 2 блоки
+                                                    </button>
+                                                </div>
+                                            }
 
                                             <!-- Questions List -->
                                             <div class="list-group mb-3" id="questions-tour-@tour.Id" data-tour-id="@tour.Id">
                                             @if (tour.Questions.Count == 0)
                                             {
                                                 <div class="list-group-item text-center text-muted py-3">
-                                                    <p class="mb-0">Тур ще не має запитань. Перетягніть сюди запитання або додайте нове.</p>
+                                                    <p class="mb-0">@(IsShvager ? "Тема" : "Тур") ще не має запитань. Перетягніть сюди запитання або додайте нове.</p>
                                                 </div>
                                             }
                                             else
@@ -534,7 +561,7 @@
 
                     <div class="mt-3 text-center">
                         <button class="btn btn-success" @onclick="AddTourAsync">
-                            <Icon Name="plus" Class="me-1" />Додати тур
+                            <Icon Name="plus" Class="me-1" />@AddTourLabel
                         </button>
                     </div>
                 }
@@ -550,14 +577,14 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Видалити тур</h5>
+                    <h5 class="modal-title">@(IsShvager ? "Видалити тему" : "Видалити тур")</h5>
                     <button type="button" class="btn-close" @onclick="CancelDeleteTour"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Ви впевнені, що хочете видалити <strong>Тур @_tourToDelete.Number</strong>?</p>
+                    <p>Ви впевнені, що хочете видалити <strong>@(IsShvager ? _tourToDelete.ThemeDisplayName : $"Тур {_tourToDelete.Number}")</strong>?</p>
                     <p class="text-danger mb-0">
                         <Icon Name="exclamation-triangle" Class="me-2" />
-                        Всі @_tourToDelete.Questions.Count запитань туру будуть видалені.
+                        Всі @_tourToDelete.Questions.Count запитань @(IsShvager ? "теми" : "туру") будуть видалені.
                     </p>
                 </div>
                 <div class="modal-footer">
@@ -580,7 +607,7 @@
                     <button type="button" class="btn-close" @onclick="CancelDeleteQuestion"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Ви впевнені, що хочете видалити <strong>Запитання @_questionToDelete.Number</strong>?</p>
+                    <p>Ви впевнені, що хочете видалити <strong>@(IsShvager ? $"запитання за {_questionToDelete.Number}" : $"Запитання {_questionToDelete.Number}")</strong>?</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CancelDeleteQuestion">Скасувати</button>
@@ -627,6 +654,37 @@
     </div>
 }
 
+<!-- Shvager Publish Warnings Modal -->
+@if (_showPublishWarningsModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Публікація з зауваженнями</h5>
+                    <button type="button" class="btn-close" @onclick="CancelPublishWithWarnings"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Пакет має неповні теми:</p>
+                    <ul class="mb-3">
+                        @foreach (var warning in _publishWarnings)
+                        {
+                            <li>
+                                <Icon Name="exclamation-triangle" Class="text-warning me-1" />@warning
+                            </li>
+                        }
+                    </ul>
+                    <p class="mb-0">Опублікувати пакет попри зауваження?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelPublishWithWarnings">Скасувати</button>
+                    <button type="button" class="btn btn-warning" @onclick="ConfirmPublishWithWarnings">Опублікувати все одно</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Question Editor Modal -->
 @if (_showQuestionEditor && _editingQuestion != null && _editingTour != null)
 {
@@ -635,8 +693,16 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        Запитання @_editingQuestion.Number
-                        <span class="text-muted">(Тур @_editingTour.Number)</span>
+                        @if (IsShvager)
+                        {
+                            <text>Запитання за @_editingQuestion.Number</text>
+                            <span class="text-muted">(@_editingTour.ThemeDisplayName)</span>
+                        }
+                        else
+                        {
+                            <text>Запитання @_editingQuestion.Number</text>
+                            <span class="text-muted">(Тур @_editingTour.Number)</span>
+                        }
                     </h5>
                     <div class="ms-auto me-3">
                         <button class="btn btn-outline-secondary btn-sm me-1"
@@ -653,7 +719,7 @@
                         {
                             <button class="btn btn-outline-success btn-sm ms-1"
                                     @onclick="CreateAndNavigateToNextQuestion"
-                                    title="Створити нове запитання в цьому турі">
+                                    title="@(IsShvager ? "Створити нове запитання в цій темі" : "Створити нове запитання в цьому турі")">
                                 <Icon Name="plus" /> Створити наступне
                             </button>
                         }
@@ -663,24 +729,31 @@
                 <div class="modal-body">
                     <div class="row g-2">
                         <div class="col-md-2">
-                            <label class="col-form-label">Номер</label>
+                            <label class="col-form-label">@(IsShvager ? "Вартість" : "Номер")</label>
                         </div>
                         <div class="col-md-10">
                             <input type="text" class="form-control" style="max-width: 100px;"
                                    @bind="_editingQuestion.Number" @onblur="SaveEditingQuestionAsync"
-                                   disabled="@(_package?.NumberingMode != QuestionNumberingMode.Manual)" />
-                            @if (_package?.NumberingMode != QuestionNumberingMode.Manual)
+                                   disabled="@(IsShvager || _package?.NumberingMode != QuestionNumberingMode.Manual)" />
+                            @if (IsShvager)
+                            {
+                                <small class="text-muted">Вартість призначається автоматично за позицією</small>
+                            }
+                            else if (_package?.NumberingMode != QuestionNumberingMode.Manual)
                             {
                                 <small class="text-muted">Автоматична нумерація</small>
                             }
                         </div>
-                        <div class="col-md-2">
-                            <label class="col-form-label">Вказівка ведучому</label>
-                        </div>
-                        <div class="col-md-10">
-                            <textarea class="form-control auto-expand" placeholder="Інструкції для ведучого/організатора"
-                                      @bind="_editingQuestion.HostInstructions" @onblur="SaveEditingQuestionAsync"></textarea>
-                        </div>
+                        @if (!IsShvager)
+                        {
+                            <div class="col-md-2">
+                                <label class="col-form-label">Вказівка ведучому</label>
+                            </div>
+                            <div class="col-md-10">
+                                <textarea class="form-control auto-expand" placeholder="Інструкції для ведучого/організатора"
+                                          @bind="_editingQuestion.HostInstructions" @onblur="SaveEditingQuestionAsync"></textarea>
+                            </div>
+                        }
                         <div class="col-md-2">
                             <label class="col-form-label">Роздатковий матеріал</label>
                         </div>
@@ -782,6 +855,16 @@
                             <textarea class="form-control auto-expand"
                                       @bind="_editingQuestion.RejectedAnswers" @onblur="SaveEditingQuestionAsync"></textarea>
                         </div>
+                        @if (IsShvager)
+                        {
+                            <div class="col-md-2">
+                                <label class="col-form-label">Форма</label>
+                            </div>
+                            <div class="col-md-10">
+                                <textarea class="form-control auto-expand" placeholder="Форма відповіді, напр. «таку назву»"
+                                          @bind="_editingQuestion.AnswerForm" @onblur="SaveEditingQuestionAsync"></textarea>
+                            </div>
+                        }
                         <div class="col-md-2">
                             <label class="col-form-label">Коментар</label>
                         </div>
@@ -892,7 +975,20 @@
     [Parameter]
     public int? Id { get; set; }
 
+    /// <summary>Game type for a newly created package (query string, e.g. /manage/package?type=Shvager).</summary>
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeParam { get; set; }
+
     private Package? _package;
+
+    private bool IsShvager => _package?.Type == PackageType.Shvager;
+
+    private string AddTourLabel => IsShvager ? "Додати тему" : "Додати тур";
+
+    private string TourEditorsLabel => IsShvager ? "Автори теми" : "Редактори туру";
+
+    // Shvager rows have an extra theme-title column, so the editors column is narrower
+    private string TourEditorsColumnClass => IsShvager ? "col-md-6" : "col-md-8";
     private bool _isLoading = true;
     private string? _errorMessage;
     private string? _userId;
@@ -923,6 +1019,10 @@
     private Question? _editingQuestion;
     private Tour? _editingTour;
     private string? _questionSaveStatus;
+
+    // Shvager publish warnings modal
+    private bool _showPublishWarningsModal;
+    private List<string> _publishWarnings = [];
 
     // Media upload state
     private bool _isUploadingHandout;
@@ -1495,6 +1595,9 @@
                 _package = new Package
                 {
                     Title = "Новий пакет",
+                    Type = Enum.TryParse<PackageType>(TypeParam, ignoreCase: true, out var type) && Enum.IsDefined(type)
+                        ? type
+                        : PackageType.Www,
                     Description = null,
                     PlayedFrom = null,
                     PlayedTo = null,
@@ -1735,37 +1838,97 @@
         }
     }
 
-    private async Task OnStatusChanged(ChangeEventArgs e)
+    private async Task OnStatusSet(PackageStatus newStatus)
     {
         if (_package == null) return;
 
-        if (Enum.TryParse<PackageStatus>(e.Value?.ToString(), out var newStatus))
+        // Soft validation on publishing a Своя гра package: warn (don't block) about
+        // incomplete themes. Status is applied only after the user confirms; until then
+        // _package.Status stays unchanged and the bound select reverts.
+        if (newStatus == PackageStatus.Published
+            && _package.Status != PackageStatus.Published
+            && IsShvager)
         {
-            var wasPublished = _package.Status == PackageStatus.Published;
-            var willBePublished = newStatus == PackageStatus.Published;
-            _package.Status = newStatus;
-
-            // Auto-set publication date when publishing for the first time
-            if (newStatus == PackageStatus.Published && !_package.PublicationDate.HasValue)
+            var warnings = GetShvagerPublishWarnings();
+            if (warnings.Count > 0)
             {
-                _package.PublicationDate = DateTime.UtcNow;
-            }
-
-            await SavePackageWithPublicationDateAsync();
-
-            // Invalidate cache when package is published or unpublished
-            if (wasPublished != willBePublished)
-            {
-                PackageListService.InvalidateCache();
-                TagService.InvalidatePopularTagsCache();
-            }
-
-            // Notify Telegram channel on first publish
-            if (!wasPublished && willBePublished)
-            {
-                await TelegramNotification.NotifyPackagePublished(_package.Id);
+                _publishWarnings = warnings;
+                _showPublishWarningsModal = true;
+                return;
             }
         }
+
+        await ApplyStatusChange(newStatus);
+    }
+
+    private async Task ApplyStatusChange(PackageStatus newStatus)
+    {
+        if (_package == null) return;
+
+        var wasPublished = _package.Status == PackageStatus.Published;
+        var willBePublished = newStatus == PackageStatus.Published;
+        _package.Status = newStatus;
+
+        // Auto-set publication date when publishing for the first time
+        if (newStatus == PackageStatus.Published && !_package.PublicationDate.HasValue)
+        {
+            _package.PublicationDate = DateTime.UtcNow;
+        }
+
+        await SavePackageWithPublicationDateAsync();
+
+        // Invalidate cache when package is published or unpublished
+        if (wasPublished != willBePublished)
+        {
+            PackageListService.InvalidateCache();
+            TagService.InvalidatePopularTagsCache();
+        }
+
+        // Notify Telegram channel on first publish
+        if (!wasPublished && willBePublished)
+        {
+            await TelegramNotification.NotifyPackagePublished(_package.Id);
+        }
+    }
+
+    /// <summary>
+    /// Collects non-blocking warnings for publishing a Своя гра package:
+    /// themes without a title and themes with a non-canonical question count (≠5).
+    /// </summary>
+    private List<string> GetShvagerPublishWarnings()
+    {
+        var warnings = new List<string>();
+        if (_package == null) return warnings;
+
+        foreach (var theme in _package.Tours.OrderBy(t => t.OrderIndex))
+        {
+            if (string.IsNullOrWhiteSpace(theme.Title))
+            {
+                warnings.Add($"Тема {theme.Number} не має назви");
+            }
+
+            if (theme.Questions.Count != 5)
+            {
+                warnings.Add($"{theme.ThemeDisplayName}: {theme.Questions.Count} запитань замість 5");
+            }
+        }
+
+        return warnings;
+    }
+
+    private async Task ConfirmPublishWithWarnings()
+    {
+        _showPublishWarningsModal = false;
+        _publishWarnings = [];
+        await ApplyStatusChange(PackageStatus.Published);
+        StateHasChanged();
+    }
+
+    private void CancelPublishWithWarnings()
+    {
+        // Status was never changed — closing the modal re-renders the select with the current value
+        _showPublishWarningsModal = false;
+        _publishWarnings = [];
     }
 
     private async Task OnPublicationDateChanged(ChangeEventArgs e)
@@ -1824,6 +1987,7 @@
         {
             // Trim whitespaces from text fields
             tour.Number = tour.Number.Trim();
+            tour.Title = TextNormalizer.Normalize(tour.Title);
             tour.Preamble = tour.Preamble?.Trim();
             tour.Comment = tour.Comment?.Trim();
 
@@ -1834,6 +1998,7 @@
             if (dbTour != null)
             {
                 dbTour.Number = tour.Number;
+                dbTour.Title = tour.Title;
                 dbTour.Preamble = tour.Preamble;
                 dbTour.Comment = tour.Comment;
 
@@ -1862,6 +2027,7 @@
     private async Task AddWarmupTourAsync()
     {
         if (_package == null) return;
+        if (_package.Type == PackageType.Shvager) return;
         if (_package.Tours.Any(t => t.Type == TourType.Warmup)) return;
 
         try
@@ -1941,7 +2107,7 @@
 
             _package.Tours.Add(tour);
             _expandedTours.Add(tour.Id);
-            _saveStatus = "Тур додано";
+            _saveStatus = IsShvager ? "Тему додано" : "Тур додано";
             _needsSortableInit = true;
         }
         catch (Exception ex)
@@ -1992,7 +2158,7 @@
 
             _showDeleteTourModal = false;
             _tourToDelete = null;
-            _saveStatus = "Тур видалено";
+            _saveStatus = IsShvager ? "Тему видалено" : "Тур видалено";
         }
         catch (Exception ex)
         {
@@ -2029,8 +2195,15 @@
 
             var newOrderIndex = tour.Questions.Count;
 
-            // If a block is specified, use block editors; otherwise use tour editors
-            var editors = block?.Editors ?? tour.Editors;
+            // Author prefill: block editors, else tour/theme editors, else package-level
+            // editors (SharedEditors) — most Своя гра packages have one global author
+            var editors = block?.Editors is { Count: > 0 } blockEditors
+                ? blockEditors
+                : tour.Editors.Count > 0
+                    ? tour.Editors
+                    : _package.SharedEditors
+                        ? _package.PackageEditors
+                        : tour.Editors;
 
             var question = new Question
             {
@@ -2167,6 +2340,7 @@
             _editingQuestion.HandoutText = TextNormalizer.Normalize(_editingQuestion.HandoutText);
             _editingQuestion.AcceptedAnswers = TextNormalizer.Normalize(_editingQuestion.AcceptedAnswers);
             _editingQuestion.RejectedAnswers = TextNormalizer.Normalize(_editingQuestion.RejectedAnswers);
+            _editingQuestion.AnswerForm = TextNormalizer.Normalize(_editingQuestion.AnswerForm);
             _editingQuestion.Comment = TextNormalizer.Normalize(_editingQuestion.Comment);
             // Source is not normalized for apostrophes as it may contain URLs
             _editingQuestion.Source = TextNormalizer.NormalizeExcludingApostrophes(_editingQuestion.Source);
@@ -2184,6 +2358,7 @@
                 dbQuestion.HandoutText = _editingQuestion.HandoutText;
                 dbQuestion.AcceptedAnswers = _editingQuestion.AcceptedAnswers;
                 dbQuestion.RejectedAnswers = _editingQuestion.RejectedAnswers;
+                dbQuestion.AnswerForm = _editingQuestion.AnswerForm;
                 dbQuestion.Comment = _editingQuestion.Comment;
                 dbQuestion.Source = _editingQuestion.Source;
 
@@ -2772,6 +2947,9 @@
     private async Task OnTourTypeChanged(Tour tour, TourType newType)
     {
         if (_package == null) return;
+
+        // Special tour types are a Що?Де?Коли? concept; Своя гра themes are always Regular
+        if (_package.Type == PackageType.Shvager && newType != TourType.Regular) return;
 
         try
         {

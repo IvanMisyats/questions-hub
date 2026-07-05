@@ -57,6 +57,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(p => p.SourceUrl).HasMaxLength(2000);
             entity.Property(p => p.Description).HasMaxLength(2000);
             entity.Property(p => p.Status).HasDefaultValue(PackageStatus.Draft);
+            entity.Property(p => p.Type).HasDefaultValue(PackageType.Www);
             entity.Property(p => p.NumberingMode).HasDefaultValue(QuestionNumberingMode.Global);
             entity.Property(p => p.SharedEditors).HasDefaultValue(false);
 
@@ -85,6 +86,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Number).IsRequired().HasMaxLength(50);
+            entity.Property(t => t.Title).HasMaxLength(200);
             entity.Property(t => t.Preamble);
             entity.Property(t => t.Comment).HasMaxLength(2000);
             entity.Property(t => t.OrderIndex).HasDefaultValue(0);
@@ -130,6 +132,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.Property(q => q.Answer).IsRequired().HasMaxLength(1000);
             entity.Property(q => q.AcceptedAnswers).HasMaxLength(1000);
             entity.Property(q => q.RejectedAnswers).HasMaxLength(1000);
+            entity.Property(q => q.AnswerForm).HasMaxLength(1000);
             entity.Property(q => q.HandoutUrl).HasMaxLength(500);
             entity.Property(q => q.CommentAttachmentUrl).HasMaxLength(500);
 
@@ -176,6 +179,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasKey(j => j.Id);
 
             entity.Property(j => j.OwnerId).IsRequired();
+            entity.Property(j => j.Type).HasDefaultValue(PackageType.Www);
             entity.Property(j => j.InputFileName).IsRequired().HasMaxLength(500);
             entity.Property(j => j.InputFilePath).IsRequired().HasMaxLength(1000);
             entity.Property(j => j.ConvertedFilePath).HasMaxLength(1000);

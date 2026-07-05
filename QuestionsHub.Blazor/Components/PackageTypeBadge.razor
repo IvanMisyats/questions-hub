@@ -1,0 +1,30 @@
+@*
+    Game-type badge for a package (ЩДК / Своя гра).
+    Usage: <PackageTypeBadge Type="package.Type" Class="ms-2" />
+*@
+
+<span class="badge @BadgeColorClass @Class" title="@Type.DisplayName()">@Label</span>
+
+@code {
+    /// <summary>
+    /// The game type to display.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required PackageType Type { get; set; }
+
+    /// <summary>
+    /// Additional CSS classes for the badge (e.g., Bootstrap spacing utilities).
+    /// </summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>
+    /// When true, shows the full game name («Що?Де?Коли?») instead of the short one («ЩДК»).
+    /// </summary>
+    [Parameter]
+    public bool FullName { get; set; }
+
+    private string Label => FullName ? Type.DisplayName() : Type.ShortName();
+
+    private string BadgeColorClass => Type == PackageType.Shvager ? "bg-success" : "bg-primary";
+}

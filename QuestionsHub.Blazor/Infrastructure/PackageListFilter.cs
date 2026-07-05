@@ -1,3 +1,5 @@
+using QuestionsHub.Blazor.Domain;
+
 namespace QuestionsHub.Blazor.Infrastructure;
 
 /// <summary>
@@ -28,6 +30,7 @@ public enum SortDirection
 /// <param name="TitleSearch">Partial title match (case-insensitive). Null or empty means no filter.</param>
 /// <param name="EditorId">Filter by editor ID. Null means no filter (all editors).</param>
 /// <param name="TagId">Filter by tag ID. Null means no filter (all tags).</param>
+/// <param name="Type">Filter by game type. Null means no filter (both types).</param>
 /// <param name="SortField">Field to sort by.</param>
 /// <param name="SortDir">Sort direction.</param>
 /// <param name="Page">1-based page number.</param>
@@ -36,6 +39,7 @@ public record PackageListFilter(
     string? TitleSearch = null,
     int? EditorId = null,
     int? TagId = null,
+    PackageType? Type = null,
     PackageSortField SortField = PackageSortField.PublicationDate,
     SortDirection SortDir = SortDirection.Desc,
     int Page = 1,
@@ -48,10 +52,12 @@ public record PackageListFilter(
 public record PackageCardDto(
     int Id,
     string Title,
+    PackageType Type,
     string? Description,
     DateTime? PublicationDate,
     DateOnly? PlayedFrom,
     DateOnly? PlayedTo,
+    int ToursCount,
     int QuestionsCount,
     List<EditorBriefDto> Editors,
     List<TagBriefDto> Tags

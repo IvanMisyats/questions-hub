@@ -7,7 +7,7 @@
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
 
-<PageTitle>Запитання @(_question?.Number ?? "") - База українських запитань</PageTitle>
+<PageTitle>@PageTitleText - База українських запитань</PageTitle>
 
 @if (_notFound)
 {
@@ -35,11 +35,21 @@ else
                 <div class="card question-detail-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
+                            <PackageTypeBadge Type="_question.Tour.Package.Type" Class="me-2" />
                             <a href="/package/@_question.Tour.PackageId" class="text-decoration-none fw-bold">@_question.Tour.Package.Title</a>
                             <span class="text-muted mx-2">·</span>
-                            <span class="text-muted">Тур @_question.Tour.Number</span>
-                            <span class="text-muted mx-2">·</span>
-                            <span class="text-muted">Запитання @_question.Number</span>
+                            @if (_question.Tour.Package.Type == PackageType.Shvager)
+                            {
+                                <span class="text-muted">@_question.Tour.ThemeDisplayName</span>
+                                <span class="text-muted mx-2">·</span>
+                                <span class="text-muted">@_question.Number</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Тур @_question.Tour.Number</span>
+                                <span class="text-muted mx-2">·</span>
+                                <span class="text-muted">Запитання @_question.Number</span>
+                            }
                         </div>
                         <a href="/package/@_question.Tour.PackageId#question-@_question.Id"
                            class="btn btn-sm btn-outline-primary">
@@ -74,6 +84,12 @@ else
     private Question? _question;
     private bool _notFound;
     private bool _isAdult;
+
+    private string PageTitleText => _question == null
+        ? "Запитання"
+        : _question.Tour.Package.Type == PackageType.Shvager
+            ? $"{_question.Tour.ThemeDisplayName} · {_question.Number}"
+            : $"Запитання {_question.Number}";
 
     protected override async Task OnInitializedAsync()
     {

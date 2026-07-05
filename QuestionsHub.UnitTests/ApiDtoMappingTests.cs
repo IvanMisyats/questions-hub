@@ -42,6 +42,14 @@ public class ApiDtoMappingTests
     }
 
     [Theory]
+    [InlineData(QuestionsHub.Blazor.Domain.PackageType.Www, "www")]
+    [InlineData(QuestionsHub.Blazor.Domain.PackageType.Shvager, "shvager")]
+    public void ToGameTypeString_ConvertsCorrectly(QuestionsHub.Blazor.Domain.PackageType type, string expected)
+    {
+        SearchController.ToGameTypeString(type).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(null, "https://example.com", null)]
     [InlineData("", "https://example.com", null)]
     [InlineData("/media/image.jpg", "https://example.com", "https://example.com/media/image.jpg")]

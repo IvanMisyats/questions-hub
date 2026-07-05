@@ -2,7 +2,10 @@
 
 ## Overview
 
-**Questions Hub** (База українських запитань "Що?Де?Коли?") is an online database of Ukrainian questions for the intellectual game "What? Where? When?" (Що?Де?Коли?).
+**Questions Hub** (База українських запитань) is an online database of Ukrainian questions for intellectual games. It hosts packages of two game types:
+
+- **Що?Де?Коли? (ЩДК / WWW)** — team game; packages consist of tours of sequentially numbered questions.
+- **Своя гра (Shvager / свояк)** — buzzer game for 3–4 players; packages consist of themes of 5 questions valued 10–50. Game rules and source-format reference: [shvager.md](shvager.md).
 
 **Purpose**: Provide a structured, searchable repository of game questions for players, editors, and game organizers in Ukraine.
 
@@ -14,7 +17,29 @@
 
 **Language**: Ukrainian (uk-UA)
 
-**Last Updated**: January 22, 2026
+**Branding**: Site name is game-neutral — «База українських запитань» (top bar, page titles, emails); nav sidebar brand is «База запитань». Game names appear as type labels, tabs, and badges only.
+
+**Last Updated**: July 2, 2026
+
+---
+
+## Game Types
+
+Every package has exactly one type, chosen at creation/import and immutable afterwards. It must always be obvious which type of package/question the user is looking at — every package card, package page, question card, and search result carries a type badge (ЩДК / Своя гра).
+
+| Aspect | Що?Де?Коли? | Своя гра |
+|---|---|---|
+| Package children | Tours (Тури) | Themes (Теми) |
+| Container display | «Тур 1», «Розминка», «Перестрілка» | «Тема 1. {Назва}» — themes have titles |
+| Optional sub-grouping | Blocks (Блоки) | — (not applicable) |
+| Questions per container | Any number | Canonically 5 |
+| Question identifier | Number («1», «2», … per NumberingMode) | Value («10»–«50»), derived from position |
+| Numbering modes | Global / PerTour / Manual | Not applicable (values are fixed by position) |
+| Special tours | Warmup (Розминка), Shootout (Перестрілка) | Not applicable |
+| Question fields | Text, Answer, Залік, Незалік, Коментар, Джерело, Вказівка ведучому, handouts | Same minus Вказівка ведучому, plus **Форма** (answer-form hint) |
+| Import source | DOCX (tour-based formats), .qhub | DOCX (theme-based formats), .qhub |
+
+Both types share: statuses (Draft/Published/Archived), access levels, owners, editors/authors, tags (including 18+), media handling, search infrastructure, and the public API.
 
 ---
 
@@ -24,8 +49,8 @@
 |-------|------------|
 | Backend | C#, ASP.NET Core, Blazor Server |
 | Frontend | HTML, CSS, Bootstrap, Blazor Components |
-| Database | PostgreSQL with Entity Framework Core |
-| Authentication | ASP.NET Core Identity |
+| Database | PostgreSQL with Entity Framework Core (Ukrainian FTS: hunspell dictionary, tsvector, pg_trgm) |
+| Authentication | ASP.NET Core Identity (+ API keys for public API) |
 | Containerization | Docker, Docker Compose |
 
 ---
@@ -34,44 +59,35 @@
 
 ### Core Entities
 
-- **Package (Пакет запитань)** - A collection of questions prepared for a tournament
+- **Package (Пакет запитань)** - A collection of questions prepared for a tournament or a game
+  - Has **Type**: `Www` or `Shvager` — the game type discriminator; set at creation/import, never changed
   - Has owner (User who created it)
   - Has status: Draft, Published, or Archived
   - Has AccessLevel: All (default), RegisteredOnly, or EditorsOnly - controls who can view the package
   - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
-  - Has NumberingMode: Global (sequential across package), PerTour (restart at 1 each tour), or Manual (user-controlled)
-  - Has SharedEditors flag: when true, editors are defined at package level; when false, computed from tour/block editors
-  - Has optional PackageEditors (many-to-many with Authors) - used when SharedEditors is true
-  - Editors property returns PackageEditors when SharedEditors is true, otherwise computed from all tour/block editors
-- **Tour (Тур)** - A round within a package, typically prepared by a specific editor
-  - Has OrderIndex for ordering within package (0-based, source of truth for order)
-  - Has Number for display (e.g., "1", "2", "0" for warmup)
-  - Has IsWarmup flag (at most one warmup tour per package, always first if present)
-  - Has optional Preamble (Преамбула) - info from editors, usually contains testers list
-  - Has many-to-many relationship with Authors (as Editors)
-  - Can optionally contain Blocks (0-6 blocks per tour)
-  - When tour has blocks, tour editors are computed from block editors
-- **Block (Блок)** - Optional grouping within a tour (rare feature)
-  - Has OrderIndex for ordering within tour (0-based)
-  - Has optional Name (defaults to "Блок редактора: {editors names}")
-  - Has optional Preamble (Преамбула)
-  - Has many-to-many relationship with Authors (as Editors)
-  - Questions can optionally belong to a block (BlockId nullable)
-  - When first block is created, all existing questions are moved to it
-  - A tour can have both questions in blocks and "orphan" questions outside blocks
-- **Question (Запитання)** - A single question with answer, handouts, and metadata
-  - Has OrderIndex for physical ordering within tour (0-based, unique within tour)
-  - Has Number for display (auto-assigned based on package NumberingMode, or user-editable in Manual mode)
-  - Has optional HostInstructions (Вказівка ведучому) for organizer guidance
-  - Has many-to-many relationship with Authors
-  - Has optional BlockId (when tour uses blocks, null means question is outside any block)
-- **Author (Автор/Редактор)** - A person who creates questions or edits tours
-  - Has FirstName (Ім'я) and LastName (Прізвище)
-  - Unique constraint on (FirstName, LastName)
-  - Can be linked to multiple Questions, Tours, and Blocks
-  - Can be linked to a User account (optional one-to-one relationship)
+  - Has NumberingMode: Global / PerTour / Manual — **ЩДК only**; ignored (and hidden in UI) for Shvager packages
+  - Has SharedEditors flag: when true, editors are defined at package level; when false, computed from tour/block editors (applies to both types)
+  - Has Tags (many-to-many), including the special 18+ tag that blurs content
+- **Tour (Тур / Тема)** - A round within a ЩДК package, or a theme within a Shvager package
+  - Has OrderIndex (0-based, source of truth for order) and Number for display
+  - Has optional **Title** — the theme name; used by Shvager (required for a complete theme), null for ЩДК
+  - Has Type: Regular / Warmup / Shootout — **ЩДК only**; Shvager themes are always Regular
+  - Has optional Preamble; has many-to-many Editors (for Shvager these are the theme authors)
+  - Can optionally contain Blocks — **ЩДК only**
+- **Block (Блок)** - Optional grouping within a ЩДК tour (rare feature). Not applicable to Shvager.
+- **Question (Запитання)** - A single question
+  - Has OrderIndex (0-based, unique within tour) and Number for display
+    - ЩДК: Number assigned per package NumberingMode
+    - Shvager: Number holds the **value** — «10»/«20»/«30»/«40»/«50», auto-derived from position within the theme: `(OrderIndex + 1) × 10`
+  - Has Text and Answer (required); optional Залік (AcceptedAnswers), Незалік (RejectedAnswers), Comment, Source, handout text/media, comment attachment
+  - Has optional HostInstructions (Вказівка ведучому) — ЩДК only
+  - Has optional **AnswerForm (Форма)** — answer-form hint (e.g. «таку назву», «цих предметів») — Shvager only
+  - Has many-to-many Authors
+  - Has DB-generated search columns (SearchTextNorm, SearchVector) — identical for both types
+- **Author (Автор/Редактор)** - A person who creates questions or edits tours/themes
+  - Unique on (FirstName, LastName); can be linked to a User account
+  - Statistics are tracked **per game type** (see Authors pages)
 - **User (Користувач)** - Application user with profile information
-  - Can be linked to an Author entity (for Editors)
 
 ---
 
@@ -80,288 +96,164 @@
 ### 1. Home Page (Головна сторінка)
 **Route**: `/`
 
-Displays package cards in a responsive grid with total count. Packages ordered by play date (newest first). Clicking a card navigates to package detail page.
+Two **type tabs** above the content: «Що?Де?Коли?» (default) and «Своя гра». The active tab persists in the query string (`?type=shvager`) so views are shareable. Each tab shows:
+
+- Popular-tag pill row and filter panel (package title search, editor dropdown, sort by publication/play date) — filters apply within the active tab
+- Total count for the active type
+- Responsive card grid of published packages (24/page, paginated), ordered by play date (newest first)
+
+Package cards carry a type badge. ЩДК cards show question count («N запитань»); Shvager cards show theme and question counts («N тем · M запитань»).
 
 ### 2. Package Detail Page (Сторінка пакету)
 **Route**: `/package/{id}`
 
-Displays full package with all tours and questions on a single scrollable page. Left sidebar provides quick navigation to any tour or question with smooth scrolling.
+Single scrollable page with the full package; a prominent type badge sits next to the title. Left sidebar (TourNavigation) provides quick navigation with smooth scrolling. «Показати всі відповіді» toggles all answers.
+
+**ЩДК rendering**: tours headed «Розминка» / «Тур N» / «Перестрілка», optional blocks, questions headed «Запитання N».
+
+**Shvager rendering**: themes headed «Тема N. {Назва}» with theme authors and preamble; questions headed by their **value badge** (10/20/30/40/50). The sidebar lists theme titles.
 
 ### 3. Question Card Component
 
-Displays question with host instructions (Вказівка ведучому) if present, followed by handout materials (text, images, video, audio). Toggle button shows/hides answer section with correct answer, accepted/rejected alternatives, commentary, sources, and authors.
+Displays a question with (if present) host instructions, handout materials (text, images, video, audio), and the question text. A toggle reveals the spoilered answer section: Відповідь, Залік, Незалік, **Форма** (Shvager), Коментар, comment attachment, Джерело (auto-linkified), Автор(и). 18+ packages blur content until revealed (per-package, remembered client-side).
 
-### 4. User Authentication
+### 4. Question Permalink (Сторінка запитання)
+**Route**: `/question/{id}`
 
-#### 4.1 Registration (Реєстрація)
-**Route**: `/Account/Register`
+Single-question card with breadcrumb: ЩДК — «{Пакет} · Тур N · Запитання M»; Shvager — «{Пакет} · Тема «{Назва}» · {value}». Carries the type badge.
 
-Registration form with first name, last name, city, team, email, and password. New users automatically assigned "User" role. Email confirmation required before login.
-
-**Email Confirmation Flow**:
-1. User submits registration form
-2. Confirmation email sent via Mailjet
-3. User clicks link in email to confirm
-4. User can now login
-
-**Related Pages**:
-- `/Account/RegisterConfirmation` - Shows "check your email" message
-- `/Account/ConfirmEmail` - Processes confirmation link
-- `/Account/ResendConfirmation` - Resend confirmation email
-
-#### 4.2 Login (Вхід)
-**Route**: `/Account/Login`
-
-Email and password authentication with "Remember Me" option. Account lockout after 5 failed attempts. "Forgot Password" link for password reset.
-
-#### 4.3 Logout (Вихід)
-**Route**: `/Account/Logout` or `/api/Auth/logout`
-
-Ends user session and redirects to home page.
-
-#### 4.4 User Profile (Мій профіль)
-**Route**: `/Account/Profile`
-
-**Authorization**: Requires authentication
-
-View and edit profile information. City and Team are editable; First name, Last name, and Email are read-only.
-
-#### 4.5 Password Reset (Скидання пароля)
-
-**Forgot Password Page**: `/Account/ForgotPassword`
-- User enters email address
-- System sends password reset link via Mailjet
-- Link is valid for 24 hours
-
-**Reset Password Page**: `/Account/ResetPassword`
-- User enters email and new password
-- Password must meet security requirements
-- On success, user can login with new password
-
-#### 4.6 Login Display Component
-
-Shows login/register buttons for anonymous users. For authenticated users, shows user's name with dropdown menu containing:
-- **Мій профіль** - User profile page
-- **Мої пакети** - Package management (Editors and Admins only)
-- **Редактори** - Editors list (Editors and Admins only)
-- **Користувачі** - User management (Admins only)
-- **Вийти** - Logout
-
-### 5. Navigation & Layout
-
-Responsive design with sidebar and main content area. Fixed header with site title, search bar placeholder (not functional), and login/user display. Tour navigation sidebar on package detail page with collapsible groups and smooth scroll.
-
-### 6. User Roles
-
-| Role | Description |
-|------|-------------|
-| Anonymous | View published packages |
-| User | View all published packages, edit own profile (default for new users) |
-| Editor | Create/edit own packages, view own draft packages |
-| Admin | Manage all packages regardless of owner, full access |
-
-### 7. Media Support
-
-Supports images (.jpg, .jpeg, .png, .gif, .webp, .svg), videos (.mp4, .webm, .ogg), and audio (.mp3, .wav, .ogg, .m4a) with lazy loading and caching.
-
-### 8. Database Seeding
-
-On startup: creates roles (Admin, Editor, User), creates admin user from environment variables, seeds sample packages if database is empty.
-
-### 9. Package Management (CRUD)
-
-**Authorization**: Requires Editor or Admin role
-
-#### 9.1 Package List (Мої пакети)
-**Route**: `/manage/packages`
-
-Displays list of packages owned by the current user (Editors see only their own; Admins see all). Shows package title, play date, tour count, question count, status, and owner (for Admins). Actions: create new, edit, delete with confirmation.
-
-#### 9.2 Package Editor (Редагування пакету)
-**Route**: `/manage/package/{id}`
-
-Single-page editor for complete package management:
-
-**Package Properties**:
-- Title, description, play date, status (Draft/Published/Archived)
-- **Numbering Mode** - Controls how question numbers are assigned:
-  - **Global (Наскрізна)** - Questions numbered sequentially across all main tours (1, 2, 3...)
-  - **PerTour (Потурова)** - Questions numbered starting from 1 in each tour
-  - **Manual (Ручна)** - Question numbers are not auto-assigned; user can edit them directly
-- **Shared Editors** - "Спільні редактори для всіх турів" checkbox:
-  - **Disabled (default)** - Each tour/block has its own editors; package editors are computed from all tour/block editors and displayed as read-only
-  - **Enabled** - All tours share the same editors; editable AuthorSelector at package level; tour-level editor selectors are hidden
-  - When switching to enabled mode, existing tour/block editors are automatically copied to package editors
-- Auto-save on field blur
-
-**Tours Management**:
-- Collapsible accordion showing all tours, ordered by OrderIndex
-- **Warmup checkbox** - Mark a tour as warmup (at most one per package, auto-moved to first position)
-- Inline editing of tour editors (via AuthorSelector component) - hidden when SharedEditors is enabled
-- When SharedEditors is enabled, tours display "(спільні для пакету)" instead of individual editors
-- Tour numbers are auto-assigned: warmup gets "0", main tours get 1, 2, 3...
-- Add/delete tours with confirmation
-- Drag & drop reordering of tours (updates OrderIndex, triggers renumbering)
-
-**Questions Management**:
-- List of questions within each tour, ordered by OrderIndex
-- Add/delete questions with confirmation
-- Question count auto-calculated
-- Drag & drop reordering (within tour, across blocks, or across tours)
-- After any reorder/move operation, questions are automatically renumbered based on package NumberingMode
-- **Blocks support**: When tour has blocks:
-  - Questions are grouped by blocks
-  - "Orphan" questions (not assigned to any block) shown in a separate highlighted section
-  - Orphan questions can be dragged to blocks
-  - When creating a question via "Create next" button, new question inherits the block of the current question
-  - When first block is created, all existing questions are automatically moved to it
-
-**Question Editor Modal**:
-- Number field (read-only unless package is in Manual numbering mode)
-- Full question editing: text, answer, accepted/rejected answers, comment, source, authors (via AuthorSelector)
-- Authors prefilled from tour editors (or block editors if question belongs to a block) when creating new question
-- Prev/Next navigation buttons (including cross-tour navigation by OrderIndex)
-- **"Create next" button** - Creates new question and navigates to it; inherits block from current question if applicable
-- Auto-save on field blur
-- Handout text field and media upload for handout and comment attachments
-
-**Package Status**:
-- **Draft** - Only visible to owner and admins
-- **Published** - Visible based on access level settings
-- **Archived** - Hidden from main list, accessible via direct link
-
-**Package Access Level**:
-- **Всі (All)** - Everyone can access (default)
-- **Зареєстровані користувачі (RegisteredOnly)** - Only registered users with verified email
-- **Лише редактори (EditorsOnly)** - Only users with Editor role
-
-*Note: Admins and package owners always have access regardless of access level.*
-
-### 10. Search (Пошук)
+### 5. Search (Пошук)
 **Route**: `/search` or `/search/{query}`
 
-Full-text search across all published questions with Ukrainian morphology support.
+Full-text search across all published questions of **both game types** with Ukrainian morphology support.
+
+**Type filter**: three-state toggle above the results — «Усі» (default) / «Що?Де?Коли?» / «Своя гра», persisted in the query string (`?type=`).
 
 **Features**:
 - **Ukrainian Morphology** - Finds words in different forms (відмінки, роди, числа)
 - **Accent Insensitive** - Searches ignore Ukrainian accents (А́мундсен = Амундсен)
 - **Typo Tolerance** - Finds results even with spelling mistakes (via trigram matching)
-- **Result Highlighting** - Matched words are highlighted with `<mark>` tags in results
+- **Result Highlighting** - Matched words highlighted with `<mark>` tags
 
-**Search Syntax**:
-- `слово1 слово2` - Both words required (AND)
-- `слово1 OR слово2` - Either word (OR)
-- `"точна фраза"` - Exact phrase match
-- `-слово` - Exclude word from results
+**Search Syntax**: `слово1 слово2` (AND), `слово1 OR слово2`, `"точна фраза"`, `-слово` (exclude).
 
-**Searchable Fields** (in order of priority):
-1. Question Text
-2. Handout Text
-3. Answer
-4. Accepted/Rejected Answers
-5. Comment
-6. Source
+**Searchable Fields**: Question Text, Handout Text, Answer, Accepted/Rejected Answers, Comment. (Theme titles and Форма are **displayed** in Shvager result cards but not matched by the query — possible future upgrade.)
 
-### 10.1 Authors List (Автори)
-**Route**: `/editors`
+**Result cards**: type badge + context line — ЩДК: «{Пакет} · Тур N · Запитання M»; Shvager: «{Пакет} · Тема «{Назва}» · {value}» — plus the question content with highlights and a link to the question's anchor in the package page.
 
-**Authorization**: Public (no authentication required)
+### 6. Authors List (Автори)
+**Route**: `/editors` (paginated)
 
-**Navigation**: Available in left navigation panel (under "Пошук")
+Public list of all authors with **per-type statistics** — separate columns for ЩДК (packages, questions) and Своя гра (packages, questions), ranked by total question count. Only content from published packages is counted.
 
-Displays all Authors in the system, ranked by number of questions (descending).
-
-**Columns**:
-- Name (clickable link to EditorProfile page `/editor/{id}`)
-- Number of packages (where author is editor of at least one tour)
-- Number of questions (where author is listed as question author)
-
-**Important**: Only content from **published packages** is counted. Authors with questions/packages only in Draft or Archived packages will not appear on this list. See [AUTHENTICATION.md](AUTHENTICATION.md#package-access-control) for details.
-
-### 10.2 Author Profile (Профіль автора)
+### 7. Author Profile (Профіль автора)
 **Route**: `/editor/{id}`
 
-**Authorization**: Public (no authentication required)
+Author name, linked-user info, and per-type statistics. Packages the author edited are grouped **by game type** into separate sections; within ЩДК packages with per-tour editors, tour/block links are shown («Пакет → Тур 1 | Тур 2…»); Shvager packages list the author's themes.
 
-Displays detailed information about an author including their packages and questions.
+### 8. User Authentication
 
-**Package List Display**:
-- Shows packages where the author is an editor
-- For packages with **SharedEditors enabled** (global editors): shows only the package name
-- For packages with **SharedEditors disabled** (per-tour editors): shows "Package Name → Тур 1 | Тур 2..." with links to specific tours/blocks where the author is editor
+Registration with email confirmation (Mailjet), login with lockout, logout, password reset via email, and profile editing. Routes under `/Account/*` (Register, Login, Logout, Profile, ForgotPassword, ResetPassword, ConfirmEmail, RegisterConfirmation, ResendConfirmation). Transactional emails use the «База українських запитань» branding.
 
-**Content Visibility**: Only packages and questions from **published packages** are displayed. Content from Draft and Archived packages is hidden to protect unpublished work. See [AUTHENTICATION.md](AUTHENTICATION.md#package-access-control) for details.
+### 9. User Roles
 
-### 11. Admin User Management
+| Role | Description |
+|------|-------------|
+| Anonymous | View published packages (AccessLevel All) |
+| User | View published packages incl. RegisteredOnly, edit own profile |
+| Editor | Create/edit/import own packages of both types |
+| Admin | Manage all packages, users, editors, API keys |
 
-**Authorization**: Admin only (except Editors list which is read-only for Editors)
+### 10. Media Support
 
-#### 11.1 Editors List (Редактори)
-**Route**: `/admin/editors`
+Images (.jpg, .jpeg, .png, .gif, .webp, .svg), videos (.mp4, .webm, .ogg), audio (.mp3, .wav, .ogg, .m4a) with lazy loading and caching. Available to both game types (handouts and comment attachments).
 
-Displays all users with Editor role.
+### 11. Package Management (CRUD)
+**Routes**: `/manage/packages` (list), `/manage/package/{id}` (editor). Requires Editor or Admin role.
 
-**Visible to Editors (read-only)**:
-- Name, City, Linked Author
+#### 11.1 Package List (Мої пакети)
 
-**Visible to Admin**:
-- Name, Email, City, Linked Author
-- "Понизити" button to demote editor
+Single table of the user's packages (Admins see all) with a **type badge column** and a type filter. Shows title, play date, tour/theme count, question count, status, owner (Admins). Creating a package requires choosing its type (ЩДК / Своя гра); the type cannot be changed later. The import section lives on this page (see §12).
 
-#### 11.2 Users List (Користувачі)
-**Route**: `/admin/users`
+#### 11.2 Package Editor (Редагування пакету)
 
-**Authorization**: Admin only
+Single-page editor; the header shows the package's type badge. Common to both types: title, description, play dates, preamble, status, publication date, access level, SharedEditors, tags, auto-save on blur.
 
-Displays all users (except admins) with search functionality.
+**ЩДК mode** (unchanged behavior):
+- NumberingMode select (Наскрізна/Потурова/Ручна) with automatic renumbering
+- Tours accordion: add tour/warmup, per-tour type select (Regular/Warmup/Shootout, at most one warmup — always first, one shootout — always last), editors, preamble, blocks support (split into blocks, per-block editors/preamble, orphan questions), drag & drop reordering of tours and questions with renumbering
+- Question editor modal: Number (editable only in Manual mode), HostInstructions, handout text/media, Text, Answer, Залік, Незалік, Comment + media, Source, authors; prev/next navigation; «Create next»
 
-**Features**:
-- Search by name or email
-- Shows: Name, Email, City, Team, Status/Actions
-- Editors shown with "Редактор" badge
-- Regular users have "Зробити редактором" button
-- When promoting to editor: automatically creates linked Author entity (or links to existing author with same name)
+**Shvager mode**:
+- No NumberingMode select, no warmup/shootout, no blocks
+- Themes accordion: «Додати тему»; each theme has a **Title** input, authors (theme editors), preamble
+- Questions within a theme get values automatically by position (10, 20, 30, 40, 50, …); drag & drop reordering reassigns values; themes reorder freely («Тема N» renumbers)
+- Question editor modal: value (read-only), Text, Answer, Залік, Незалік, **Форма**, Comment + media, Source, handout text/media, authors (no HostInstructions)
+- **Soft validation on publish**: warnings (non-blocking) for themes without a title, themes with ≠5 questions
 
-#### 11.3 Editor Profile (Профіль редактора)
-**Route**: `/editor/{id}`
+**Package Status**: Draft (owner/admin only) → Published (visible per access level) → Archived (hidden from lists, direct link only).
 
-Displays author profile with:
-- Author name
-- Linked user info (name, city visible to all; email visible to admin only)
-- Statistics: number of tours and questions
-- Admin can link/unlink author to user account
+**Package Access Level**: Всі / Зареєстровані користувачі / Лише редактори. Admins and owners always have access.
+
+### 12. Package Import
+
+On `/manage/packages`, the import section offers **two clearly separated upload zones**:
+
+- **Імпорт Що?Де?Коли?** — existing DOCX pipeline (tour-based formats)
+- **Імпорт Своя гра** — Shvager DOCX pipeline (theme-based formats)
+
+The chosen zone determines the parser — no content sniffing for DOCX. `.qhub` files are accepted in either zone; their embedded `gameType` decides the actual type (mismatch with the zone produces a warning).
+
+Imports run as background jobs (queued, progress, retry with backoff, warnings, artifacts for debugging). Imported packages are created as **Draft**. See [PACKAGE_IMPORT.md](PACKAGE_IMPORT.md) and [IMPORT_DEBUGGING.md](IMPORT_DEBUGGING.md).
+
+**Shvager DOCX formats supported** (both must import cleanly; samples in `_shvager/`):
+- **Named-theme format** (2026-style): «Тема: {Назва} ({Автори})» headers (also «Тема.»), «Форма:» label, theme list in preamble
+- **Bare-title format** (2021-style): theme headers are bare title lines; the «Теми:» list in the package header anchors theme detection; per-question «Автор: Ім'я Прізвище (Місто)» lines (city stripped); inline «[Малюнок N {url}]» handout references
+
+Parsed labels: Відповідь, Залік, Незалік, Форма, Коментар, Джерело, Автор. Values must appear in 10→50 order within a theme; deviations produce warnings, not failures.
+
+### 13. Package Export (.qhub)
+**Route**: `GET /api/packages/{id}/export`
+
+Any package can be exported as a `.qhub` archive (ZIP: `package.json` + assets). The format carries `gameType`, theme titles, and the Форма field. See [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md).
+
+### 14. Admin
+
+- `/admin/editors` — editors list (read-only for Editors); promote/demote, author↔user linking
+- `/admin/users` — all users, search, promote to Editor (auto-creates/links Author)
+- `/admin/api-keys` — API key management for the public API
+
+### 15. Public API (v1)
+
+API-key authenticated, CORS-restricted, rate-limited. See [API.md](API.md).
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/v1/packages?type=www\|shvager` | Package list; optional game-type filter; DTOs include `gameType` |
+| GET | `/api/v1/packages/{id}` | Full package; tours carry `title` (themes), questions carry `form` |
+| GET | `/api/v1/search?q=&type=www\|shvager` | Question search; results include `gameType` and `tourTitle` |
+| GET | `/api/v1/editors` | Authors list |
+| GET | `/api/v1/tags/popular` | Popular tags |
+
+Internal (cookie-auth) endpoints: `/api/packages/search` (home filters, incl. `type`), `/api/packages/{id}/export`, `/api/media/*`, `/api/Auth/*`.
+
+### 16. Notifications
+
+Telegram notification on package publish includes the package's game type.
+
+### 17. Database Seeding
+
+On startup: creates roles (Admin, Editor, User), creates admin user from environment variables, seeds sample packages if database is empty.
 
 ---
 
 ## UI/UX Features
 
 - Full Ukrainian interface with Ukrainian date formatting (uk-UA)
-- Responsive mobile-friendly design using Bootstrap
-- Custom error page and form validation
-- **Icon System**: SVG sprite (`icons.svg`) with reusable `Icon.razor` component. Icons inherit text color via `fill: currentColor` and work with Bootstrap utilities. Available icons: check, link, drag, search, close, group, shield-exclamation, person-plus, person-minus. See [ICONS.md](ICONS.md) for details.
-
----
-
-## Future Features (Planned)
-
-### Package Reordering
-Not implemented. Drag-and-drop or button-based reordering of tours within packages and questions within tours.
-
-### Author/Editor Search
-Partially implemented. Authors are now stored as separate entities with unique profiles. Author names are clickable links to `/editor/{id}` profile page. Profile page shows author name, linked user info (city visible to all, email visible to admin only), and statistics (tours and questions count). Admin can link/unlink authors to user accounts. Future: search for packages by author, list of author's works.
-
-### Interactive Play Mode
-Not implemented. Timer-based question display, one question at a time, score tracking for practice sessions.
-
-### Tournament Results
-Not implemented. Upload and store tournament results, team scores, rankings.
-
-### Comments & Ratings
-Not implemented. User comments on questions, rating system for questions and packages, favorites.
-
-
-### Package Access Levels
-Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUsersOnly, Public.
+- Responsive mobile-friendly design using Bootstrap; light/dark theme toggle
+- **Type badges**: consistent `PackageTypeBadge` component (ЩДК / Своя гра) on cards, package pages, question cards, search results, and management tables
+- **Icon System**: SVG sprite (`icons.svg`) with reusable `Icon.razor` component. See [ICONS.md](ICONS.md)
+- Spoilered answers and 18+ blur are pure client-side JS (no server roundtrips)
 
 ---
 
@@ -370,92 +262,50 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 ```
 /QuestionsHub.Blazor/
 ├── Components/
-│   ├── Account/           # Authentication pages (Login, Register, Profile, LoginDisplay, etc.)
-│   ├── Layout/            # Layout components (MainLayout, NavMenu, TopSearchBar)
-│   ├── Pages/             # Main pages
-│   │   ├── Admin/         # Admin pages (Editors, Users)
-│   │   ├── Home.razor     # Home page with package list
-│   │   ├── PackageDetail.razor  # Package view page
-│   │   ├── ManagePackages.razor # Package management list
-│   │   ├── ManagePackageDetail.razor # Package editor
-│   │   ├── EditorProfile.razor  # Author/editor profile page
-│   │   └── Search.razor   # Search page
-│   ├── AddAuthorModal.razor # Modal for creating new authors
-│   ├── AuthorSelector.razor # Multi-select autocomplete for authors/editors
-│   ├── Icon.razor         # Reusable SVG icon component (uses sprite)
-│   ├── QuestionCard.razor # Question display component
-│   └── TourNavigation.razor # Tour sidebar navigation
-├── Controllers/           # API controllers
-│   ├── AuthController.cs  # Authentication endpoints
-│   ├── MediaController.cs # Media upload/delete API
-│   └── Dto/               # Data transfer objects
-├── Data/                  # Database context, seeding, migrations
-├── Domain/                # Domain models (User, Package, Tour, Question, Author)
-├── wwwroot/
-│   ├── app.css            # Global styles
-│   └── icons.svg          # SVG sprite with all UI icons
-└── Infrastructure/        # Utilities and services
-    ├── AuthorUserLinkingService.cs  # Author-User linking operations
-    ├── MediaService.cs    # Media file handling
-    └── SearchService.cs   # Full-text search
+│   ├── Account/           # Authentication pages
+│   ├── Layout/            # MainLayout, NavMenu, TopSearchBar, ThemeToggle
+│   ├── Pages/             # Home, PackageDetail, QuestionDetail, Search, Authors,
+│   │   │                  # EditorProfile, Disclaimer, ManagePackages, ManagePackageDetail
+│   │   └── Admin/         # Editors, Users, ApiKeys
+│   ├── PackageTypeBadge.razor  # Game-type badge (ЩДК / Своя гра)
+│   ├── QuestionCard.razor / QuestionContent.razor
+│   ├── TourNavigation.razor    # Sidebar navigation (tours or themes)
+│   ├── PackageImportSection.razor / ImportWarnings.razor
+│   └── AuthorSelector.razor, TagSelector.razor, Icon.razor, MediaDisplay.razor
+├── Controllers/           # AuthController, MediaController, PackageListController,
+│   │                      # PackageExportController
+│   └── Api/V1/            # PackagesController, SearchController, MetadataController
+├── Data/                  # DbContext, seeding, migrations
+├── Domain/                # Package (Type), Tour (Title), Block, Question (AnswerForm),
+│                          # Author, Tag, PackageImportJob, enums
+├── Infrastructure/
+│   ├── Search/            # SearchService, SearchQueryParser, HighlightSanitizer
+│   ├── Import/            # Job pipeline, DocxExtractor, PackageParser (ЩДК),
+│   │                      # ShvagerParser (Своя гра), QhubExtractor, PackageDbImporter
+│   ├── Export/            # QhubExporter
+│   └── ...                # PackageListService, PackageManagementService,
+│                          # PackageRenumberingService, AuthorService, TagService, MediaService
+└── wwwroot/               # app.css, icons.svg, question-card.js, home-filters.js, ...
 ```
-
----
-
-## API Endpoints
-
-### Authentication API
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/Auth/login` | User login |
-| POST | `/api/Auth/register` | User registration |
-| POST/GET | `/api/Auth/logout` | User logout |
-
-### Media API
-
-**Authorization**: All endpoints require Editor or Admin role
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/media/questions/{id}/{target}` | Upload media for question handout or comment (target: 'handout' or 'comment') |
-| DELETE | `/api/media/questions/{id}/{target}` | Delete media from question handout or comment |
-
-> **Note**: Package, Tour, and Question management is done directly via Blazor Server components using DbContext, not via REST API.
 
 ---
 
 ## Quick Reference: What Works Now
 
-| Feature | Status |
-|---------|--------|
-| View packages list | ✅ Working |
-| View package details | ✅ Working |
-| View questions with answers | ✅ Working |
-| Tour navigation | ✅ Working |
-| Media display (images/video/audio) | ✅ Working |
-| User registration | ✅ Working |
-| Email confirmation | ✅ Working |
-| User login/logout | ✅ Working |
-| Password reset (via email) | ✅ Working |
-| User profile view/edit | ✅ Working |
-| Role-based authorization | ✅ Working |
-| Create/edit/delete packages | ✅ Working |
-| Create/edit/delete tours | ✅ Working |
-| Create/edit/delete questions | ✅ Working |
-| Package ownership & status | ✅ Working |
-| Media upload | ✅ Working |
-| Authors management | ✅ Working |
-| Author profile page | ✅ Working |
-| Author-User linking | ✅ Working |
-| Search | ✅ Working |
-| Admin: view editors list | ✅ Working |
-| Admin: view all users | ✅ Working |
-| Admin: promote user to editor | ✅ Working |
-| Admin: demote editor | ✅ Working |
-| Package access levels | ❌ Not implemented |
-| Interactive play mode | ❌ Not implemented |
-| Comments/ratings | ❌ Not implemented |
+| Feature | ЩДК | Своя гра |
+|---------|-----|----------|
+| View packages list (typed tabs) | ✅ | ✅ |
+| View package details | ✅ | ✅ |
+| View questions with answers | ✅ | ✅ |
+| Search with type filter | ✅ | ✅ |
+| Create/edit packages | ✅ | ✅ |
+| DOCX import | ✅ | ✅ (both format generations) |
+| .qhub import/export | ✅ | ✅ (format 1.1, `gameType`) |
+| Public API | ✅ (`type` filter, `gameType` fields) | ✅ |
+| Author stats per type | ✅ | ✅ |
+| Authentication, roles, media, tags, admin | ✅ shared | ✅ shared |
+| Interactive play mode | ❌ | ❌ |
+| Comments/ratings | ❌ | ❌ |
 
 ---
 
@@ -463,13 +313,14 @@ Not yet implemented. Planned access levels: Private, EditorsOnly, RegisteredUser
 
 | Date | Version | Changes |
 |------|---------|---------|
-| Jan 18, 2026 | 1.9 | Fixed: "Create next" button now inherits block from current question. Added: orphan questions (not in any block) are now visible and can be dragged to blocks |
-| Jan 17, 2026 | 1.8 | Icon system: replaced inline SVGs with centralized SVG sprite (icons.svg) and reusable Icon.razor component |
-| Jan 16, 2026 | 1.7 | Added Block entity: tours can optionally contain blocks, each with its own editors and preamble. Questions can belong to blocks. Updated PackageDetail, EditorProfile, and ManagePackageDetail pages |
-| Jan 10, 2026 | 1.6 | Email integration with Mailjet: email confirmation required for registration, password reset via email |
-| Jan 7, 2026 | 1.5 | New public Authors page (/editors) showing all authors ranked by question count, accessible from left navigation |
-| Jan 5, 2026 | 1.4 | Admin user management: editors list, users list, promote/demote editors, Author-User linking, enhanced editor profile page |
-| Jan 4, 2026 | 1.3 | Added Authors as separate entity with many-to-many relationships, AuthorSelector component, EditorProfile page placeholder |
-| Jan 2026 | 1.2 | Removed unused Package Management REST API (Blazor uses DbContext directly) |
-| Jan 2026 | 1.1 | Added Preamble to Package and Tour, removed Tour Title, Media upload implemented |
+| Jul 2, 2026 | 2.0 | **Dual game types**: Своя гра (Shvager) packages alongside Що?Де?Коли? — PackageType discriminator, themes (Tour.Title), question values, Форма field, typed home tabs, search type filter, split author stats, second importer, .qhub gameType, generic branding. Spec also caught up with shipped features: question permalinks, tags/18+, import pipeline, .qhub export, public API, admin API keys, dark theme |
+| Jan 18, 2026 | 1.9 | «Create next» inherits block; orphan questions visible and draggable to blocks |
+| Jan 17, 2026 | 1.8 | Icon system: centralized SVG sprite + Icon.razor |
+| Jan 16, 2026 | 1.7 | Block entity: optional blocks within tours |
+| Jan 10, 2026 | 1.6 | Mailjet email integration (confirmation, password reset) |
+| Jan 7, 2026 | 1.5 | Public Authors page (/editors) |
+| Jan 5, 2026 | 1.4 | Admin user management, Author-User linking |
+| Jan 4, 2026 | 1.3 | Authors as separate entity, AuthorSelector, EditorProfile |
+| Jan 2026 | 1.2 | Removed unused Package Management REST API |
+| Jan 2026 | 1.1 | Preamble on Package/Tour, removed Tour Title, media upload |
 | Dec 2025 | 1.0 | Initial specification document |

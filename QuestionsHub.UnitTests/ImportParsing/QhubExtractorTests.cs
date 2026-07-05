@@ -1098,4 +1098,126 @@ public class QhubExtractorTests : IDisposable
     }
 
     #endregion
+
+    #region Game Type (format 1.1)
+
+    private static object ShvagerPackageJson(
+        string gameType = "shvager",
+        Dictionary<string, object?>? tourOverrides = null)
+    {
+        var tour = new Dictionary<string, object?>
+        {
+            ["number"] = "1",
+            ["title"] = "Жереб",
+            ["questions"] = new List<object>
+            {
+                new Dictionary<string, object?>
+                {
+                    ["number"] = "10",
+                    ["text"] = "Питання за 10",
+                    ["answer"] = "Відповідь",
+                    ["form"] = "цих предметів"
+                }
+            }
+        };
+
+        if (tourOverrides != null)
+        {
+            foreach (var (key, value) in tourOverrides)
+                tour[key] = value;
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["formatVersion"] = "1.1",
+            ["gameType"] = gameType,
+            ["title"] = "Швагер-пакет",
+            ["tours"] = new List<object> { tour }
+        };
+    }
+
+    [Fact]
+    public async Task Extract_ShvagerGameType_MapsTypeTitleAndForm()
+    {
+        var zip = CreateQhubZip(ShvagerPackageJson());
+        var extractor = CreateExtractor();
+
+        var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        result.Type.Should().Be(PackageType.Shvager);
+        result.Tours.Should().ContainSingle();
+        result.Tours[0].Title.Should().Be("Жереб");
+        result.Tours[0].Questions[0].Form.Should().Be("цих предметів");
+        result.Warnings.Should().NotContain(w => w.Contains("версія формату"));
+    }
+
+    [Fact]
+    public async Task Extract_MissingGameType_DefaultsToWww()
+    {
+        var zip = CreateQhubZip(MinimalPackageJson());
+        var extractor = CreateExtractor();
+
+        var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        result.Type.Should().Be(PackageType.Www);
+    }
+
+    [Fact]
+    public async Task Extract_UnknownGameType_WarnsAndDefaultsToWww()
+    {
+        var zip = CreateQhubZip(ShvagerPackageJson(gameType: "chess"));
+        var extractor = CreateExtractor();
+
+        var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        result.Type.Should().Be(PackageType.Www);
+        result.Warnings.Should().Contain(w => w.Contains("Невідомий тип гри"));
+    }
+
+    [Fact]
+    public async Task Extract_ShvagerWithBlocks_Throws()
+    {
+        var zip = CreateQhubZip(ShvagerPackageJson(tourOverrides: new Dictionary<string, object?>
+        {
+            ["questions"] = null,
+            ["blocks"] = new List<object>
+            {
+                new Dictionary<string, object?>
+                {
+                    ["questions"] = new List<object>
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["number"] = "10",
+                            ["text"] = "Питання",
+                            ["answer"] = "Відповідь"
+                        }
+                    }
+                }
+            }
+        }));
+        var extractor = CreateExtractor();
+
+        var act = () => extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ExtractionException>()
+            .WithMessage("*блоки*");
+    }
+
+    [Fact]
+    public async Task Extract_ShvagerWithWarmup_CoercesToRegularWithWarning()
+    {
+        var zip = CreateQhubZip(ShvagerPackageJson(tourOverrides: new Dictionary<string, object?>
+        {
+            ["isWarmup"] = true
+        }));
+        var extractor = CreateExtractor();
+
+        var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        result.Tours[0].Type.Should().Be(TourType.Regular);
+        result.Warnings.Should().Contain(w => w.Contains("не підтримуються у Своїй грі"));
+    }
+
+    #endregion
 }

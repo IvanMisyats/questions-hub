@@ -12,6 +12,9 @@ public class Package
     /// <summary>Package title.</summary>
     public required string Title { get; set; }
 
+    /// <summary>Game type of the package (Що?Де?Коли? or Своя гра). Immutable after creation.</summary>
+    public PackageType Type { get; set; } = PackageType.Www;
+
     /// <summary>Start date when the package was played (or single date for one-day events).</summary>
     public DateOnly? PlayedFrom { get; set; }
 

@@ -72,12 +72,14 @@ window.handleTopSearchSubmit = function(form) {
     return false;
 };
 
-// Handle search page form submission (static SSR)
+// Handle search page form submission (static SSR).
+// Preserves the game-type filter (?type=) from the current URL.
 window.handleSearchFormSubmit = function(form) {
     const query = form.q.value.trim();
     if (query) {
         const encodedQuery = encodeURIComponent(query);
-        window.location.href = '/search/' + encodedQuery;
+        const type = new URLSearchParams(window.location.search).get('type');
+        window.location.href = '/search/' + encodedQuery + (type ? '?type=' + encodeURIComponent(type) : '');
     }
     return false;
 };

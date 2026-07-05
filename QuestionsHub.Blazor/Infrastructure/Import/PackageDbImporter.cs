@@ -62,6 +62,7 @@ public partial class PackageDbImporter
                 // Create package
                 var package = new Package
                 {
+                    Type = parseResult.Type,
                     Title = TruncateWithWarning(parseResult.Title, 500, "Назва пакету", parseResult.Warnings)
                             ?? "Імпортований пакет",
                     Description = TruncateWithWarning(parseResult.Description, 2000, "Опис пакету", parseResult.Warnings),
@@ -111,6 +112,7 @@ public partial class PackageDbImporter
                     var tour = new Tour
                     {
                         Number = TruncateWithWarning(tourDto.Number, 50, $"Номер туру {tourDto.Number}", parseResult.Warnings) ?? tourDto.Number,
+                        Title = TruncateWithWarning(NullIfEmpty(tourDto.Title), 200, $"Назва теми {tourDto.Number}", parseResult.Warnings),
                         OrderIndex = tourDto.OrderIndex,
                         Type = tourDto.Type,
                         Preamble = tourDto.Preamble,
@@ -212,6 +214,7 @@ public partial class PackageDbImporter
             Answer = TruncateWithWarning(questionDto.Answer, 1000, $"Відповідь (запитання {questionDto.Number})", warnings) ?? "",
             AcceptedAnswers = TruncateWithWarning(questionDto.AcceptedAnswers, 1000, $"Залік (запитання {questionDto.Number})", warnings),
             RejectedAnswers = TruncateWithWarning(questionDto.RejectedAnswers, 1000, $"Незалік (запитання {questionDto.Number})", warnings),
+            AnswerForm = TruncateWithWarning(questionDto.Form, 1000, $"Форма (запитання {questionDto.Number})", warnings),
             Comment = questionDto.Comment,
             CommentAttachmentUrl = TruncateWithWarning(commentUrl, 500, $"URL коментаря (запитання {questionDto.Number})", warnings),
             Source = questionDto.Source,
