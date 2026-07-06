@@ -647,6 +647,82 @@ public class ShvagerParserTests
 
     #endregion
 
+    #region Host instructions
+
+    [Fact]
+    public void Parse_HostInstructions_OwnLine_ParsedAsHostInstructions()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. Текст запитання?",
+            "[Ведучому: читати повільно]",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HostInstructions.Should().Be("читати повільно");
+        q.Text.Should().Be("Текст запитання?");
+        q.Text.Should().NotContain("Ведучому");
+    }
+
+    [Fact]
+    public void Parse_HostInstructions_OnValueLineWithTextAfter_SplitsCorrectly()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. [Ведучому: наголос на перший склад] Що це?",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HostInstructions.Should().Be("наголос на перший склад");
+        q.Text.Should().Be("Що це?");
+        q.Text.Should().NotContain("Ведучому");
+    }
+
+    [Fact]
+    public void Parse_HostInstructions_RealExample_ExtractedFromText()
+    {
+        // The «[Ведучому: …]» text from the imported package that motivated this feature
+        var result = Parse(
+            "Тема: Тест",
+            "10. [Ведучому: читаючи слово, мазоГізму прочитати так, щоб гравці розчули саме мазоГізму, а не мазоХізму] Текст запитання?",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HostInstructions.Should().Contain("мазоГізму").And.Contain("мазоХізму");
+        q.Text.Should().Be("Текст запитання?");
+        q.Text.Should().NotContain("Ведучому");
+    }
+
+    [Fact]
+    public void Parse_HostInstructions_VariantLabel_ParsedAsHostInstructions()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. Текст?",
+            "[Вказівка ведучому: пауза перед відповіддю]",
+            "Відповідь: а");
+
+        result.Tours[0].Questions[0].HostInstructions.Should().Be("пауза перед відповіддю");
+    }
+
+    [Fact]
+    public void Parse_HostInstructions_BeforeAnyQuestion_NotTreatedAsHostInstructions()
+    {
+        // A «[Ведучому: …]» line before the first question has no question to attach to;
+        // it must not crash and must not become a phantom host instruction.
+        var result = Parse(
+            "Тема: Тест",
+            "[Ведучому: загальна вказівка]",
+            "10. Текст?",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HostInstructions.Should().BeNull();
+        q.Text.Should().Be("Текст?");
+    }
+
+    #endregion
+
     #region Picture brackets
 
     [Fact]

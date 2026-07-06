@@ -576,6 +576,9 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             }
         }
 
+        // «[Ведучому: …]» bracket — its content is the host instruction
+        if (ctx.CurrentQuestion != null && TryProcessHostInstructionsBracket(line, ctx)) return;
+
         // «[Роздатковий матеріал: …]» bracket — its content is the handout text
         if (ctx.CurrentQuestion != null && TryProcessHandoutBracket(line, ctx)) return;
 
@@ -641,6 +644,35 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         }
 
         return minIndex == int.MaxValue ? -1 : minIndex;
+    }
+
+    // ==================== Host instructions ====================
+
+    /// <summary>
+    /// Handles «[Ведучому: текст]» host-instruction brackets. The bracket content becomes the
+    /// question's host instruction; any text after the closing bracket continues as question text.
+    /// Mirrors the Що?Де?Коли? parser — single-line brackets only.
+    /// </summary>
+    private bool TryProcessHostInstructionsBracket(string line, Context ctx)
+    {
+        var match = ParserPatterns.HostInstructionsBracket().Match(line);
+        if (!match.Success) return false;
+
+        var question = ctx.CurrentQuestion!;
+        var instructions = match.Groups[1].Value.Trim();
+        if (instructions.Length > 0)
+        {
+            question.HostInstructions = Append(question.HostInstructions, Normalize(instructions));
+        }
+
+        ctx.CurrentSection = Section.QuestionText;
+
+        var rest = match.Groups[2].Value.Trim();
+        if (rest.Length > 0)
+        {
+            ProcessLabelOrContent(rest, ctx);
+        }
+        return true;
     }
 
     // ==================== Bracketed handouts ====================

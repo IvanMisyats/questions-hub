@@ -744,16 +744,13 @@
                                 <small class="text-muted">Автоматична нумерація</small>
                             }
                         </div>
-                        @if (!IsShvager)
-                        {
-                            <div class="col-md-2">
-                                <label class="col-form-label">Вказівка ведучому</label>
-                            </div>
-                            <div class="col-md-10">
-                                <textarea class="form-control auto-expand" placeholder="Інструкції для ведучого/організатора"
-                                          @bind="_editingQuestion.HostInstructions" @onblur="SaveEditingQuestionAsync"></textarea>
-                            </div>
-                        }
+                        <div class="col-md-2">
+                            <label class="col-form-label">Вказівка ведучому</label>
+                        </div>
+                        <div class="col-md-10">
+                            <textarea class="form-control auto-expand" placeholder="Інструкції для ведучого/організатора"
+                                      @bind="_editingQuestion.HostInstructions" @onblur="SaveEditingQuestionAsync"></textarea>
+                        </div>
                         <div class="col-md-2">
                             <label class="col-form-label">Роздатковий матеріал</label>
                         </div>
