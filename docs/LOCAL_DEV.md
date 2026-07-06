@@ -20,6 +20,17 @@ Captured 2026-07 during the Shvager feature work.
   log capture silently stops.
 - **A running app locks `bin/`** — rebuilds fail with MSB3026/MSB3027. Stop it first:
   `taskkill //IM QuestionsHub.Blazor.exe //F` (Git Bash needs the doubled slashes).
+  A running-under-**debugger** app locks both `QuestionsHub.Blazor.exe` *and*
+  `QuestionsHub.Blazor.dll` (the error names the VS Debug Adapter as the holder).
+- **Build/test WITHOUT stopping the app** by redirecting output away from the locked `bin/`:
+  ```bash
+  dotnet test QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj \
+    -p:BaseOutputPath=/tmp/qh-testbin/ -p:UseAppHost=false
+  ```
+  `BaseOutputPath` is a global property, so it flows to every referenced project (the Blazor
+  DLL included) and nothing is written to the real `bin/`. Must end with a slash. `UseAppHost=false`
+  skips the apphost `.exe` copy (belt-and-suspenders). The test host runs from the scratch dir;
+  the full suite passes there. Use this instead of killing a debug session you didn't start.
 
 ## Dev database without the PowerShell script
 
