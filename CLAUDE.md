@@ -37,6 +37,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 - Nullable reference types for optional fields
 - **Prefer client-side JS over Blazor server roundtrips** for UI-only interactions
 - Icons: `<Icon Name="check" Class="text-success" />` (SVG sprite in `wwwroot/icons.svg`)
+- **Never hard-code the developer's real OS username in files** (paths, examples, comments) — use `/tmp`, an env var, or a placeholder like `<user>`
 
 ## Git Workflow
 
