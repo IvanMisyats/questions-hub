@@ -15,6 +15,7 @@ using QuestionsHub.Blazor.Infrastructure.Auth;
 using QuestionsHub.Blazor.Infrastructure.Email;
 using QuestionsHub.Blazor.Infrastructure.Import;
 using QuestionsHub.Blazor.Infrastructure.Media;
+using QuestionsHub.Blazor.Infrastructure.Results;
 using QuestionsHub.Blazor.Infrastructure.Search;
 using QuestionsHub.Blazor.Infrastructure.Telegram;
 
@@ -33,6 +34,7 @@ builder.Services
     .AddPublicApiServices()
     .AddMediaServices(builder.Configuration, builder.Environment)
     .AddPackageImport(builder.Configuration)
+    .AddPackageResults(builder.Configuration)
     .AddEmailServices(builder.Configuration)
     .AddTelegramServices(builder.Configuration)
     .AddDataProtectionServices(builder.Environment);

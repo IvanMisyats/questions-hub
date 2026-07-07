@@ -1,0 +1,56 @@
+@using System.Globalization
+@using System.Net
+@using QuestionsHub.Blazor.Infrastructure.Results
+
+<div class="difficulty-chart-scroll">
+    <svg class="difficulty-chart" width="@N(Model.Width)" height="@N(Model.Height)"
+         viewBox="0 0 @N(Model.Width) @N(Model.Height)" role="img" aria-label="Діаграма складності запитань">
+        @foreach (var band in Model.Bands)
+        {
+            <rect class="chart-band @(band.Alternate ? "alt" : "")" x="@N(band.X)" y="0"
+                  width="@N(band.Width)" height="@N(Model.PlotBottom)" />
+            @SvgText("chart-band-label", band.X + band.Width / 2, Model.BandLabelY, "middle", band.Label)
+        }
+        @foreach (var line in Model.GridLines)
+        {
+            <line class="chart-grid" x1="@N(Model.PlotLeft)" y1="@N(line.Y)"
+                  x2="@N(Model.Width)" y2="@N(line.Y)" />
+            @SvgText("chart-axis-label", Model.PlotLeft - 6, line.Y + 4, "end", $"{line.Percent}%")
+        }
+        @foreach (var bar in Model.Bars)
+        {
+            <a href="@($"/package/{PackageId}#question-{bar.QuestionId}")">
+                @* full-column transparent hit area keeps the tooltip reachable for low bars *@
+                <rect x="@N(bar.X - 4)" y="0" width="@N(bar.Width + 8)" height="@N(Model.PlotBottom)" fill="transparent">
+                    <title>@bar.Tooltip</title>
+                </rect>
+                <rect class="chart-bar @(bar.Total > 0 && bar.Correct == 0 ? "zero" : "")"
+                      x="@N(bar.X)" y="@N(bar.Y)" width="@N(bar.Width)" height="@N(bar.Height)">
+                    <title>@bar.Tooltip</title>
+                </rect>
+            </a>
+            @if (bar.ShowAxisLabel)
+            {
+                @SvgText("chart-axis-label", bar.X + bar.Width / 2, Model.AxisLabelY, "middle", bar.Number)
+            }
+        }
+    </svg>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required DifficultyChartModel Model { get; set; }
+
+    [Parameter, EditorRequired]
+    public required int PackageId { get; set; }
+
+    /// <summary>SVG attributes need invariant decimal points regardless of the uk-UA page culture.</summary>
+    private static string N(double value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Razor reserves the &lt;text&gt; tag, so SVG text elements are emitted as markup.</summary>
+    private static MarkupString SvgText(string cssClass, double x, double y, string anchor, string content)
+    {
+        return new MarkupString(
+            $"<text class=\"{cssClass}\" x=\"{N(x)}\" y=\"{N(y)}\" text-anchor=\"{anchor}\">{WebUtility.HtmlEncode(content)}</text>");
+    }
+}

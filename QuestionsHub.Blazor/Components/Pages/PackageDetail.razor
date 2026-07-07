@@ -7,6 +7,7 @@
 @using QuestionsHub.Blazor.Utils
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
+@inject PackageResultsService PackageResults
 
 <PageTitle>@(_package?.Title ?? "Пакет не знайдено") - База українських запитань</PageTitle>
 
@@ -100,6 +101,31 @@ else
                             <strong>Дата публікації:</strong> <span data-utc="@_package.PublicationDate.Value.ToString("o")"></span>
                         </p>
                     }
+
+                    @{
+                        var loadedSources = _resultsSources.Where(s => s.LoadedAt != null && s.TeamsCount > 0).ToList();
+                        var externalResultLinks = _resultsSources.Where(s => s.ShowExternalLink).ToList();
+                    }
+                    @if (loadedSources.Count > 0 || externalResultLinks.Count > 0)
+                    {
+                        <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+                            @if (loadedSources.Count > 0)
+                            {
+                                <a href="/package/@_package.Id/results" class="btn btn-primary btn-sm">
+                                    <Icon Name="list-ul" Class="me-1" />Результати
+                                </a>
+                                <span class="text-muted small me-2">@loadedSources.Sum(s => s.TeamsCount ?? 0) команд</span>
+                            }
+                            @foreach (var source in externalResultLinks)
+                            {
+                                <a href="@source.DisplayUrl" target="_blank" rel="noopener noreferrer"
+                                   class="results-source-icon"
+                                   title="@(source.Title ?? ResultsDisplay.PlatformName(source.Platform))">
+                                    <PlatformIcon Platform="source.Platform" />
+                                </a>
+                            }
+                        </div>
+                    }
                 </div>
 
                 <div class="d-flex gap-2 mb-3">
@@ -180,7 +206,7 @@ else
                                     @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" />
                                         </div>
                                     }
                                 </div>
@@ -194,7 +220,7 @@ else
                                     @foreach (var question in orphanQuestions)
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" />
                                         </div>
                                     }
                                 </div>
@@ -232,7 +258,7 @@ else
                             @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                             {
                                 <div id="question-@question.Id">
-                                    <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" />
+                                    <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" />
                                 </div>
                             }
                         }
@@ -251,6 +277,8 @@ else
     private bool _notFound;
     private bool _canEdit;
     private bool _isAdult;
+    private List<ResultsSourceInfo> _resultsSources = [];
+    private Dictionary<int, QuestionStat> _questionStats = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -289,14 +317,25 @@ else
         // Check if the package has 18+ content tag
         _isAdult = TagService.IsAdultContent(_package.Tags);
 
+        // Tournament results: attached sources (header links) + precomputed per-question stats
+        if (_package.Type == PackageType.Www)
+        {
+            _resultsSources = await PackageResults.GetSourcesForPackage(_package.Id);
+
+            if (_resultsSources.Any(s => s.StatsMapped))
+            {
+                _questionStats = await DbContext.QuestionStats
+                    .AsNoTracking()
+                    .Where(s => s.Question.Tour.PackageId == Id)
+                    .ToDictionaryAsync(s => s.QuestionId);
+            }
+        }
+
         // Sort tours by Number (ЩДК: warmup "0" first, shootout "П" last) or by OrderIndex (Своя гра),
         // blocks by OrderIndex, and questions by OrderIndex
         _package.Tours = _package.Type == PackageType.Shvager
             ? _package.Tours.OrderBy(t => t.OrderIndex).ToList()
-            : _package.Tours
-                .OrderBy(t => int.TryParse(t.Number, out var num) ? num : int.MaxValue)
-                .ThenBy(t => t.Number)
-                .ToList();
+            : TourOrdering.OrderWww(_package.Tours);
 
         foreach (var tour in _package.Tours)
         {

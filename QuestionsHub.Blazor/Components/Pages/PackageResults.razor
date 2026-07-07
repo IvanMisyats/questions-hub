@@ -1,0 +1,306 @@
+@page "/package/{Id:int}/results"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using QuestionsHub.Blazor.Data
+@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure
+@using QuestionsHub.Blazor.Infrastructure.Results
+@using QuestionsHub.Blazor.Utils
+@inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
+@inject AccessControlService AccessControl
+@inject PackageResultsService ResultsService
+
+<PageTitle>Результати: @(_packageTitle ?? "Пакет не знайдено") - База українських запитань</PageTitle>
+
+@if (_notFound)
+{
+    <div class="container mt-4">
+        <div class="alert alert-warning">
+            <h4>Пакет не знайдено</h4>
+            <p>Пакет з ідентифікатором @Id не існує або недоступний.</p>
+            <a href="/" class="btn btn-primary">Повернутися на головну</a>
+        </div>
+    </div>
+}
+else if (_packageTitle == null)
+{
+    <div class="container mt-4">
+        <p><em>Завантаження...</em></p>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/package/@Id">@_packageTitle</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Результати</li>
+            </ol>
+        </nav>
+
+        <h1 class="mb-3">Результати</h1>
+
+        @if (_loadedSources.Count == 0)
+        {
+            <div class="alert alert-info">
+                Результатів ще немає. Якщо турнір нещодавно зіграно, результати можуть з'явитися пізніше.
+            </div>
+        }
+        else
+        {
+            @if (_loadedSources.Count > 1)
+            {
+                <div class="mb-3">
+                    <div class="text-muted small mb-1">Джерела результатів</div>
+                    <div class="d-flex flex-wrap gap-3">
+                        @foreach (var source in _loadedSources)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="src-@source.Id"
+                                       checked="@_selectedSourceIds.Contains(source.Id)"
+                                       @onchange="e => ToggleSource(source.Id, (bool)(e.Value ?? false))" />
+                                <label class="form-check-label d-inline-flex align-items-center gap-1" for="src-@source.Id">
+                                    <PlatformIcon Platform="source.Platform" Size="16" />
+                                    <span>@(source.Title ?? ResultsDisplay.PlatformName(source.Platform))</span>
+                                    @if (!string.IsNullOrEmpty(source.DisplayUrl))
+                                    {
+                                        <a href="@source.DisplayUrl" target="_blank" rel="noopener noreferrer"
+                                           title="Відкрити на платформі" @onclick:stopPropagation="true"><Icon Name="external-link" Size="12" /></a>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    @foreach (var source in _loadedSources)
+                    {
+                        @if (!string.IsNullOrEmpty(source.DisplayUrl))
+                        {
+                            <a href="@source.DisplayUrl" target="_blank" rel="noopener noreferrer"
+                               class="results-source-icon" title="@(source.Title ?? ResultsDisplay.PlatformName(source.Platform))">
+                                <PlatformIcon Platform="source.Platform" />
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="results-source-icon" title="@(source.Title ?? ResultsDisplay.PlatformName(source.Platform))">
+                                <PlatformIcon Platform="source.Platform" />
+                            </span>
+                        }
+                    }
+                </div>
+            }
+
+            @if (_selectedSourceIds.Count == 0)
+            {
+                <div class="alert alert-info">Оберіть хоча б одне джерело результатів.</div>
+            }
+            else
+            {
+                @if (_chartModel != null)
+                {
+                    <h2 class="h4 mt-4">Складність запитань</h2>
+                    <p class="text-muted small mb-2">
+                        Стовпчик — відсоток команд, що взяли запитання. Натисніть на стовпчик, щоб перейти до запитання.
+                    </p>
+                    <DifficultyChart Model="_chartModel" PackageId="Id" />
+                }
+
+                @if (_standings.Count > 0)
+                {
+                    <h2 class="h4 mt-4">Підсумкова таблиця</h2>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle w-auto">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">Місце</th>
+                                    <th>Команда</th>
+                                    @foreach (var tour in _regularTours)
+                                    {
+                                        <th class="text-center" title="Тур @tour.Number">@tour.Number</th>
+                                    }
+                                    @if (_hasShootoutColumn)
+                                    {
+                                        <th class="text-center" title="Перестрілка">П</th>
+                                    }
+                                    <th class="text-center">Разом</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _standings)
+                                {
+                                    <tr>
+                                        <td class="text-center">@row.Place</td>
+                                        <td>@row.Name</td>
+                                        @foreach (var cell in row.TourCells)
+                                        {
+                                            <td class="text-center">@(cell?.ToString() ?? "—")</td>
+                                        }
+                                        @if (_hasShootoutColumn)
+                                        {
+                                            <td class="text-center">@(row.ShootoutCell?.ToString() ?? "—")</td>
+                                        }
+                                        <td class="text-center fw-bold">@row.Points.ToString("0.##")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private string? _packageTitle;
+    private bool _notFound;
+    private List<ResultsSourceInfo> _loadedSources = [];
+    private List<Tour> _regularTours = [];
+    private List<Tour> _shootoutTours = [];
+    private HashSet<int> _allQuestionIds = [];
+    private Dictionary<int, List<TeamResult>> _teamsBySource = [];
+    private readonly HashSet<int> _selectedSourceIds = [];
+
+    private List<StandingsRow> _standings = [];
+    private bool _hasShootoutColumn;
+    private DifficultyChartModel? _chartModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+
+        var package = await db.Packages.AsNoTracking().FirstOrDefaultAsync(p => p.Id == Id);
+        if (package == null)
+        {
+            _notFound = true;
+            return;
+        }
+
+        var accessContext = await AccessControl.GetPackageAccessContext();
+        if (!accessContext.CanViewPackage(package))
+        {
+            _notFound = true;
+            return;
+        }
+
+        _packageTitle = package.Title;
+
+        // Slim projection — the page needs tour structure and question ids/numbers, not the texts
+        var tourData = await db.Tours
+            .AsNoTracking()
+            .Where(t => t.PackageId == Id)
+            .Select(t => new
+            {
+                t.Number,
+                t.Type,
+                Questions = t.Questions
+                    .OrderBy(q => q.OrderIndex)
+                    .Select(q => new { q.Id, q.Number, q.OrderIndex })
+                    .ToList()
+            })
+            .ToListAsync();
+
+        // Same tour ordering as the package page and the stats mapping (shared helper)
+        var tours = TourOrdering.OrderWww(tourData.Select(t => new Tour
+        {
+            Number = t.Number,
+            Type = t.Type,
+            Questions = t.Questions
+                .Select(q => new Question { Id = q.Id, Number = q.Number, OrderIndex = q.OrderIndex, Text = "", Answer = "" })
+                .ToList()
+        }));
+
+        _regularTours = tours.Where(t => t.Type == TourType.Regular).ToList();
+        _shootoutTours = tours.Where(t => t.Type == TourType.Shootout).ToList();
+        _allQuestionIds = tours.SelectMany(t => t.Questions).Select(q => q.Id).ToHashSet();
+
+        _loadedSources = (await ResultsService.GetSourcesForPackage(Id))
+            .Where(s => s.LoadedAt != null && s.TeamsCount > 0)
+            .ToList();
+
+        if (_loadedSources.Count > 0)
+        {
+            var sourceIds = _loadedSources.Select(s => s.Id).ToList();
+            var teamResults = await db.TeamResults
+                .AsNoTracking()
+                .Where(t => sourceIds.Contains(t.ResultsSourceId))
+                .ToListAsync();
+            _teamsBySource = teamResults
+                .GroupBy(t => t.ResultsSourceId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Default: all sources selected (the aggregated view)
+            foreach (var source in _loadedSources)
+            {
+                _selectedSourceIds.Add(source.Id);
+            }
+
+            Recompute();
+        }
+    }
+
+    private void ToggleSource(int sourceId, bool selected)
+    {
+        if (selected)
+        {
+            _selectedSourceIds.Add(sourceId);
+        }
+        else
+        {
+            _selectedSourceIds.Remove(sourceId);
+        }
+
+        Recompute();
+    }
+
+    private void Recompute()
+    {
+        var teams = _selectedSourceIds
+            .Where(_teamsBySource.ContainsKey)
+            .SelectMany(id => _teamsBySource[id])
+            .ToList();
+
+        _standings = StandingsBuilder.Build(_regularTours, _shootoutTours, teams);
+        _hasShootoutColumn = _standings.Any(r => r.ShootoutCell != null);
+
+        var aggregates = QuestionStatsAggregator.Aggregate(teams.Select(t => t.ResultsByQuestionJson), _allQuestionIds);
+        if (aggregates.Count > 0)
+        {
+            var groups = _regularTours
+                .Select(t => new ChartGroup(
+                    $"Тур {t.Number}",
+                    t.Questions.Select(q => ToChartQuestion(q, aggregates)).ToList()))
+                .ToList();
+
+            var shootoutQuestions = _shootoutTours
+                .SelectMany(t => t.Questions)
+                .Where(q => aggregates.ContainsKey(q.Id))
+                .Select(q => ToChartQuestion(q, aggregates))
+                .ToList();
+            if (shootoutQuestions.Count > 0)
+            {
+                groups.Add(new ChartGroup("Перестрілка", shootoutQuestions));
+            }
+
+            _chartModel = DifficultyChartModel.Build(groups);
+        }
+        else
+        {
+            _chartModel = null;
+        }
+    }
+
+    private static ChartQuestion ToChartQuestion(Question question, Dictionary<int, QuestionAggregate> aggregates)
+    {
+        var a = aggregates.GetValueOrDefault(question.Id);
+        return new ChartQuestion(question.Id, question.Number, a.Correct, a.Total);
+    }
+}

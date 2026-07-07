@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -12,9 +13,11 @@ using QuestionsHub.Blazor.Data;
 namespace QuestionsHub.Blazor.Data.Migrations
 {
     [DbContext(typeof(QuestionsHubDbContext))]
-    partial class QuestionsHubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260706202841_AddPackageResults")]
+    partial class AddPackageResults
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -679,16 +682,16 @@ namespace QuestionsHub.Blazor.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("Label")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime?>("LastAttemptAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LoadError")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("LoadErrorDetail")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
 
                     b.Property<DateTime?>("LoadedAt")
                         .HasColumnType("timestamp with time zone");
@@ -712,10 +715,6 @@ namespace QuestionsHub.Blazor.Data.Migrations
 
                     b.Property<int?>("TeamsCount")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Title")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Url")
                         .IsRequired()

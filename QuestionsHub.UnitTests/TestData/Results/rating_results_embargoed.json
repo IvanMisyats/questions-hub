@@ -1,0 +1,1 @@
+[{"team": {"id": 1, "name": "Команда А", "town": {"id": 1, "name": "Київ"}}, "mask": null, "current": {"name": "Команда А"}, "questionsTotal": null, "position": null, "controversials": []}, {"team": {"id": 2, "name": "Команда Б", "town": {"id": 2, "name": "Львів"}}, "mask": null, "current": {"name": "Команда Б"}, "questionsTotal": null, "position": null, "controversials": []}]

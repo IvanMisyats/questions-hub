@@ -1,0 +1,23 @@
+@* Platform favicon (rating.chgk.info / open-quiz.com) or a generic external-link icon for «Other». *@
+@using QuestionsHub.Blazor.Domain
+
+@if (Platform == ResultsPlatform.Rating)
+{
+    <img src="/images/platform-rating.ico" alt="Рейтинг МАК" width="@Size" height="@Size" />
+}
+else if (Platform == ResultsPlatform.OpenQuiz)
+{
+    <img src="/images/platform-openquiz.png" alt="OpenQuiz" width="@Size" height="@Size" />
+}
+else
+{
+    <Icon Name="external-link" Size="@Size" />
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ResultsPlatform Platform { get; set; }
+
+    [Parameter]
+    public int Size { get; set; } = 20;
+}

@@ -63,12 +63,12 @@ else
                                 <div class="adult-reveal-overlay" onclick="revealAdultContent(this)">
                                     <span>🔞 Вміст 18+. Натисніть, щоб показати.</span>
                                 </div>
-                                <QuestionContent Question="_question" />
+                                <QuestionContent Question="_question" Stat="_stat" />
                             </div>
                         }
                         else
                         {
-                            <QuestionContent Question="_question" />
+                            <QuestionContent Question="_question" Stat="_stat" />
                         }
                     </div>
                 </div>
@@ -84,6 +84,7 @@ else
     private Question? _question;
     private bool _notFound;
     private bool _isAdult;
+    private QuestionStat? _stat;
 
     private string PageTitleText => _question == null
         ? "Запитання"
@@ -118,5 +119,10 @@ else
 
         // Check if the package has 18+ content tag
         _isAdult = TagService.IsAdultContent(_question.Tour.Package.Tags);
+
+        // Precomputed tournament statistics for the question (if any)
+        _stat = await DbContext.QuestionStats
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.QuestionId == Id);
     }
 }

@@ -1,0 +1,1 @@
+{"Status": "Executed", "Value": {"Ok": {"RefreshToken": "FAKE_REFRESH_TOKEN", "Settings": {"MediaHost": "https://www.open-quiz.com"}, "Token": "FAKE.JWT.TOKEN", "User": {"AudUser": {"QuizId": 25795}}}}, "ST": "2026-07-06T18:46:21Z"}

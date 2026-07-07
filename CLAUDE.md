@@ -59,6 +59,8 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/PACKAGE_IMPORT.md` | DOCX import pipeline |
 | `docs/IMPORT_DEBUGGING.md` | Debugging imports: job artifacts, replaying the parser offline, numbering-cascade failure mode |
 | `docs/LOCAL_DEV.md` | Headless run/verification: ports, dev DB via bash, curl smoke-testing (Cyrillic URLs, SSR encoding), bin locks |
+| `docs/RESULTS.md` | Tournament results & question statistics: platform loaders (Rating/OpenQuiz), mapping rules, debugging |
+| `docs/Stats_plan.md` | Results/statistics feature: design decisions and phased plan |
 | `docs/SEARCH.md` | FTS implementation details |
 | `docs/ICONS.md` | Icon system and available icons |
 | `docs/BACKUPS.md` | Backup system overview, schedule, storage, IaC |

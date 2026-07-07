@@ -16,6 +16,7 @@
 @inject AccessControlService AccessControl
 @inject PackageListService PackageListService
 @inject TelegramNotificationService TelegramNotification
+@inject PackageResultsService PackageResults
 @inject IJSRuntime JS
 
 <PageTitle>@(_package?.Title ?? "Новий пакет") - База українських запитань</PageTitle>
@@ -205,6 +206,115 @@
                 </div>
             </div>
         </div>
+
+        @if (!IsShvager && Id != null)
+        {
+            <!-- Results Sources Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Результати</h5>
+                </div>
+                <div class="card-body">
+                    @if (_sourcesError != null)
+                    {
+                        <div class="alert alert-danger py-2" role="alert">
+                            <Icon Name="exclamation-triangle" Class="me-2" />@_sourcesError
+                        </div>
+                    }
+                    <div class="input-group mb-3">
+                        <input type="url" class="form-control" placeholder="Посилання на результати: rating.chgk.info, open-quiz.com або інший сайт"
+                               @bind="_newSourceUrl" disabled="@_isAttachingSource"
+                               @onkeydown="@(e => e.Key == "Enter" ? AttachSourceAsync() : Task.CompletedTask)" />
+                        <button class="btn btn-success" @onclick="AttachSourceAsync" disabled="@_isAttachingSource">
+                            @if (_isAttachingSource)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            else
+                            {
+                                <Icon Name="plus" Class="me-1" />
+                            }
+                            Додати
+                        </button>
+                    </div>
+                    @if (_resultsSources.Count == 0)
+                    {
+                        <p class="text-muted mb-0">
+                            Джерел результатів ще немає. Платформа визначається автоматично з посилання.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-3">
+                            @foreach (var source in _resultsSources)
+                            {
+                                <div class="border rounded p-2 px-3">
+                                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                        <div class="me-auto" style="min-width: 0;">
+                                            <span class="badge @ResultsDisplay.PlatformBadgeClass(source.Platform) me-2">@ResultsDisplay.PlatformName(source.Platform)</span>
+                                            <a href="@source.Url" target="_blank" rel="noopener noreferrer" class="small text-break">@source.Url</a>
+                                            <div class="small mt-1">
+                                                @if (_loadingSourceIds.Contains(source.Id))
+                                                {
+                                                    <span class="text-muted">
+                                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                        Завантаження результатів...
+                                                    </span>
+                                                }
+                                                else if (source.Platform == ResultsPlatform.Other)
+                                                {
+                                                    <span class="text-muted">Зовнішнє посилання — не завантажується автоматично.</span>
+                                                }
+                                                else if (source.LoadError != null)
+                                                {
+                                                    <span class="text-danger">
+                                                        <Icon Name="exclamation-circle" Class="me-1" />@source.LoadError
+                                                    </span>
+                                                }
+                                                else if (source.LoadedAt != null)
+                                                {
+                                                    <span class="text-success">
+                                                        <Icon Name="check-circle" Class="me-1" />Завантажено: @(source.TeamsCount ?? 0) команд@(source.StatsMapped ? ", зі статистикою запитань" : ", без статистики запитань")
+                                                        <span class="text-muted">(@source.LoadedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm"))</span>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Ще не завантажено.</span>
+                                                }
+                                            </div>
+                                            @if (source.LoadError != null && !string.IsNullOrEmpty(source.LoadErrorDetail))
+                                            {
+                                                <details class="small mt-1">
+                                                    <summary class="text-muted" style="cursor: pointer;">Технічні деталі помилки</summary>
+                                                    <pre class="small text-danger-emphasis mb-0 mt-1" style="white-space: pre-wrap;">@source.LoadErrorDetail</pre>
+                                                </details>
+                                            }
+                                            <ImportWarnings WarningsJson="@source.WarningsJson" />
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            @if (source.Platform != ResultsPlatform.Other)
+                                            {
+                                                @* All reload buttons lock while any load runs — concurrent recomputes of one package collide *@
+                                                <button class="btn btn-outline-secondary btn-sm" title="@(source.LoadedAt == null ? "Завантажити результати" : "Оновити результати")"
+                                                        disabled="@(_loadingSourceIds.Count > 0)"
+                                                        @onclick="() => LoadSourceAsync(source.Id)">
+                                                    <Icon Name="arrow-repeat" />
+                                                </button>
+                                            }
+                                            <button class="btn btn-outline-danger btn-sm" title="Видалити джерело"
+                                                    @onclick="() => ShowDeleteSourceModal(source)">
+                                                <Icon Name="trash" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
 
         <!-- Tours Section -->
         <div class="card">
@@ -569,6 +679,39 @@
         </div>
     }
 </div>
+
+<!-- Delete Results Source Modal -->
+@if (_showDeleteSourceModal && _sourceToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Видалити джерело результатів</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDeleteSource"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        Ви впевнені, що хочете видалити джерело
+                        <strong>@ResultsDisplay.PlatformName(_sourceToDelete.Platform)</strong>
+                        <span class="text-break">(@_sourceToDelete.Url)</span>?
+                    </p>
+                    @if (_sourceToDelete.TeamsCount is > 0)
+                    {
+                        <p class="text-danger mb-0">
+                            <Icon Name="exclamation-triangle" Class="me-2" />
+                            Завантажені результати (@_sourceToDelete.TeamsCount команд) і відповідна статистика запитань будуть видалені.
+                        </p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDeleteSource">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeleteSourceAsync">Видалити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 <!-- Delete Tour Modal -->
 @if (_showDeleteTourModal && _tourToDelete != null)
@@ -1020,6 +1163,15 @@
     // Shvager publish warnings modal
     private bool _showPublishWarningsModal;
     private List<string> _publishWarnings = [];
+
+    // Results sources
+    private List<ResultsSourceInfo> _resultsSources = [];
+    private readonly HashSet<int> _loadingSourceIds = [];
+    private string? _newSourceUrl;
+    private bool _isAttachingSource;
+    private bool _showDeleteSourceModal;
+    private ResultsSourceInfo? _sourceToDelete;
+    private string? _sourcesError;
 
     // Media upload state
     private bool _isUploadingHandout;
@@ -1644,6 +1796,11 @@
                     }
                     // Trigger sortable initialization on next render
                     _needsSortableInit = true;
+
+                    if (_package.Type == PackageType.Www)
+                    {
+                        _resultsSources = await PackageResults.GetSourcesForPackage(_package.Id);
+                    }
                 }
             }
         }
@@ -3346,5 +3503,118 @@
         }
         StateHasChanged();
     }
+
+    #region Results sources
+
+    private async Task AttachSourceAsync()
+    {
+        if (_package == null || _isAttachingSource)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_newSourceUrl))
+        {
+            _sourcesError = "Вкажіть посилання на результати.";
+            return;
+        }
+
+        _isAttachingSource = true;
+        _sourcesError = null;
+        try
+        {
+            var source = await PackageResults.AttachSource(_package.Id, _newSourceUrl);
+            _newSourceUrl = null;
+            await RefreshSourcesAsync();
+
+            if (source.Platform != ResultsPlatform.Other)
+            {
+                await LoadSourceAsync(source.Id);
+            }
+        }
+        catch (ResultsLoadException ex)
+        {
+            _sourcesError = ex.Message;
+        }
+        catch (Exception)
+        {
+            // The circuit must survive any failure; details are in the server log
+            _sourcesError = "Несподівана помилка — спробуйте ще раз.";
+        }
+        finally
+        {
+            _isAttachingSource = false;
+        }
+    }
+
+    private async Task LoadSourceAsync(int sourceId)
+    {
+        _loadingSourceIds.Add(sourceId);
+        _sourcesError = null;
+        StateHasChanged();
+        try
+        {
+            // Load failures are stored on the source and shown in its status line
+            await PackageResults.LoadSource(sourceId);
+        }
+        catch (ResultsLoadException ex)
+        {
+            _sourcesError = ex.Message;
+        }
+        catch (Exception)
+        {
+            _sourcesError = "Несподівана помилка — спробуйте ще раз.";
+        }
+        finally
+        {
+            _loadingSourceIds.Remove(sourceId);
+            await RefreshSourcesAsync();
+        }
+    }
+
+    private void ShowDeleteSourceModal(ResultsSourceInfo source)
+    {
+        _sourceToDelete = source;
+        _showDeleteSourceModal = true;
+    }
+
+    private void CancelDeleteSource()
+    {
+        _showDeleteSourceModal = false;
+        _sourceToDelete = null;
+    }
+
+    private async Task DeleteSourceAsync()
+    {
+        if (_sourceToDelete == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await PackageResults.DeleteSource(_sourceToDelete.Id);
+        }
+        catch (Exception)
+        {
+            _sourcesError = "Не вдалося видалити джерело — спробуйте ще раз.";
+        }
+
+        _showDeleteSourceModal = false;
+        _sourceToDelete = null;
+        await RefreshSourcesAsync();
+    }
+
+    private async Task RefreshSourcesAsync()
+    {
+        if (_package != null)
+        {
+            _resultsSources = await PackageResults.GetSourcesForPackage(_package.Id);
+        }
+
+        StateHasChanged();
+    }
+
+    #endregion
 }
 

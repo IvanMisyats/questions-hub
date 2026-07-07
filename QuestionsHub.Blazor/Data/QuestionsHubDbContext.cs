@@ -15,6 +15,9 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<PackageImportJob> PackageImportJobs => Set<PackageImportJob>();
     public DbSet<ApiClient> ApiClients => Set<ApiClient>();
+    public DbSet<ResultsSource> ResultsSources => Set<ResultsSource>();
+    public DbSet<TeamResult> TeamResults => Set<TeamResult>();
+    public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -199,6 +202,53 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             // Index for efficient job queue polling
             entity.HasIndex(j => new { j.Status, j.CreatedAt })
                 .HasDatabaseName("IX_PackageImportJobs_Status_CreatedAt");
+        });
+
+        builder.Entity<ResultsSource>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Platform).HasDefaultValue(ResultsPlatform.Other);
+            entity.Property(s => s.Url).IsRequired().HasMaxLength(2000);
+            entity.Property(s => s.ExternalId).HasMaxLength(50);
+            entity.Property(s => s.Title).HasMaxLength(500);
+            entity.Property(s => s.DisplayUrl).HasMaxLength(2000);
+            entity.Property(s => s.LoadError).HasMaxLength(1000);
+            entity.Property(s => s.LoadErrorDetail).HasMaxLength(8000);
+            entity.Property(s => s.RawPayload).HasColumnType("jsonb");
+
+            entity.HasOne(s => s.Package)
+                .WithMany(p => p.ResultsSources)
+                .HasForeignKey(s => s.PackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(s => s.TeamResults)
+                .WithOne(t => t.ResultsSource)
+                .HasForeignKey(t => t.ResultsSourceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(s => s.PackageId)
+                .HasDatabaseName("IX_ResultsSources_PackageId");
+        });
+
+        builder.Entity<TeamResult>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(200);
+            entity.Property(t => t.Town).HasMaxLength(200);
+            entity.Property(t => t.ResultsByQuestionJson).HasColumnType("jsonb");
+
+            entity.HasIndex(t => t.ResultsSourceId)
+                .HasDatabaseName("IX_TeamResults_ResultsSourceId");
+        });
+
+        builder.Entity<QuestionStat>(entity =>
+        {
+            entity.HasKey(s => s.QuestionId);
+
+            entity.HasOne(s => s.Question)
+                .WithOne()
+                .HasForeignKey<QuestionStat>(s => s.QuestionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

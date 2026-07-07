@@ -611,3 +611,61 @@ h1:focus {
         display: block !important;
     }
 }
+/* Difficulty chart (package results page) */
+.difficulty-chart-scroll {
+    overflow-x: auto;
+}
+
+.difficulty-chart .chart-band {
+    fill: transparent;
+}
+
+.difficulty-chart .chart-band.alt {
+    fill: var(--bs-secondary-bg);
+    opacity: 0.55;
+}
+
+.difficulty-chart .chart-grid {
+    stroke: var(--bs-border-color);
+    stroke-width: 1;
+}
+
+.difficulty-chart .chart-bar {
+    fill: var(--bs-primary);
+}
+
+.difficulty-chart .chart-bar.zero {
+    fill: var(--bs-danger);
+}
+
+.difficulty-chart a:hover .chart-bar {
+    opacity: 0.75;
+}
+
+.difficulty-chart .chart-axis-label {
+    fill: var(--bs-secondary-color);
+    font-size: 11px;
+}
+
+.difficulty-chart .chart-band-label {
+    fill: var(--bs-secondary-color);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.results-source-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-body-bg);
+}
+
+.results-source-icon:hover {
+    border-color: var(--bs-secondary-color);
+    background-color: var(--bs-secondary-bg);
+}

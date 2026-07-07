@@ -42,7 +42,7 @@
             <div class="adult-reveal-overlay" onclick="revealAdultContent(this)">
                 <span>🔞 Вміст 18+. Натисніть, щоб показати.</span>
             </div>
-            <QuestionContent Question="Question" ShowAnswer="false">
+            <QuestionContent Question="Question" ShowAnswer="false" Stat="Stat">
                 <button class="answer-toggle" onclick="toggleAnswer(this)">
                     <span class="answer-toggle-label">Показати відповідь</span>
                     <Icon Name="chevron-down" Class="answer-toggle-icon" Size="14" />
@@ -52,7 +52,7 @@
     }
     else
     {
-        <QuestionContent Question="Question" ShowAnswer="false">
+        <QuestionContent Question="Question" ShowAnswer="false" Stat="Stat">
             <button class="answer-toggle" onclick="toggleAnswer(this)">
                 <span class="answer-toggle-label">Показати відповідь</span>
                 <Icon Name="chevron-down" Class="answer-toggle-icon" Size="14" />
@@ -84,6 +84,10 @@
     /// </summary>
     [Parameter]
     public bool IsBlurred { get; set; }
+
+    /// <summary>Optional tournament statistics for the question, passed through to the content.</summary>
+    [Parameter]
+    public QuestionStat? Stat { get; set; }
 
     private PackageType EffectiveType => Type ?? Question.Tour?.Package?.Type ?? PackageType.Www;
 }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -12,9 +13,11 @@ using QuestionsHub.Blazor.Data;
 namespace QuestionsHub.Blazor.Data.Migrations
 {
     [DbContext(typeof(QuestionsHubDbContext))]
-    partial class QuestionsHubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260707170251_AdjustResultsSourceDiagnostics")]
+    partial class AdjustResultsSourceDiagnostics
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -712,10 +715,6 @@ namespace QuestionsHub.Blazor.Data.Migrations
 
                     b.Property<int?>("TeamsCount")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Title")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Url")
                         .IsRequired()

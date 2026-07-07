@@ -245,6 +245,24 @@ Telegram notification on package publish includes the package's game type.
 
 On startup: creates roles (Admin, Editor, User), creates admin user from environment variables, seeds sample packages if database is empty.
 
+### 18. Tournament Results & Question Statistics (ЩДК only)
+
+See [RESULTS.md](RESULTS.md) for the full design; plan in [Stats_plan.md](Stats_plan.md).
+
+- **Results sources** attached per package (manage page card «Результати»): Рейтинг МАК
+  (rating.chgk.info, official API), OpenQuiz (open-quiz.com, static results.json), «Інше»
+  (display-only external link). Loaded synchronously with spinner; reload keeps old data on
+  failure; Rating embargo (hideResultsTo) surfaced with the date.
+- **Per-question stats**: «Взяли: X/Y (Z%)» inside the answer spoiler (package page and
+  question permalink), precomputed in the `QuestionStats` table, summed over all sources.
+  Warm-up questions never have stats; shoot-out stats shown when a platform provides them
+  (own denominator).
+- **Results page** `/package/{id}/results`: aggregated standings across all platforms
+  (re-ranked by points, ties share places, per-tour counts, «П» column, platform badges) +
+  question-difficulty SVG chart with tour bands; bars link to question anchors.
+- Package header: primary «Результати» link (internal, preferred) + secondary external
+  platform links.
+
 ---
 
 ## UI/UX Features
@@ -304,6 +322,7 @@ On startup: creates roles (Admin, Editor, User), creates admin user from environ
 | Public API | ✅ (`type` filter, `gameType` fields) | ✅ |
 | Author stats per type | ✅ | ✅ |
 | Authentication, roles, media, tags, admin | ✅ shared | ✅ shared |
+| Tournament results & question stats | ✅ (Rating, OpenQuiz, links) | ❌ (postponed) |
 | Interactive play mode | ❌ | ❌ |
 | Comments/ratings | ❌ | ❌ |
 
@@ -313,6 +332,7 @@ On startup: creates roles (Admin, Editor, User), creates admin user from environ
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Jul 6, 2026 | 2.1 | **Tournament results & question statistics** (ЩДК): results sources per package (Рейтинг МАК API, OpenQuiz, external links), per-question «Взяли: X/Y» stats, `/package/{id}/results` page with aggregated standings + difficulty SVG chart, management card with sync load/reload |
 | Jul 2, 2026 | 2.0 | **Dual game types**: Своя гра (Shvager) packages alongside Що?Де?Коли? — PackageType discriminator, themes (Tour.Title), question values, Форма field, typed home tabs, search type filter, split author stats, second importer, .qhub gameType, generic branding. Spec also caught up with shipped features: question permalinks, tags/18+, import pipeline, .qhub export, public API, admin API keys, dark theme |
 | Jan 18, 2026 | 1.9 | «Create next» inherits block; orphan questions visible and draggable to blocks |
 | Jan 17, 2026 | 1.8 | Icon system: centralized SVG sprite + Icon.razor |

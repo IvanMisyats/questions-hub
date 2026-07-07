@@ -80,6 +80,13 @@
             <span class="answer-label">Автор(и):</span> <span class="authors-list">@foreach (var (author, index) in Question.Authors.Select((a, i) => (a, i))){<a href="/editor/@author.Id">@author.FullName</a>@(index < Question.Authors.Count - 1 ? ", " : "")}</span>
         </div>
     }
+
+    @if (Stat is { TotalTeams: > 0 })
+    {
+        <div class="answer-field" title="@Stat.CorrectCount з @Stat.TotalTeams команд відповіли правильно">
+            <span class="answer-label">Взяли:</span> @Stat.CorrectCount/@Stat.TotalTeams (@Stat.Percent%)
+        </div>
+    }
 </div>
 
 @code {
@@ -100,5 +107,11 @@
     /// </summary>
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Optional tournament statistics for the question («Взяли: 5/10»), shown after the authors.
+    /// </summary>
+    [Parameter]
+    public QuestionStat? Stat { get; set; }
 }
 

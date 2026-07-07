@@ -63,6 +63,9 @@ public class Package
     /// <summary>Tags associated with this package.</summary>
     public List<Tag> Tags { get; set; } = [];
 
+    /// <summary>Tournament-results sources attached to this package.</summary>
+    public List<ResultsSource> ResultsSources { get; set; } = [];
+
     /// <summary>
     /// Gets the effective editors for the package.
     /// When SharedEditors is true, returns PackageEditors.
