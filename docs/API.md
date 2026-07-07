@@ -80,7 +80,8 @@ Browse and filter packages with pagination.
       ],
       "tags": [
         { "id": 5, "name": "2025" }
-      ]
+      ],
+      "hasResults": true
     }
   ],
   "totalCount": 150,
@@ -89,7 +90,7 @@ Browse and filter packages with pagination.
 }
 ```
 
-`type` in list items is numeric: `0` = Що?Де?Коли?, `1` = Своя гра. `toursCount` is the number of tours (ЩДК) or themes (Своя гра).
+`type` in list items is numeric: `0` = Що?Де?Коли?, `1` = Своя гра. `toursCount` is the number of tours (ЩДК) or themes (Своя гра). `hasResults` is `true` when the package has at least one loaded tournament-results source.
 
 ---
 

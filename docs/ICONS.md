@@ -56,6 +56,7 @@ The following icons are available in the sprite file:
 | `i-list-ul` | list-ul, list | Bulleted list |
 | `i-arrow-left` | arrow-left, back | Left arrow for back navigation |
 | `i-exclamation-circle` | exclamation-circle | Circle with "!" for inline errors |
+| `i-bar-chart` | bar-chart, stats, statistics | Filled bar chart marking a package that has loaded tournament statistics |
 
 ## Usage
 

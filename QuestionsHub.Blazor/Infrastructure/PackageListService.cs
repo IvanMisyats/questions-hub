@@ -133,7 +133,10 @@ public class PackageListService
                 p.PlayedFrom,
                 p.PlayedTo,
                 ToursCount = p.Tours.Count,
-                QuestionsCount = p.Tours.SelectMany(t => t.Questions).Count()
+                QuestionsCount = p.Tours.SelectMany(t => t.Questions).Count(),
+                // Package has results if at least one attached source is loaded (mirrors the
+                // "loaded sources" gate on the package detail page's «Результати» button).
+                HasResults = p.ResultsSources.Any(s => s.LoadedAt != null && s.TeamsCount > 0)
             })
             .ToListAsync();
 
@@ -193,7 +196,8 @@ public class PackageListService
                     p.ToursCount,
                     p.QuestionsCount,
                     editors,
-                    tags);
+                    tags,
+                    p.HasResults);
             })
             .ToList();
 

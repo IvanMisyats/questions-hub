@@ -1071,4 +1071,55 @@ public class PackageListServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Results Indicator
+
+    private async Task AddResultsSource(int packageId, DateTime? loadedAt, int? teamsCount)
+    {
+        using var context = _dbFactory.CreateDbContext();
+        context.ResultsSources.Add(new ResultsSource
+        {
+            PackageId = packageId,
+            Platform = ResultsPlatform.Rating,
+            Url = "https://rating.chgk.info/tournament/1",
+            LoadedAt = loadedAt,
+            TeamsCount = teamsCount
+        });
+        await context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task SearchPackages_HasResults_TrueWhenSourceLoaded()
+    {
+        var package = await CreatePackage("Package with results");
+        await AddResultsSource(package.Id, loadedAt: DateTime.UtcNow, teamsCount: 42);
+
+        var result = await _service.SearchPackages(new PackageListFilter(), CreateAnonymousAccessContext());
+
+        result.Packages.Should().ContainSingle().Which.HasResults.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SearchPackages_HasResults_FalseWhenNoSources()
+    {
+        await CreatePackage("Package without results");
+
+        var result = await _service.SearchPackages(new PackageListFilter(), CreateAnonymousAccessContext());
+
+        result.Packages.Should().ContainSingle().Which.HasResults.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SearchPackages_HasResults_FalseWhenSourceAttachedButNotLoaded()
+    {
+        // A source may be attached (link entered) yet never successfully loaded.
+        var package = await CreatePackage("Package with pending source");
+        await AddResultsSource(package.Id, loadedAt: null, teamsCount: null);
+
+        var result = await _service.SearchPackages(new PackageListFilter(), CreateAnonymousAccessContext());
+
+        result.Packages.Should().ContainSingle().Which.HasResults.Should().BeFalse();
+    }
+
+    #endregion
 }

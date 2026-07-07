@@ -64,7 +64,7 @@
         setupResetFiltersButton();
         setupTagButtons();
         setupTagExpandButton();
-        setupPackageTagClicks();
+        setupPackageCardClicks();
         updateTagVisibility();
 
         // Handle browser back/forward (only add once)
@@ -473,6 +473,13 @@
             ? `<strong>${pkg.toursCount}</strong> тем · <strong>${pkg.questionsCount}</strong> запитань`
             : `<strong>${pkg.questionsCount}</strong> запитань`;
 
+        // Stats marker when the package has loaded tournament results (mirrors Home.razor).
+        // A span (not a nested <a>, which is invalid inside the card link) intercepted in
+        // setupPackageCardClicks to navigate to the package's results page.
+        const statsIconHtml = pkg.hasResults
+            ? `<span class="package-stats-link ms-1" data-package-id="${pkg.id}" role="link" title="Є статистика" aria-label="Є статистика"><svg class="icon text-warning" width="16" height="16" aria-hidden="true" focusable="false"><use href="${ICONS_SVG}#i-bar-chart"></use></svg></span>`
+            : '';
+
         return `
             <div class="col">
                 <a href="/package/${pkg.id}" class="text-decoration-none text-reset">
@@ -481,7 +488,7 @@
                             <h5 class="card-title">${escapeHtml(pkg.title)}</h5>
                             <p class="card-text text-muted mb-2">
                                 <small>
-                                    ${typeBadge}${countsHtml}${playedPeriod ? ` · ${playedPeriod}` : ''}
+                                    ${typeBadge}${countsHtml}${playedPeriod ? ` · ${playedPeriod}` : ''}${statsIconHtml}
                                 </small>
                             </p>
                             ${publicationDateHtml}
@@ -838,15 +845,26 @@
     }
 
     /**
-     * Sets up click handlers on tag badges within package cards.
-     * Clicking a tag filters the package list by that tag.
+     * Sets up click handlers for interactive elements inside package cards.
+     * The whole card is a link to the package page; these sub-elements intercept the click
+     * (preventDefault + stopPropagation) so they can act instead of navigating there:
+     *   - tag badges filter the package list by that tag;
+     *   - the stats icon opens the package's results page.
      */
-    function setupPackageTagClicks() {
+    function setupPackageCardClicks() {
         const container = document.getElementById('packages-container') || document.getElementById('packages-section');
-        if (!container || container._hfPackageTagInit) return;
-        container._hfPackageTagInit = true;
+        if (!container || container._hfPackageCardInit) return;
+        container._hfPackageCardInit = true;
 
         container.addEventListener('click', function (e) {
+            const statsEl = e.target.closest('.package-stats-link[data-package-id]');
+            if (statsEl) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.location.href = `/package/${statsEl.dataset.packageId}/results`;
+                return;
+            }
+
             const tagEl = e.target.closest('.package-tag[data-tag-id]');
             if (!tagEl) return;
 

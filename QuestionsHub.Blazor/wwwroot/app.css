@@ -273,6 +273,16 @@ h1:focus {
     opacity: 0.8;
 }
 
+/* Stats icon on package cards - opens the package's results page */
+.package-stats-link {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.package-stats-link:hover {
+    opacity: 0.8;
+}
+
 #tag-expand-btn:focus,
 #tag-expand-btn:focus-visible {
     box-shadow: none;

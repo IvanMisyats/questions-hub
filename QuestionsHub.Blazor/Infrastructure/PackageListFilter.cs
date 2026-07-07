@@ -60,7 +60,8 @@ public record PackageCardDto(
     int ToursCount,
     int QuestionsCount,
     List<EditorBriefDto> Editors,
-    List<TagBriefDto> Tags
+    List<TagBriefDto> Tags,
+    bool HasResults
 );
 
 /// <summary>

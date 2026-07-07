@@ -209,6 +209,12 @@
                                             {
                                                 <span> · @playedPeriod</span>
                                             }
+                                            @if (package.HasResults)
+                                            {
+                                                <span class="package-stats-link ms-1" data-package-id="@package.Id" role="link" title="Є статистика" aria-label="Є статистика">
+                                                    <Icon Name="bar-chart" Class="text-warning" />
+                                                </span>
+                                            }
                                         </small>
                                     </p>
                                     @if (package.PublicationDate.HasValue)

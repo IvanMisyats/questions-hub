@@ -97,6 +97,16 @@ Positional, in two independent groups:
 
 ## UI surfaces
 
+- **Home page** (`Home.razor` + `home-filters.js`): each package card shows a stats bar-chart icon
+  (`Icon Name="bar-chart"`, tooltip «Є статистика») when the package has at least one loaded source
+  (`LoadedAt != null && TeamsCount > 0` — same gate as the detail page's «Результати» button).
+  The whole card links to the package page, so the icon can't be a nested `<a>`; instead it is a
+  `.package-stats-link` span whose click is intercepted (`setupPackageCardClicks`, same mechanism
+  as the tag badges) to navigate to the results page (`/package/{id}/results`).
+  Computed as `PackageCardDto.HasResults` via an `EXISTS` on `ResultsSources` in
+  `PackageListService.SearchPackages`; also surfaced in the public list API (`hasResults`). The
+  card is rendered twice — server-side in the Razor and client-side in `renderPackageCard` — so
+  both templates must stay in sync.
 - **Package page** (`PackageDetail.razor`): header gets a primary «Результати» button
   (internal page, preferred) + secondary external icon links — a shared `PlatformIcon`
   component renders each platform's favicon (`wwwroot/images/platform-*`) or a generic
