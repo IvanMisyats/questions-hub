@@ -203,11 +203,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*Теми\s*:?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex ShvagerThemeListHeader();
 
-    // Question start by value: "10. text", "20 . text", "30: text" (value is a multiple of 10).
+    // Question start by value: "10. text", "20 . text", "30: text", "30.text" (value is a multiple of 10).
     // Also matches value ranges used by reserve themes: "30-50. text".
-    // Whitespace (or end of line) is REQUIRED after the separator so that dates ("20.05.1986"),
-    // times ("10:00") and DOIs ("10.1038/...") are not mistaken for question starts.
-    [GeneratedRegex(@"^\s*(\d{2,3}(?:\s*[-–—]\s*\d{2,3})?)\s*[.:](?:\s+(.*))?$")]
+    // A NON-DIGIT (or end of line) is REQUIRED after the separator so that dates ("20.05.1986"),
+    // times ("10:00") and DOIs ("10.1038/...") are not mistaken for question starts, while a value
+    // written without a space before its text ("30.В дитинстві…") is still recognized.
+    [GeneratedRegex(@"^\s*(\d{2,3}(?:\s*[-–—]\s*\d{2,3})?)\s*[.:](?!\d)\s*(.*)$")]
     public static partial Regex ShvagerQuestionStart();
 
     // Numbered entry in the «Теми:» list: "1.\tАвіація", "2) Тема: Жереб"
@@ -219,8 +220,11 @@ public static partial class ParserPatterns
     public static partial Regex TitleWithTrailingParens();
 
     // Package-header editor line with optional prefix: "Редактор Євген Шляхов", "Коло 1. Редактор Євген Шляхов",
-    // "Редактор та автор тем - Олександр Мерзликін", "Автор тем: Ім'я Прізвище", "Авторка та редакторка тем — Ім'я Прізвище"
-    [GeneratedRegex(@"^\s*(?:(.*?)[.,:]\s*)?(?:Редактор|Автор)(?:и|ка|ки)?(?:\s+та\s+(?:автор|редактор)(?:и|ка|ки)?)?(?:\s+тем\w*)?\s*[-–—:]?\s+(.+)$", RegexOptions.IgnoreCase)]
+    // "Редактор та автор тем - Олександр Мерзликін", "Автор тем: Ім'я Прізвище", "Авторка та редакторка тем — Ім'я Прізвище",
+    // "Редактор та автор усіх запитань: Едуард Голуб (Київ)". The optional scope qualifier after the role
+    // ("тем", "запитань", "усіх запитань") is enumerated, not open-ended, so acknowledgment lines like
+    // "Редактор вдячний за тестування: …" are not captured (their name part fails author-list validation).
+    [GeneratedRegex(@"^\s*(?:(.*?)[.,:]\s*)?(?:Редактор|Автор)(?:и|ка|ки)?(?:\s+та\s+(?:автор|редактор)(?:и|ка|ки)?)?(?:\s+(?:(?:усіх|всіх)\s+)?(?:тем\w*|запитань|питань))?\s*[-–—:]?\s+(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex ShvagerHeaderEditors();
 
     // Bracketed picture reference inside question text: "[Малюнок 1 https://...]", "[Рисунок 2]"

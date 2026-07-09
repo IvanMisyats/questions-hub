@@ -24,6 +24,16 @@ public class ShvagerParserTests
         Text = text
     };
 
+    private static DocBlock BlockWithAsset(string text, string fileName, int index = 0) => new()
+    {
+        Index = index,
+        Text = text,
+        Assets =
+        [
+            new AssetReference { FileName = fileName, RelativeUrl = "/media/" + fileName, ContentType = "image/jpeg" }
+        ]
+    };
+
     private static List<DocBlock> Blocks(params string[] lines) =>
         lines.Select((text, i) => Block(text, i)).ToList();
 
@@ -456,6 +466,54 @@ public class ShvagerParserTests
         result.Warnings.Should().Contain(w => w.Contains("за 10") && w.Contains("не знайдено відповідь"));
     }
 
+    [Fact]
+    public void Parse_ValueWithoutSpaceAfterPeriod_DetectedAsQuestion()
+    {
+        // Real packages sometimes omit the space after the value's period («30.В дитинстві…»).
+        // The question must still be detected, not absorbed as content of the previous one.
+        var result = Parse(
+            "Тема: Тест",
+            "10. Перше?",
+            "Відповідь: а",
+            "20.Друге без пробілу після крапки?",
+            "Відповідь: б");
+
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Tours[0].Questions[1].Number.Should().Be("20");
+        result.Tours[0].Questions[1].Text.Should().Contain("без пробілу");
+        result.Tours[0].Questions[1].Answer.Should().Be("б");
+        // The value line was not absorbed as content of the previous question
+        result.Tours[0].Questions[0].Comment.Should().BeNull();
+    }
+
+    [Fact]
+    public void Parse_BareTitleBeforeNoSpaceValue10_DetectsThemeAndFirstQuestion()
+    {
+        // Regression: the second theme «Антарктида» is a bare title whose first question is written
+        // «10.У 1957…» with no space after the period. Both must be recognized so the theme is not
+        // merged into the previous one and left starting at «20.».
+        var lines = new List<string>();
+        lines.AddRange(Theme("Паралімпіада"));
+        lines.Add("Антарктида");
+        lines.Add("10.У 1957 році загинув студент Зиков?");
+        lines.Add("Відповідь: Ніжин");
+        lines.Add("20. Друге?");
+        lines.Add("Відповідь: діра");
+        lines.Add("30.Третє без пробілу?");
+        lines.Add("Відповідь: гармата");
+        lines.Add("40. Четверте?");
+        lines.Add("Відповідь: комар");
+        lines.Add("50. П'яте?");
+        lines.Add("Відповідь: пальма");
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Title.Should().Be("Антарктида");
+        result.Tours[1].Questions.Select(q => q.Number).Should().Equal("10", "20", "30", "40", "50");
+        result.Warnings.Should().NotContain(w => w.Contains("без назви"));
+    }
+
     [Theory]
     [InlineData("11. Не кратне десяти")]
     [InlineData("110. Завелике")]
@@ -711,6 +769,32 @@ public class ShvagerParserTests
         q.Text.Should().Be("Текст запитання?");
     }
 
+    [Fact]
+    public void Parse_HandoutLabelThenImage_QuestionTextNotSwallowedIntoHandout()
+    {
+        // «20. Роздатковий матеріал:» (empty inline text) announces an image handout. The image is
+        // the handout; the text after it is the question, not more handout text.
+        var blocks = new List<DocBlock>
+        {
+            Block("Тема: Тест", 0),
+            Block("10. Перше?", 1),
+            Block("Відповідь: а", 2),
+            Block("20. Роздатковий матеріал:", 3),
+            BlockWithAsset(" ", "img1.jpeg", 4),
+            Block("В 1969 році після автотрощі ВІН змінив діяльність?", 5),
+            Block("Відповідь: Абебе Бікіла", 6)
+        };
+
+        var result = _parser.Parse(blocks, []);
+
+        var q = result.Tours[0].Questions[1];
+        q.Number.Should().Be("20");
+        q.HandoutAssetFileName.Should().Be("img1.jpeg");
+        q.Text.Should().Contain("В 1969 році");
+        q.HandoutText.Should().BeNull();
+        q.Answer.Should().Be("Абебе Бікіла");
+    }
+
     #endregion
 
     #region Host instructions
@@ -833,6 +917,46 @@ public class ShvagerParserTests
 
         result.Title.Should().Be("Швагер-ліга 2026 Весна");
         result.Preamble.Should().Contain("Допомогли покращити").And.Contain("Окрема подяка");
+    }
+
+    [Fact]
+    public void Parse_EditorAuthorOfAllQuestionsHeader_ParsedAsPackageEditors()
+    {
+        // "Редактор та автор усіх запитань: …" — the scope qualifier is «усіх запитань», not «тем»,
+        // and the name carries a city that must be stripped.
+        var lines = new List<string>
+        {
+            "Швагер-ліга",
+            "Осінь-2021. Тиждень 4",
+            "Редактор та автор усіх запитань: Едуард Голуб (Київ)"
+        };
+        lines.AddRange(Theme("Тема: Тест"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Title.Should().Be("Швагер-ліга. Осінь-2021. Тиждень 4");
+        result.SharedEditors.Should().BeTrue();
+        result.PackageEditors.Should().ContainSingle().Which.Should().Be("Едуард Голуб");
+    }
+
+    [Fact]
+    public void Parse_EditorAcknowledgmentLine_NotParsedAsEditors()
+    {
+        // "Редактор вдячний за тестування: Імена…" is thanks, not an editor line. The enumerated
+        // scope qualifier must not swallow «вдячний за тестування», so the names fail validation
+        // and the line goes to the preamble.
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Редактор вдячний за тестування: Миколі Королю, Роману Немучинському, Ігорю Пальті"
+        };
+        lines.AddRange(Theme("Тема: Тест"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.SharedEditors.Should().BeFalse();
+        result.PackageEditors.Should().BeEmpty();
+        result.Preamble.Should().Contain("вдячний за тестування");
     }
 
     [Fact]

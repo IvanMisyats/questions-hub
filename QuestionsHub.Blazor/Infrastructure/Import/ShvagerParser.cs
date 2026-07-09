@@ -923,7 +923,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             else
             {
                 if (question.HandoutAssetFileName == null)
+                {
                     question.HandoutAssetFileName = asset.FileName;
+
+                    // A bare «Роздатковий матеріал:» label (no inline text) announces this image and
+                    // leaves the section in Handout. The image *is* the handout, so text that follows
+                    // is the question, not more handout — revert so it is not swallowed by HandoutText.
+                    if (ctx.CurrentSection == Section.Handout && question.HandoutText == null)
+                    {
+                        ctx.CurrentSection = Section.QuestionText;
+                    }
+                }
                 else
                     ctx.Result.Warnings.Add($"Запитання за {question.Number}: додаткове зображення {asset.FileName} пропущено");
             }
