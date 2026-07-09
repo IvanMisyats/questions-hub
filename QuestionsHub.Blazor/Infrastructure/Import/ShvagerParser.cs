@@ -194,8 +194,28 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             }
         }
 
-        // Fallback: a short plain line immediately followed by a value-10 question is a theme title
-        if (IsPlausibleBareTitle(line) && NextQuestionValueIs10(lines, index)
+        // A header may append an explanatory parenthetical the «Теми:» list entry lacks
+        // («В. В. (ініціальна тема…)» ↔ anchor «В. В.»; «-ван- / -гог- (…)» ↔ «-ван- / -гог-»).
+        // Match the anchor on the core title but keep the full header (with the explanation)
+        // as the theme title, like the other themes whose parenthetical was short enough to
+        // pass the bare-title check directly.
+        var core = StripTrailingParenthetical(candidate);
+        if (!string.Equals(core, candidate, StringComparison.Ordinal))
+        {
+            var coreNormalized = NormalizeTitle(core);
+            if (ctx.Anchors.TryGetValue(coreNormalized, out var coreAnchor))
+            {
+                ctx.Anchors.Remove(coreNormalized);
+                var (fullTitle, _) = SplitTitleAndAuthors(candidate);
+                StartTheme(ctx, fullTitle, coreAnchor.Authors);
+                return true;
+            }
+        }
+
+        // Fallback: a plain line immediately followed by a value-10 question is a theme title.
+        // Judge plausibility on the core title (list number already stripped into `candidate`,
+        // trailing explanatory parenthetical removed) so long descriptive headers still pass.
+        if (IsPlausibleBareTitle(core) && NextQuestionValueIs10(lines, index)
             && (ctx.CurrentTheme == null || ctx.CurrentTheme.Questions.Count > 0))
         {
             var (title, authors) = SplitTitleAndAuthors(candidate);
@@ -367,6 +387,23 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             : text;
 
     /// <summary>
+    /// Returns the title with a single trailing «(…)» group removed, whatever it contains
+    /// — used to match a header carrying an explanatory parenthetical against a bare «Теми:»
+    /// anchor, and to measure a long descriptive header by its core length. Returns the input
+    /// unchanged when there is no trailing group or nothing precedes it.
+    /// </summary>
+    private static string StripTrailingParenthetical(string text)
+    {
+        var match = ParserPatterns.TitleWithTrailingParens().Match(text);
+        if (match.Success)
+        {
+            var head = match.Groups[1].Value.Trim();
+            if (head.Length > 0) return head;
+        }
+        return text;
+    }
+
+    /// <summary>
     /// Splits «Назва (Автор1, Автор2)» into the title and the author list.
     /// Parenthesized text is treated as authors only when it looks like person names.
     /// </summary>
@@ -440,6 +477,16 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             ctx.Result.Warnings.Add($"Запитання за {value} з'явилося до першої теми — створено тему без назви");
             StartTheme(ctx, "", []);
         }
+        else if (ctx.CurrentTheme.Questions.Count > 0 && value <= LastQuestionStartValue(ctx.CurrentTheme))
+        {
+            // Within a theme, question values strictly increase (10 → 20 → 30 → 40 → 50). A value
+            // that does not exceed the previous question's means the current theme is complete and
+            // a new one began — recover even when its title line was not recognized (e.g. a long
+            // descriptive header, or a title separated from its first question by a preamble).
+            ctx.Result.Warnings.Add(
+                $"Тема «{ctx.CurrentTheme.Title}»: запитання за {value} йде після запитання за більшу вартість — розпочато нову тему без назви");
+            StartTheme(ctx, "", []);
+        }
 
         FinalizeQuestion(ctx);
 
@@ -468,6 +515,18 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The starting value of a theme's last question (the low end of a «30-50» range),
+    /// used to detect the value reset that marks a new theme.
+    /// </summary>
+    private static int LastQuestionStartValue(TourDto theme)
+    {
+        var first = theme.Questions[^1].Number
+            .Split(['-', '–', '—'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+        return int.TryParse(first, out var v) ? v : 0;
     }
 
     // ==================== Package header ====================

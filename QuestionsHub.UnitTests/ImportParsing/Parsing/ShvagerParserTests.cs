@@ -337,6 +337,72 @@ public class ShvagerParserTests
         result.Warnings.Should().Contain(w => w.Contains("до першої теми"));
     }
 
+    [Fact]
+    public void Parse_LongDescriptiveHeaderMatchingAnchor_DetectedAsSeparateTheme()
+    {
+        // Regression: a non-first header whose explanatory parenthetical pushes it past the
+        // bare-title length limit («5. В. В. (це звичайна ініціальна тема: …)») must still be
+        // matched against its «Теми:» anchor «5. В. В.» and not merged into the previous theme.
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "1. Аква Віта",
+            "2. В. В.",
+            ""
+        };
+        lines.AddRange(Theme("1. Аква Віта (про воду або життя)"));
+        lines.AddRange(Theme("2. В. В. (це звичайна ініціальна тема: кожна відповідь складається з двох слів, кожне з яких починається на літеру «В»)", 6));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(2);
+        result.Tours[0].Title.Should().Be("Аква Віта (про воду або життя)");
+        result.Tours[0].Questions.Should().HaveCount(5);
+        result.Tours[1].Title.Should().StartWith("В. В.");
+        result.Tours[1].Questions.Should().HaveCount(5);
+        result.Warnings.Should().NotContain(w => w.Contains("запитань замість"));
+    }
+
+    [Fact]
+    public void Parse_LongDescriptiveHeaderWithoutList_DetectedByCoreLength()
+    {
+        // No «Теми:» list: the bare-title fallback must judge the header by its core length
+        // (list number and trailing parenthetical excluded), not the full 100+ char line.
+        var lines = new List<string>();
+        lines.AddRange(Theme("1. Аква Віта (про воду або життя)"));
+        lines.AddRange(Theme("2. -ван- / -гог- (це альтернативно-матрична тема, відповіді в ній належать або до матриці -ван-, або до матриці -гог-; редактор лишив мітку перед кожним запитанням)", 6));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Title.Should().StartWith("-ван- / -гог-");
+        result.Tours[1].Questions.Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void Parse_ValueResetWithoutRecognizedHeader_StartsNewUntitledTheme()
+    {
+        // Backstop: even if a theme header is completely unrecognizable, a value that does not
+        // exceed the previous question's (a «10.» after a «50.») starts a new theme so questions
+        // are grouped in fives instead of piling onto the previous theme.
+        var lines = new List<string>();
+        lines.AddRange(Theme("Тема: Перша"));
+        // A header that is neither an anchor nor followed directly by «10.» (a preamble sits between)
+        lines.Add("Друга тема з нульовим запитанням");
+        lines.Add("У цій темі буде нульове запитання за 0 балів.");
+        lines.Add("0. Жартівливе нульове запитання.");
+        lines.Add("Відповідь: жарт");
+        lines.AddRange(Theme("", 6)[1..]); // 10..50 questions with no header line
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(2);
+        result.Tours[0].Questions.Should().HaveCount(5);
+        result.Tours[1].Questions.Should().HaveCount(5);
+        result.Warnings.Should().Contain(w => w.Contains("розпочато нову тему без назви"));
+    }
+
     #endregion
 
     #region Question values
