@@ -203,6 +203,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*Теми\s*:?\s*$", RegexOptions.IgnoreCase)]
     public static partial Regex ShvagerThemeListHeader();
 
+    // Stand-alone theme-author line written in parentheses: "(Автор – Ім'я Прізвище)",
+    // "(Авторка: Ім'я Прізвище)", "(Автори — Ім'я1, Ім'я2)". Group 1 is the name list; the
+    // caller validates it looks like a person-name list so non-author parentheticals are ignored.
+    [GeneratedRegex(@"^\s*\(\s*Автор(?:а|и|ка|ки|ы|\(и\))?\s*[:.\-–—]?\s*(.+?)\s*\)\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShvagerParentheticalAuthor();
+
     // Question start by value: "10. text", "20 . text", "30: text", "30.text" (value is a multiple of 10).
     // Also matches value ranges used by reserve themes: "30-50. text".
     // A NON-DIGIT (or end of line) is REQUIRED after the separator so that dates ("20.05.1986"),

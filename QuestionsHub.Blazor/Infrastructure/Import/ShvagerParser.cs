@@ -360,9 +360,42 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             var text = lines[i].Text;
             if (string.IsNullOrWhiteSpace(text)) continue;
 
+            // An author designation may sit between the theme title and its first question
+            // («Миші» / «Автор: Тарас Вахрів» / «10. …», or the parenthetical «(Авторка – …)»).
+            // Skip it so the title line is still recognized as standing before the «10.» question.
+            if (TryMatchThemeAuthorLine(text, out _)) continue;
+
             var match = ParserPatterns.ShvagerQuestionStart().Match(text);
             return match.Success && match.Groups[1].Value == "10";
         }
+        return false;
+    }
+
+    /// <summary>
+    /// Recognizes a stand-alone theme-author line and returns its author list. Two forms appear
+    /// in real headers between the title and the first question:
+    ///   • label form        — «Автор: Ім'я Прізвище», «Авторка: …»
+    ///   • parenthetical form — «(Авторка – Ім'я Прізвище)»
+    /// Only matches when the name part looks like a person-name list, so a title that merely
+    /// starts with «Автор…» or carries a non-name parenthetical is not mistaken for an author line.
+    /// </summary>
+    private static bool TryMatchThemeAuthorLine(string line, out List<string> authors)
+    {
+        var label = ParserPatterns.AuthorLabel().Match(line);
+        if (label.Success && LooksLikeAuthorList(label.Groups[1].Value))
+        {
+            authors = PackageParser.ParseAuthorList(label.Groups[1].Value);
+            return true;
+        }
+
+        var paren = ParserPatterns.ShvagerParentheticalAuthor().Match(line);
+        if (paren.Success && LooksLikeAuthorList(paren.Groups[1].Value))
+        {
+            authors = PackageParser.ParseAuthorList(paren.Groups[1].Value);
+            return true;
+        }
+
+        authors = [];
         return false;
     }
 
@@ -621,16 +654,21 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
     private void ProcessLabelOrContent(string line, Context ctx)
     {
-        // «Редактор: X» / «Автор: X» in a theme header (before any question) → theme authors
+        // A theme header (before any question) may carry an author designation on its own line →
+        // theme authors. «Редактор: X» plus the two «Автор» forms handled by TryMatchThemeAuthorLine
+        // («Автор: Тарас Вахрів», «(Авторка – Вікторія Маландіна)»).
         if (ctx.CurrentQuestion == null && ctx.CurrentTheme != null)
         {
             var editorsMatch = ParserPatterns.EditorsLabel().Match(line);
-            if (!editorsMatch.Success)
-                editorsMatch = ParserPatterns.AuthorLabel().Match(line);
-
             if (editorsMatch.Success && LooksLikeAuthorList(editorsMatch.Groups[1].Value))
             {
                 ctx.CurrentTheme.Editors.AddRange(PackageParser.ParseAuthorList(editorsMatch.Groups[1].Value));
+                return;
+            }
+
+            if (TryMatchThemeAuthorLine(line, out var themeAuthors))
+            {
+                ctx.CurrentTheme.Editors.AddRange(themeAuthors);
                 return;
             }
         }
@@ -772,6 +810,40 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             if (handout.Length > 0)
             {
                 question.HandoutText = Append(question.HandoutText, Normalize(handout));
+            }
+            return true;
+        }
+
+        // A bare «[…]» bracket after a stand-alone «Роздатка:» marker — the marker and the bracket
+        // sit on separate lines («10. Роздатка:» / «[» / «url» / «]» / question text). The current
+        // section is already Handout; wrap the bracket content as handout and let the closing «]»
+        // hand control back to the question text, otherwise everything after «]» is swallowed.
+        if (ctx.CurrentSection == Section.Handout && line.StartsWith('['))
+        {
+            var closeIndex = line.IndexOf(']');
+            if (closeIndex < 0)
+            {
+                ctx.InsideHandoutBracket = true;
+                var opened = line[1..].Trim();
+                if (opened.Length > 0)
+                {
+                    question.HandoutText = Append(question.HandoutText, Normalize(opened));
+                }
+                return true;
+            }
+
+            var inside = line[1..closeIndex].Trim();
+            if (inside.Length > 0)
+            {
+                question.HandoutText = Append(question.HandoutText, Normalize(inside));
+            }
+
+            ctx.CurrentSection = Section.QuestionText;
+
+            var rest = line[(closeIndex + 1)..].Trim();
+            if (rest.Length > 0)
+            {
+                ProcessLabelOrContent(rest, ctx);
             }
             return true;
         }

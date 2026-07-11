@@ -391,6 +391,97 @@ public class ShvagerParserTests
     }
 
     [Fact]
+    public void Parse_TitleFollowedByAuthorLabelLine_TitleAndThemeEditorDetected()
+    {
+        // Real header shape: a bare title, then an «Автор: Ім'я Прізвище» line, then the first
+        // question. The author line sits between the title and «10.», so the title must still be
+        // recognized (not the author line) and the author becomes the theme editor.
+        var result = Parse(
+            "Миші",
+            "Автор: Тарас Вахрів",
+            "",
+            "10. Питання?",
+            "Відповідь: а",
+            "20. Друге?",
+            "Відповідь: б",
+            "30. Третє?",
+            "Відповідь: в",
+            "40. Четверте?",
+            "Відповідь: г",
+            "50. П'яте?",
+            "Відповідь: ґ");
+
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Title.Should().Be("Миші");
+        result.Tours[0].Editors.Should().ContainSingle().Which.Should().Be("Тарас Вахрів");
+        result.Tours[0].Questions.Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void Parse_TitleFollowedByParentheticalAuthorLine_TitleAndThemeEditorDetected()
+    {
+        // Real header shape: a bare title, then a parenthetical «(Авторка – Ім'я Прізвище)» author
+        // line, then the first question. The parenthetical must not be mistaken for the title, and
+        // its name becomes the theme editor.
+        var result = Parse(
+            "Останівка",
+            "(Авторка – Вікторія Маландіна)",
+            "",
+            "10. Питання?",
+            "Відповідь: а",
+            "20. Друге?",
+            "Відповідь: б",
+            "30. Третє?",
+            "Відповідь: в",
+            "40. Четверте?",
+            "Відповідь: г",
+            "50. П'яте?",
+            "Відповідь: ґ");
+
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Title.Should().Be("Останівка");
+        result.Tours[0].Editors.Should().ContainSingle().Which.Should().Be("Вікторія Маландіна");
+        result.Tours[0].Questions.Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void Parse_ParentheticalAuthorAfterThemeList_TitleAndEditorDetected()
+    {
+        // Same parenthetical-author header, but reached straight out of the «Теми:» list (the very
+        // first body theme). The list carries a single-surname author that does not resolve to a
+        // full name, so the authoritative editor comes from the real header's author line.
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "1.\tОстанівка (Маландіна)",
+            ""
+        };
+        lines.AddRange(new[]
+        {
+            "Останівка",
+            "(Авторка – Вікторія Маландіна)",
+            "",
+            "10. Питання?",
+            "Відповідь: а",
+            "20. Друге?",
+            "Відповідь: б",
+            "30. Третє?",
+            "Відповідь: в",
+            "40. Четверте?",
+            "Відповідь: г",
+            "50. П'яте?",
+            "Відповідь: ґ"
+        });
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(1);
+        result.Tours[0].Title.Should().Be("Останівка");
+        result.Tours[0].Editors.Should().ContainSingle().Which.Should().Be("Вікторія Маландіна");
+    }
+
+    [Fact]
     public void Parse_ValueResetWithoutRecognizedHeader_StartsNewUntitledTheme()
     {
         // Backstop: even if a theme header is completely unrecognizable, a value that does not
@@ -767,6 +858,43 @@ public class ShvagerParserTests
         var q = result.Tours[0].Questions[0];
         q.HandoutText.Should().Be("перший рядок\nдругий рядок");
         q.Text.Should().Be("Текст запитання?");
+    }
+
+    [Fact]
+    public void Parse_HandoutMarkerThenBareBracket_TextAfterCloseIsQuestion()
+    {
+        // Real shape: «10. Роздатка:» announces a handout, then the content is wrapped in a bare
+        // «[ … ]» bracket on following lines (marker and bracket decoupled). The bracket content is
+        // the handout; text after the closing «]» is the question, not more handout.
+        var result = Parse(
+            "Тема: Тест",
+            "10. Роздатка:",
+            "[",
+            "https://ibb.co/zNH9qnt",
+            "]",
+            "",
+            "За легендою, сир мав іншу форму.",
+            "Відповідь: Наполеон");
+
+        var q = result.Tours[0].Questions[0];
+        q.HandoutText.Should().Be("https://ibb.co/zNH9qnt");
+        q.Text.Should().Be("За легендою, сир мав іншу форму.");
+        q.Answer.Should().Be("Наполеон");
+    }
+
+    [Fact]
+    public void Parse_HandoutMarkerThenSingleLineBareBracket_TextAfterCloseIsQuestion()
+    {
+        // The decoupled bracket may also be single-line: «Роздатка:» then «[url] Текст».
+        var result = Parse(
+            "Тема: Тест",
+            "10. Роздатка:",
+            "[слово] Що це?",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.HandoutText.Should().Be("слово");
+        q.Text.Should().Be("Що це?");
     }
 
     [Fact]
