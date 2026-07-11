@@ -152,24 +152,31 @@ else
                 @foreach (var tour in _package.Tours)
                 {
                     <div id="tour-@tour.Id" class="tour-section">
-                        <h2>
-                            @if (_package.Type == PackageType.Shvager)
-                            {
-                                @tour.ThemeDisplayName
-                            }
-                            else if (tour.IsWarmup)
-                            {
-                                <text>Розминка</text>
-                            }
-                            else if (tour.IsShootout)
-                            {
-                                <text>Перестрілка</text>
-                            }
-                            else
-                            {
-                                <text>Тур @tour.Number</text>
-                            }
-                        </h2>
+                        <div class="tour-heading">
+                            <h2 class="mb-0">
+                                @if (_package.Type == PackageType.Shvager)
+                                {
+                                    @tour.ThemeDisplayName
+                                }
+                                else if (tour.IsWarmup)
+                                {
+                                    <text>Розминка</text>
+                                }
+                                else if (tour.IsShootout)
+                                {
+                                    <text>Перестрілка</text>
+                                }
+                                else
+                                {
+                                    <text>Тур @tour.Number</text>
+                                }
+                            </h2>
+                            <button class="btn btn-sm copy-link-btn"
+                                    onclick="copyTourLink(this, @_package.Id, @tour.Id)"
+                                    title="@(_package.Type == PackageType.Shvager ? "Скопіювати посилання на тему" : "Скопіювати посилання на тур")">
+                                <Icon Name="link" Class="copy-icon" />
+                            </button>
+                        </div>
 
                         @if (tour.HasBlocks)
                         {

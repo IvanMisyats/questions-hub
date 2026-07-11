@@ -34,6 +34,34 @@
     margin-bottom: 3rem;
 }
 
+/* Tour heading with copy-link button */
+.tour-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.copy-link-btn {
+    padding: 0.15rem 0.35rem;
+    color: var(--app-text-muted);
+    background: transparent;
+    border: none;
+    line-height: 1;
+}
+
+.copy-link-btn:hover {
+    color: var(--app-primary);
+}
+
+.copy-icon {
+    vertical-align: middle;
+}
+
+.copy-icon.copied {
+    color: #28a745;
+}
+
 /* Block sections */
 .block-section {
     margin-bottom: 2rem;

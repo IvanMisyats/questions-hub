@@ -65,10 +65,8 @@ window.toggleAllAnswers = function(button) {
     }
 };
 
-// Copy question link to clipboard
-window.copyQuestionLink = function(button, questionId) {
-    const url = window.location.origin + '/question/' + questionId;
-
+// Copy a URL to the clipboard and briefly swap the button's link icon to a checkmark
+function copyLinkToClipboard(button, url) {
     // Use existing copyToClipboard if available, otherwise inline
     const copyPromise = window.copyToClipboard
         ? window.copyToClipboard(url)
@@ -98,4 +96,14 @@ window.copyQuestionLink = function(button, questionId) {
     }).catch(function(err) {
         console.error('Copy failed:', err);
     });
+}
+
+// Copy question link to clipboard
+window.copyQuestionLink = function(button, questionId) {
+    copyLinkToClipboard(button, window.location.origin + '/question/' + questionId);
+};
+
+// Copy a tour (or Своя гра theme) link to the clipboard, anchored on its package page
+window.copyTourLink = function(button, packageId, tourId) {
+    copyLinkToClipboard(button, window.location.origin + '/package/' + packageId + '#tour-' + tourId);
 };

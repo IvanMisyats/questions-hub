@@ -6,7 +6,7 @@
     {
         var tourElementId = $"tour-{tour.Id}";
         <div class="tour-group mb-3">
-            <a href="#@tourElementId" class="nav-link tour-link" onclick="scrollToElement('@tourElementId'); return false;">
+            <a href="/package/@Package.Id#@tourElementId" class="nav-link tour-link" onclick="scrollToElement('@tourElementId'); return false;">
                 @if (Package.Type == PackageType.Shvager)
                 {
                     @* Sidebar is narrow: theme title alone (no «Тема N.» prefix), fallback to «Тема N» *@
@@ -34,14 +34,14 @@
                     var blockElementId = $"block-{block.Id}";
                     var currentBlockNumber = blockNumberInPackage;
                     <div class="block-group ms-2">
-                        <a href="#@blockElementId" class="nav-link block-link small text-muted" onclick="scrollToElement('@blockElementId'); return false;">
+                        <a href="/package/@Package.Id#@blockElementId" class="nav-link block-link small text-muted" onclick="scrollToElement('@blockElementId'); return false;">
                             @block.GetDisplayName(currentBlockNumber)
                         </a>
                         <div class="question-links">
                             @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
                             {
                                 var questionElementId = $"question-{question.Id}";
-                                <a href="#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
+                                <a href="/package/@Package.Id#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
                                     @question.Number
                                 </a>
                             }
@@ -56,7 +56,7 @@
                         @foreach (var question in orphanQuestions)
                         {
                             var questionElementId = $"question-{question.Id}";
-                            <a href="#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
+                            <a href="/package/@Package.Id#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
                                 @question.Number
                             </a>
                         }
@@ -70,7 +70,7 @@
                     @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                     {
                         var questionElementId = $"question-{question.Id}";
-                        <a href="#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
+                        <a href="/package/@Package.Id#@questionElementId" class="nav-link question-link" onclick="scrollToElement('@questionElementId'); return false;">
                             @question.Number
                         </a>
                     }
