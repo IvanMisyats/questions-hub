@@ -104,6 +104,38 @@ otherwise Named tour. It is allowed through only when the current question is al
 appears before the answer and restarts at 1, so it still stays as content. If you change this
 logic, cover both cases in tests.
 
+## Своя гра (Shvager) theme-boundary failure modes
+
+The bare-title format (no explicit `Тема:` prefix) detects a theme by a plausible title line
+standing right before the first `10.` question. Three real-world header shapes broke this; all
+are now handled (with regression tests), but the mechanics are worth knowing:
+
+- **Author line between the title and `10.`** — headers commonly read `Миші` / `Автор: Тарас
+  Вахрів` / (blank) / `10.…`, or with a parenthetical author `Останівка` / `(Авторка – Вікторія
+  Маландіна)` / `10.…`. `NextQuestionValueIs10` only looked at the *immediately* following
+  non-blank line, so the **author line got parsed as the theme title** and the real title was
+  lost. Fix: `NextQuestionValueIs10` skips theme-author designation lines (via
+  `TryMatchThemeAuthorLine`), and the theme-header handler attaches both the `Автор: X` label
+  form **and** the parenthetical `(Авторка – X)` form as theme editors (`ShvagerParentheticalAuthor`
+  regex, guarded by `LooksLikeAuthorList`). Symptom to recognize: a theme `Title` that is literally
+  `Автор: …` or `(Авторка – …)`, or an empty title with a "questions out of order" warning.
+
+- **`Теми:` list authors are single surnames** — list entries look like `4.\tОстанівка
+  (Маландіна)`. `LooksLikeAuthorList` requires 2–3 capitalized words (`Ім'я Прізвище`), so a lone
+  surname fails and the **anchor keeps `(Маландіна)` glued into its title** → the bare title
+  `Останівка` never matches the anchor. That's fine: the title is recovered by the
+  before-`10.` fallback, and the authoritative editor comes from the real header's author line
+  (full name), not the list. Don't "fix" this by loosening `LooksLikeAuthorList` — it would let
+  non-author parentheticals become authors. Expect a benign `У списку «Теми:» N тем, а в пакеті
+  знайдено M` count-mismatch warning when a reserve theme (`Запас`) isn't in the list.
+
+- **Decoupled handout bracket** — `10. Роздатка:` (bare marker → section becomes Handout) followed
+  by a bare `[` / url / `]` on separate lines. The multiline-bracket state only engaged for
+  `[Роздатка…` (keyword *inside* the bracket), so the bare `[` never opened it, `]` was never a
+  close, and **every line after `]` — including the question text — was swallowed into
+  `HandoutText`**. Fix: `TryProcessHandoutBracket` treats a bare `[…]` while already in the Handout
+  section as the handout wrapper and reverts to question text after `]`.
+
 ## Tests
 
 Parser tests use synthetic blocks built with the `Block("...")` helper in
