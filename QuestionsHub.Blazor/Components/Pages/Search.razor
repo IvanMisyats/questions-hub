@@ -128,6 +128,14 @@
                                         @Sanitize(result.TextHighlighted, result.Text, _searchedQuery)
                                     </div>
 
+                                    @* Своя гра answer-form hint (Форма): shown below the question text as a player hint *@
+                                    @if (result.PackageType == PackageType.Shvager && !string.IsNullOrEmpty(result.AnswerForm))
+                                    {
+                                        <div class="question-form mb-3">
+                                            <span class="question-form-label">Форма:</span> @result.AnswerForm
+                                        </div>
+                                    }
+
                                     @* Answer section *@
                                     <div class="answer-section">
                                         <div class="answer-field">
@@ -148,7 +156,7 @@
                                             </div>
                                         }
 
-                                        @if (!string.IsNullOrEmpty(result.AnswerForm))
+                                        @if (result.PackageType != PackageType.Shvager && !string.IsNullOrEmpty(result.AnswerForm))
                                         {
                                             <div class="answer-field">
                                                 <span class="answer-label">Форма:</span> @result.AnswerForm

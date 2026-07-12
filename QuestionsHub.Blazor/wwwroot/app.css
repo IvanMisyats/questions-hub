@@ -448,6 +448,7 @@ h1:focus {
 }
 
 .adult-blur-wrapper.blurred .question-text,
+.adult-blur-wrapper.blurred .question-form,
 .adult-blur-wrapper.blurred .answer-section,
 .adult-blur-wrapper.blurred .answer-toggle,
 .adult-blur-wrapper.blurred .handout,

@@ -16,6 +16,20 @@
     white-space: pre-line;
 }
 
+/* Своя гра answer-form hint (Форма): a player-facing hint shown below the
+   question text and always visible (never collapsed with the answer). */
+.question-form {
+    margin-top: 0.5rem;
+    white-space: pre-line;
+    font-style: italic;
+    color: var(--app-text-secondary);
+}
+
+.question-form-label {
+    font-weight: 600;
+    font-style: normal;
+}
+
 .handout {
     margin-top: 0.75rem;
     padding: 0.75rem;

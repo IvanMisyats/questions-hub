@@ -24,6 +24,13 @@
 
 <div class="question-text">@Question.Text.Trim()</div>
 
+@if (IsShvager && !string.IsNullOrEmpty(Question.AnswerForm))
+{
+    <div class="question-form">
+        <span class="question-form-label">Форма:</span> @Question.AnswerForm
+    </div>
+}
+
 @ChildContent
 
 <div class="answer-section @(ShowAnswer ? "" : "answer-hidden")">
@@ -45,7 +52,7 @@
         </div>
     }
 
-    @if (!string.IsNullOrEmpty(Question.AnswerForm))
+    @if (!IsShvager && !string.IsNullOrEmpty(Question.AnswerForm))
     {
         <div class="answer-field">
             <span class="answer-label">Форма:</span> @Question.AnswerForm
@@ -93,6 +100,14 @@
     [Parameter, EditorRequired]
     public required Question Question { get; set; }
 
+    /// <summary>
+    /// Game type of the question's package. For Своя гра, the answer-form hint (Форма)
+    /// is shown below the question text as a player hint instead of inside the collapsible
+    /// answer section. When not supplied, falls back to the loaded Tour.Package navigation.
+    /// </summary>
+    [Parameter]
+    public PackageType? Type { get; set; }
+
     [Parameter]
     public bool ShowHostInstructions { get; set; } = true;
 
@@ -113,5 +128,7 @@
     /// </summary>
     [Parameter]
     public QuestionStat? Stat { get; set; }
+
+    private bool IsShvager => (Type ?? Question.Tour?.Package?.Type ?? PackageType.Www) == PackageType.Shvager;
 }
 

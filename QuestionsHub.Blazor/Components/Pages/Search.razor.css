@@ -27,6 +27,18 @@
     white-space: pre-line;
 }
 
+/* Своя гра answer-form hint (Форма): player-facing hint below the question text. */
+.question-form {
+    white-space: pre-line;
+    font-style: italic;
+    color: var(--app-text-secondary);
+}
+
+.question-form-label {
+    font-weight: 600;
+    font-style: normal;
+}
+
 .handout {
     padding: 0.75rem;
     background: var(--app-handout-bg);
