@@ -55,6 +55,17 @@ public class ShvagerParserTests
         "Відповідь: п'ята"
     ];
 
+    /// <summary>A 5-question theme whose bare-title header carries an «Автор:» line.</summary>
+    private static string[] ThemeWithAuthor(string title, string author, int startId = 1) =>
+        [title, $"Автор: {author}", "", .. Theme("", startId)[1..]];
+
+    /// <summary>
+    /// A 5-question theme whose header places a preamble line between the «Автор:» line and the
+    /// first «10.» question — the shape that defeats the before-«10.» lookahead.
+    /// </summary>
+    private static string[] ThemeWithAuthorAndPreamble(string title, string author, string preamble, int startId = 1) =>
+        [title, $"Автор: {author}", preamble, "", .. Theme("", startId)[1..]];
+
     #region Theme detection
 
     [Theory]
@@ -502,6 +513,122 @@ public class ShvagerParserTests
         result.Tours[0].Questions.Should().HaveCount(5);
         result.Tours[1].Questions.Should().HaveCount(5);
         result.Warnings.Should().Contain(w => w.Contains("розпочато нову тему без назви"));
+    }
+
+    [Fact]
+    public void Parse_NumberedListEntryTen_RecordedAsAnchorNotValue10Question()
+    {
+        // A numbered «Теми:» list reaching entry «10.»: that entry's number is also a question value,
+        // so it must be recognized as list position 10, not the first value-10 question (which would
+        // abandon the list, drop the remaining entries and start a spurious theme).
+        var lines = new List<string> { "Пакет", "Теми:" };
+        for (var i = 1; i <= 11; i++)
+        {
+            lines.Add($"{i}.\tТема{i} (Прізвище)");
+        }
+        lines.Add("");
+        for (var i = 1; i <= 11; i++)
+        {
+            lines.AddRange(ThemeWithAuthor($"Тема{i}", "Іван Петренко"));
+        }
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(11);
+        result.Tours.Select(t => t.Title).Should().Equal(Enumerable.Range(1, 11).Select(i => $"Тема{i}"));
+        result.Tours.Should().OnlyContain(t => t.Questions.Count == 5);
+        // The full 11-entry list — including entry «10.» — is preserved in the preamble
+        result.Preamble.Should().Contain("10.\tТема10 (Прізвище)").And.Contain("11.\tТема11 (Прізвище)");
+        result.Warnings.Should().NotContain(w => w.Contains("розпочато нову тему без назви"));
+        result.Warnings.Should().NotContain(w => w.Contains("У списку «Теми:»"));
+    }
+
+    [Fact]
+    public void Parse_ThemeTitleSeparatedFromQuestionsByPreamble_RecoveredViaAnchorCore()
+    {
+        // The list entry keeps a glued single surname «(Мартиненко)»; the real header is separated
+        // from «10.» by a preamble, defeating the before-«10.» lookahead. Anchor-core matching still
+        // finds the title (before the fix the theme came out untitled and the title leaked upward).
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "1.\tПомилки (Мартиненко)",
+            ""
+        };
+        lines.AddRange(ThemeWithAuthorAndPreamble(
+            "Помилки", "Андрій Мартиненко", "Шоу могли бути не цілком українськими."));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().ContainSingle();
+        result.Tours[0].Title.Should().Be("Помилки");
+        result.Tours[0].Editors.Should().ContainSingle().Which.Should().Be("Андрій Мартиненко");
+        result.Tours[0].Preamble.Should().Contain("Шоу могли бути");
+        result.Tours[0].Questions.Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void Parse_IncompleteNumberedListWithTenCollision_DetectsAllThemesWithTitles()
+    {
+        // End-to-end reproduction of «Швагер-супер-кубок 2022»: a numbered «Теми:» list whose 12
+        // entries carry a single surname «N.\tНазва (Прізвище)». Entry «10.» collides with a value-10
+        // question, and two themes place a preamble between the «Автор:» line and the first «10.».
+        var titles = new[]
+        {
+            "-РОН-", "Кіно", "Польська опера", "Осінні квіти", "Написи", "Прийоми їжі",
+            "Помилки", "Не тільки назви телешоу", "Римуй як Сергій Вікторович",
+            "Не лише позивні", "Сусіди", "-АНДА-"
+        };
+        var surnames = new[]
+        {
+            "Каунін", "Каунін", "Маландіна", "Маландіна", "Шляхов", "Шляхов",
+            "Мартиненко", "Мартиненко", "Мерзликін", "Мерзликін", "Вахрів", "Вахрів"
+        };
+
+        var lines = new List<string> { "Швагер-супер-кубок 2022", "", "Теми:" };
+        for (var i = 0; i < titles.Length; i++)
+        {
+            lines.Add($"{i + 1}.\t{titles[i]} ({surnames[i]})");
+        }
+        lines.Add("");
+
+        // Bodies: themes 8 and 9 (0-based 7, 8) carry a preamble between the author line and «10.»
+        lines.AddRange(ThemeWithAuthor("-РОН-", "Костянтин Каунін"));
+        lines.AddRange(ThemeWithAuthor("Кіно", "Костянтин Каунін"));
+        lines.AddRange(ThemeWithAuthor("Польська опера", "Вікторія Маландіна"));
+        lines.AddRange(ThemeWithAuthor("Осінні квіти", "Вікторія Маландіна"));
+        lines.AddRange(ThemeWithAuthor("Написи", "Євген Шляхов"));
+        lines.AddRange(ThemeWithAuthor("Прийоми їжі", "Євген Шляхов"));
+        lines.AddRange(ThemeWithAuthor("Помилки", "Андрій Мартиненко"));
+        lines.AddRange(ThemeWithAuthorAndPreamble(
+            "Не тільки назви телешоу", "Андрій Мартиненко", "Шоу могли бути не цілком українськими."));
+        lines.AddRange(ThemeWithAuthorAndPreamble(
+            "Римуй як Сергій Вікторович", "Олександр Мерзликін", "У відповіді – заримовані слова."));
+        lines.AddRange(ThemeWithAuthor("Не лише позивні", "Олександр Мерзликін"));
+        lines.AddRange(ThemeWithAuthor("Сусіди", "Тарас Вахрів"));
+        lines.AddRange(ThemeWithAuthor("-АНДА-", "Тарас Вахрів"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        // Exactly 12 themes (no spurious extra), each titled and complete
+        result.Tours.Should().HaveCount(12);
+        result.Tours.Select(t => t.Title).Should().Equal(titles);
+        result.Tours.Should().OnlyContain(t => t.Questions.Count == 5);
+
+        // The two preamble-separated themes carry their authors and preamble
+        result.Tours[8].Title.Should().Be("Римуй як Сергій Вікторович");
+        result.Tours[8].Editors.Should().ContainSingle().Which.Should().Be("Олександр Мерзликін");
+        result.Tours[8].Preamble.Should().Contain("заримовані слова");
+
+        // The full 12-entry list stays in the preamble; nothing leaked into question text
+        result.Preamble.Should().Contain("12.\t-АНДА- (Вахрів)");
+
+        // None of the boundary/count/answer warnings the broken parse produced
+        result.Warnings.Should().NotContain(w => w.Contains("розпочато нову тему без назви"));
+        result.Warnings.Should().NotContain(w => w.Contains("У списку «Теми:»"));
+        result.Warnings.Should().NotContain(w => w.Contains("не знайдено відповідь"));
+        result.Warnings.Should().NotContain(w => w.Contains("запитань замість"));
     }
 
     #endregion

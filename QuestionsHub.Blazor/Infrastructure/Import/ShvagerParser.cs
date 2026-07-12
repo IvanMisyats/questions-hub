@@ -52,6 +52,18 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         /// <summary>Normalized theme titles from the «Теми:» list → (raw title, authors). Consumed on match.</summary>
         public Dictionary<string, (string Title, List<string> Authors)> Anchors { get; } = new();
 
+        /// <summary>
+        /// Normalized «core» title (trailing «(Прізвище)» parenthetical stripped) → the anchor's full key.
+        /// Lets a bare header match a list entry whose single-surname author stayed glued to the title.
+        /// </summary>
+        public Dictionary<string, string> AnchorCores { get; } = new();
+
+        /// <summary>
+        /// Next expected position number while reading a numbered «Теми:» list (0 = no run started).
+        /// A line continuing the 1..N sequence is a list entry even when its number is a question value.
+        /// </summary>
+        public int ThemeListNextNumber { get; set; }
+
         /// <summary>Total number of anchors recorded (for the count-mismatch warning).</summary>
         public int AnchorTotal { get; set; }
 
@@ -212,6 +224,16 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             }
         }
 
+        // The «Теми:» list entry kept a «(Прізвище)» single-surname author glued into its title
+        // (LooksLikeAuthorList needs a full «Ім'я Прізвище»). Match the bare header against that
+        // anchor's core so themes whose title is separated from «10.» by a preamble are still found,
+        // without relying on the before-«10.» lookahead.
+        if (TryConsumeAnchorByCore(ctx, candidate, out var byCoreTitle, out var byCoreAuthors))
+        {
+            StartTheme(ctx, byCoreTitle, byCoreAuthors);
+            return true;
+        }
+
         // Fallback: a plain line immediately followed by a value-10 question is a theme title.
         // Judge plausibility on the core title (list number already stripped into `candidate`,
         // trailing explanatory parenthetical removed) so long descriptive headers still pass.
@@ -234,6 +256,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
     private bool TryProcessThemeListLine(List<Line> lines, int index, Context ctx)
     {
         var raw = lines[index].Text;
+
+        // A line continuing the list's 1..N numbering is a list entry — even when its number is a
+        // question value. Entry «10.» must be recorded as position 10, not read as a value-10
+        // question (which would abandon the rest of the list and start a spurious theme).
+        if (TryTakeSequentialListEntry(raw, ctx, out var seqTitle))
+        {
+            var (t, au) = SplitTitleAndAuthors(seqTitle);
+            AddAnchor(ctx, t, au);
+            AppendPreamble(ctx, raw);
+            return true;
+        }
 
         // A genuine question line («10. …») means the list is over — an untitled theme follows
         if (IsQuestionStart(raw))
@@ -265,6 +298,14 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         {
             ctx.Anchors.Remove(normalized);
             StartTheme(ctx, known.Title, known.Authors.Count > 0 ? known.Authors : authors);
+            return true;
+        }
+
+        // Same, but the anchor kept a glued «(Прізвище)» surname the bare header lacks
+        // («-РОН-» header ↔ «-РОН- (Каунін)» list entry).
+        if (TryConsumeAnchorByCore(ctx, candidate, out var coreTitle, out var coreAuthors))
+        {
+            StartTheme(ctx, coreTitle, coreAuthors);
             return true;
         }
 
@@ -312,10 +353,75 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
     private static void AddAnchor(Context ctx, string title, List<string> authors)
     {
-        if (ctx.Anchors.TryAdd(NormalizeTitle(title), (title, authors)))
+        var key = NormalizeTitle(title);
+        if (ctx.Anchors.TryAdd(key, (title, authors)))
         {
             ctx.AnchorTotal++;
+
+            // Index the anchor by its «core» title too (trailing parenthetical stripped), so a bare
+            // header matches a list entry whose «(Прізвище)» single surname stayed glued to the title.
+            var core = StripTrailingParenthetical(title);
+            if (!string.Equals(core, title, StringComparison.Ordinal))
+            {
+                ctx.AnchorCores.TryAdd(NormalizeTitle(core), key);
+            }
         }
+    }
+
+    /// <summary>
+    /// While reading a numbered «Теми:» list, recognizes a line that continues the 1..N sequence and
+    /// returns its title (list number stripped). This keeps entry «10.» — whose number is also a
+    /// question value — from being mistaken for the first value-10 question.
+    /// </summary>
+    private static bool TryTakeSequentialListEntry(string raw, Context ctx, out string title)
+    {
+        title = "";
+
+        var match = ParserPatterns.ListEntryNumbered().Match(raw);
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var number)) return false;
+
+        // Start a run only at «1.» (so a stray number doesn't latch the sequence); afterwards the
+        // number must be exactly the next position.
+        if (ctx.ThemeListNextNumber == 0)
+        {
+            if (number != 1) return false;
+        }
+        else if (number != ctx.ThemeListNextNumber)
+        {
+            return false;
+        }
+
+        ctx.ThemeListNextNumber = number + 1;
+        title = match.Groups[2].Value.Trim();
+        return true;
+    }
+
+    /// <summary>
+    /// Matches a bare theme header against an anchor indexed by its «core» title (the list entry kept
+    /// a glued «(Прізвище)» surname). On success removes the anchor and returns the clean header title
+    /// plus the header's own authors, falling back to the anchor's authors.
+    /// </summary>
+    private static bool TryConsumeAnchorByCore(Context ctx, string candidate, out string title, out List<string> authors)
+    {
+        var (candTitle, candAuthors) = SplitTitleAndAuthors(candidate);
+
+        // Try the candidate's clean title first, then the candidate verbatim.
+        foreach (var lookup in new[] { NormalizeTitle(candTitle), NormalizeTitle(candidate) })
+        {
+            if (ctx.AnchorCores.TryGetValue(lookup, out var fullKey)
+                && ctx.Anchors.TryGetValue(fullKey, out var anchor))
+            {
+                ctx.Anchors.Remove(fullKey);
+                ctx.AnchorCores.Remove(lookup);
+                title = candTitle;
+                authors = candAuthors.Count > 0 ? candAuthors : anchor.Authors;
+                return true;
+            }
+        }
+
+        title = "";
+        authors = [];
+        return false;
     }
 
     /// <summary>

@@ -136,6 +136,23 @@ are now handled (with regression tests), but the mechanics are worth knowing:
   `HandoutText`**. Fix: `TryProcessHandoutBracket` treats a bare `[…]` while already in the Handout
   section as the handout wrapper and reverts to question text after `]`.
 
+- **Numbered `Теми:` list reaching entry «10.»** — a list like `1.\tНазва (Прізвище)` … `12.\t…`
+  where each entry carries a single surname. The `NextQuestionValueIs10` lookahead, run on entry
+  `9.`, saw the *next* line `10.\tНе лише…` and read its `10.` prefix as a **value-10 question**, so
+  it started a spurious 1-question theme, abandoned the list at entry 8 (`У списку «Теми:» 8 тем, а
+  в пакеті знайдено 13`), and dumped entries 10-12 into question text. Fix: the list now follows its
+  own `1..N` numbering (`ThemeListNextNumber` + `TryTakeSequentialListEntry`), so entry `10.` is
+  recorded as list position 10, never a question. Symptom: an extra leading theme whose title is a
+  later list entry and only holds a `10.` question with no answer.
+
+- **Theme title separated from `10.` by a preamble** — a header shaped `Назва` / `Автор: …` /
+  *preamble line* / (blank) / `10.…`. `NextQuestionValueIs10` skips the author line but not the
+  preamble, so the title was lost (empty theme; the title leaked into the previous question's
+  comment). Fix: anchors are additionally indexed by their **core** title — the list entry's trailing
+  `(Прізвище)` stripped (`AnchorCores` + `TryConsumeAnchorByCore`) — so a bare header matches its
+  `Теми:` entry directly, independent of the before-`10.` lookahead. This is the counterpart to the
+  single-surname note above: the surname stays glued to the anchor, but the *core* still matches.
+
 ## Tests
 
 Parser tests use synthetic blocks built with the `Block("...")` helper in

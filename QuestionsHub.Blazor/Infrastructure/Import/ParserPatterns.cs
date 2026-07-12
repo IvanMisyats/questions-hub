@@ -221,6 +221,12 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*\d{1,2}\s*[.)]\s*(.+)$")]
     public static partial Regex ListNumberPrefix();
 
+    // Numbered «Теми:» entry capturing both the position number and the title:
+    // "10.\tНе лише…" → ("10", "Не лише…"). Used to follow the list's 1..N sequence so that
+    // entry «10.» is recognized as a list position rather than a value-10 question.
+    [GeneratedRegex(@"^\s*(\d{1,2})\s*[.)]\s*(.+)$")]
+    public static partial Regex ListEntryNumbered();
+
     // Trailing author list in parentheses on a theme title: "Жереб (Євген Шляхов)"
     [GeneratedRegex(@"^(.*?)\s*\(([^()]+)\)\s*\.?\s*$")]
     public static partial Regex TitleWithTrailingParens();

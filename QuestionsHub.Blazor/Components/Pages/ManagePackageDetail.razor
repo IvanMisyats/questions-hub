@@ -414,7 +414,7 @@
                                                 <div class="@TourEditorsColumnClass">
                                                     <label class="form-label small">@TourEditorsLabel</label>
                                                     <AuthorSelector SelectedAuthors="tour.Editors"
-                                                                    OnSelectionChanged="() => SaveTourAsync(tour)"
+                                                                    OnSelectionChanged="() => SaveTourAsync(tour, cascadeAuthorsToEmptyQuestions: IsShvager)"
                                                                     OnAuthorRemoved="TryDeleteOrphanedAuthorAsync"
                                                                     Placeholder="@(IsShvager ? "Введіть прізвище автора..." : "Введіть прізвище редактора...")" />
                                                 </div>
@@ -2132,7 +2132,7 @@
         }
     }
 
-    private async Task SaveTourAsync(Tour tour)
+    private async Task SaveTourAsync(Tour tour, bool cascadeAuthorsToEmptyQuestions = false)
     {
         _saveStatus = "Збереження туру...";
         StateHasChanged();
@@ -2148,6 +2148,8 @@
             await using var context = await DbContextFactory.CreateDbContextAsync();
             var dbTour = await context.Tours
                 .Include(t => t.Editors)
+                .Include(t => t.Questions)
+                    .ThenInclude(q => q.Authors)
                 .FirstOrDefaultAsync(t => t.Id == tour.Id);
             if (dbTour != null)
             {
@@ -2155,6 +2157,10 @@
                 dbTour.Title = tour.Title;
                 dbTour.Preamble = tour.Preamble;
                 dbTour.Comment = tour.Comment;
+
+                // A theme that had no author until now: entering it fills every question that still
+                // has no author of its own (Своя гра themes only — via cascadeAuthorsToEmptyQuestions).
+                var themeHadNoAuthor = dbTour.Editors.Count == 0;
 
                 // Update editors (many-to-many)
                 dbTour.Editors.Clear();
@@ -2167,6 +2173,11 @@
                     }
                 }
 
+                if (cascadeAuthorsToEmptyQuestions && themeHadNoAuthor && dbTour.Editors.Count > 0)
+                {
+                    CascadeThemeAuthorsToEmptyQuestions(dbTour, tour);
+                }
+
                 await context.SaveChangesAsync();
             }
             _saveStatus = "Збережено";
@@ -2176,6 +2187,30 @@
             _saveStatus = "Помилка збереження";
         }
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Copies a Своя гра theme's authors onto every question in the theme that still has none, so
+    /// entering the theme author once fills the whole theme. Questions with their own author are left
+    /// untouched. Updates both the tracked entities (for the pending save) and the in-memory model.
+    /// </summary>
+    private static void CascadeThemeAuthorsToEmptyQuestions(Tour dbTour, Tour tour)
+    {
+        // Tracked Author instances for the DB graph, and the UI model's own instances for display.
+        var dbAuthors = dbTour.Editors.ToList();
+        var uiAuthors = tour.Editors.ToList();
+
+        foreach (var dbQuestion in dbTour.Questions.Where(q => q.Authors.Count == 0))
+        {
+            dbQuestion.Authors.AddRange(dbAuthors);
+
+            // Mirror onto the in-memory model so the open editor reflects the change immediately.
+            var uiQuestion = tour.Questions.FirstOrDefault(q => q.Id == dbQuestion.Id);
+            if (uiQuestion is { Authors.Count: 0 })
+            {
+                uiQuestion.Authors.AddRange(uiAuthors);
+            }
+        }
     }
 
     private async Task AddWarmupTourAsync()
