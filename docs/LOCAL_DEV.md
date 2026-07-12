@@ -31,6 +31,20 @@ Captured 2026-07 during the Shvager feature work.
   DLL included) and nothing is written to the real `bin/`. Must end with a slash. `UseAppHost=false`
   skips the apphost `.exe` copy (belt-and-suspenders). The test host runs from the scratch dir;
   the full suite passes there. Use this instead of killing a debug session you didn't start.
+  - **Redirect `BaseOutputPath` only — do NOT also set `BaseIntermediateOutputPath`.** Redirecting
+    `obj/` too makes the compiler see the generated `AssemblyInfo`/`AssemblyAttributes` twice and
+    the build dies with `CS0579`/`CS0101` duplicate-attribute errors. `bin/` is what's locked; `obj/`
+    isn't, so leave it at the default.
+  - Often only the apphost **`.exe`** is locked (a plain `dotnet run`, not a debugger), not the
+    `.dll` — in that case `-p:UseAppHost=false` **alone** lets the build/test succeed.
+- **Cleanest fallback: a detached git worktree** — fully isolates `bin/` *and* `obj/`, so it always
+  works regardless of what's locked. Commit first (a worktree checks out a committed state):
+  ```bash
+  git worktree add --detach /tmp/qh-wt HEAD
+  dotnet test /tmp/qh-wt/QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj --filter ...
+  git worktree remove /tmp/qh-wt --force
+  ```
+  Non-disruptive: the user's running app / debug session is untouched.
 
 ## Dev database without the PowerShell script
 
