@@ -90,6 +90,89 @@
             </div>
         }
 
+        <!-- Merge Author Section (Admin Only) -->
+        @if (_isAdmin)
+        {
+            <div class="card mb-4 border-warning">
+                <div class="card-header">
+                    <Icon Name="arrow-repeat" Class="me-2" />Об'єднати з іншим автором
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Якщо це дублікат з помилкою в імені, знайдіть правильного автора — усі запитання
+                        та пакети буде перенесено до нього, а автора «<strong>@_author.FullName</strong>» видалено.
+                    </p>
+
+                    @if (_mergeTarget == null)
+                    {
+                        <label class="form-label">Правильний автор:</label>
+                        <div class="dropdown" style="max-width: 400px;">
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="Почніть вводити прізвище..."
+                                   value="@_mergeSearchQuery"
+                                   @oninput="OnMergeSearchInput"
+                                   disabled="@_mergeProcessing" />
+                            @if (_showMergeDropdown)
+                            {
+                                <ul class="dropdown-menu show w-100" style="max-height: 250px; overflow-y: auto;">
+                                    @if (_mergeSearching)
+                                    {
+                                        <li>
+                                            <span class="dropdown-item text-muted">
+                                                <span class="spinner-border spinner-border-sm me-2"></span>Пошук...
+                                            </span>
+                                        </li>
+                                    }
+                                    else if (_mergeSearchResults.Any())
+                                    {
+                                        @foreach (var candidate in _mergeSearchResults)
+                                        {
+                                            <li>
+                                                <button type="button" class="dropdown-item"
+                                                        @onclick="() => SelectMergeTarget(candidate)">
+                                                    @candidate.FullName
+                                                </button>
+                                            </li>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <li><span class="dropdown-item text-muted">Авторів не знайдено</span></li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div>
+                                Перенести все до: <strong>@_mergeTarget.FullName</strong>
+                            </div>
+                            <div>
+                                <button class="btn btn-outline-secondary btn-sm me-2"
+                                        @onclick="ClearMergeTarget" disabled="@_mergeProcessing">
+                                    Змінити
+                                </button>
+                                <button class="btn btn-warning btn-sm"
+                                        @onclick="MergeIntoTarget" disabled="@_mergeProcessing">
+                                    <Icon Name="arrow-repeat" Class="me-1" />Об'єднати
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_mergeMessage))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0" role="alert">
+                            @_mergeMessage
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
         <!-- Statistics Section -->
         <div class="row mb-4">
             <div class="col-md-6">
@@ -234,6 +317,16 @@
     private int _displayedQuestionsCount = 0;
     private bool _isLoadingQuestions = false;
     private bool _hasMoreQuestions = false;
+
+    // Merge author (admin)
+    private string _mergeSearchQuery = string.Empty;
+    private List<Author> _mergeSearchResults = [];
+    private bool _mergeSearching;
+    private bool _showMergeDropdown;
+    private Author? _mergeTarget;
+    private bool _mergeProcessing;
+    private string? _mergeMessage;
+    private CancellationTokenSource? _mergeSearchCts;
 
 
 
@@ -451,6 +544,90 @@
         }
 
         _isProcessing = false;
+    }
+
+    private async Task OnMergeSearchInput(ChangeEventArgs e)
+    {
+        _mergeSearchQuery = e.Value?.ToString() ?? string.Empty;
+        _mergeMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_mergeSearchQuery))
+        {
+            _mergeSearchResults = [];
+            _showMergeDropdown = false;
+            return;
+        }
+
+        _mergeSearchCts?.Cancel();
+        _mergeSearchCts = new CancellationTokenSource();
+        var ct = _mergeSearchCts.Token;
+
+        _showMergeDropdown = true;
+        _mergeSearching = true;
+
+        try
+        {
+            await Task.Delay(200, ct);
+
+            var results = await AuthorService.SearchAuthors(_mergeSearchQuery, 10, ct);
+            // Exclude the current author — you cannot merge someone into themselves.
+            _mergeSearchResults = results.Where(a => a.Id != Id).ToList();
+        }
+        catch (TaskCanceledException)
+        {
+            // Superseded by a newer keystroke; ignore.
+        }
+        finally
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                _mergeSearching = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void SelectMergeTarget(Author author)
+    {
+        _mergeTarget = author;
+        _showMergeDropdown = false;
+        _mergeSearchResults = [];
+        _mergeSearchQuery = string.Empty;
+        _mergeMessage = null;
+    }
+
+    private void ClearMergeTarget()
+    {
+        _mergeTarget = null;
+        _mergeMessage = null;
+    }
+
+    private async Task MergeIntoTarget()
+    {
+        if (_mergeTarget == null || _author == null)
+            return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Об'єднати «{_author.FullName}» → «{_mergeTarget.FullName}»? Дію не можна скасувати.");
+
+        if (!confirmed)
+            return;
+
+        _mergeProcessing = true;
+        _mergeMessage = null;
+
+        var result = await AuthorService.MergeAuthors(Id, _mergeTarget.Id);
+
+        if (result.Success)
+        {
+            // The current (source) author is deleted; navigate to the surviving author's page.
+            Navigation.NavigateTo($"/editor/{_mergeTarget.Id}", forceLoad: true);
+            return;
+        }
+
+        _mergeMessage = result.Message;
+        _mergeProcessing = false;
     }
 }
 

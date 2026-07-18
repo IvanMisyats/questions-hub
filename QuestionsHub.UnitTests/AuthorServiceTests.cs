@@ -425,4 +425,298 @@ public class AuthorServiceTests : IDisposable
     }
 
     #endregion
+
+    #region MergeAuthors Tests
+
+    /// <summary>Creates a published package with a single question authored by the given authors; returns the question id.</summary>
+    private async Task<int> CreateQuestionAuthoredBy(params int[] authorIds)
+    {
+        using var context = _dbFactory.CreateDbContext();
+
+        var authors = new List<Author>();
+        foreach (var id in authorIds)
+        {
+            authors.Add((await context.Authors.FindAsync(id))!);
+        }
+
+        var question = new Question
+        {
+            Number = "1",
+            OrderIndex = 0,
+            Text = "Q",
+            Answer = "A",
+            Authors = authors
+        };
+        var tour = new Tour { Number = "1", OrderIndex = 0, Questions = [question], Editors = [], Blocks = [] };
+        var package = new Package
+        {
+            Title = "Package",
+            Status = PackageStatus.Published,
+            AccessLevel = PackageAccessLevel.All,
+            NumberingMode = QuestionNumberingMode.Global,
+            Tours = [tour]
+        };
+
+        context.Packages.Add(package);
+        await context.SaveChangesAsync();
+
+        return question.Id;
+    }
+
+    /// <summary>Creates a published package with a single tour edited by the given authors; returns the tour id.</summary>
+    private async Task<int> CreateTourEditedBy(params int[] authorIds)
+    {
+        using var context = _dbFactory.CreateDbContext();
+
+        var editors = new List<Author>();
+        foreach (var id in authorIds)
+        {
+            editors.Add((await context.Authors.FindAsync(id))!);
+        }
+
+        var tour = new Tour { Number = "1", OrderIndex = 0, Questions = [], Editors = editors, Blocks = [] };
+        var package = new Package
+        {
+            Title = "Package",
+            Status = PackageStatus.Published,
+            AccessLevel = PackageAccessLevel.All,
+            NumberingMode = QuestionNumberingMode.Global,
+            Tours = [tour]
+        };
+
+        context.Packages.Add(package);
+        await context.SaveChangesAsync();
+
+        return tour.Id;
+    }
+
+    /// <summary>Creates a published package with a single block edited by the given authors; returns the block id.</summary>
+    private async Task<int> CreateBlockEditedBy(params int[] authorIds)
+    {
+        using var context = _dbFactory.CreateDbContext();
+
+        var editors = new List<Author>();
+        foreach (var id in authorIds)
+        {
+            editors.Add((await context.Authors.FindAsync(id))!);
+        }
+
+        var block = new Block { OrderIndex = 0, Editors = editors, Questions = [] };
+        var tour = new Tour { Number = "1", OrderIndex = 0, Questions = [], Editors = [], Blocks = [block] };
+        var package = new Package
+        {
+            Title = "Package",
+            Status = PackageStatus.Published,
+            AccessLevel = PackageAccessLevel.All,
+            NumberingMode = QuestionNumberingMode.Global,
+            Tours = [tour]
+        };
+
+        context.Packages.Add(package);
+        await context.SaveChangesAsync();
+
+        return block.Id;
+    }
+
+    /// <summary>Creates a published package with shared package-level editors; returns the package id.</summary>
+    private async Task<int> CreatePackageEditedBy(params int[] authorIds)
+    {
+        using var context = _dbFactory.CreateDbContext();
+
+        var editors = new List<Author>();
+        foreach (var id in authorIds)
+        {
+            editors.Add((await context.Authors.FindAsync(id))!);
+        }
+
+        var package = new Package
+        {
+            Title = "Package",
+            Status = PackageStatus.Published,
+            AccessLevel = PackageAccessLevel.All,
+            NumberingMode = QuestionNumberingMode.Global,
+            SharedEditors = true,
+            PackageEditors = editors,
+            Tours = []
+        };
+
+        context.Packages.Add(package);
+        await context.SaveChangesAsync();
+
+        return package.Id;
+    }
+
+    /// <summary>Creates a user and links it to the given author; returns the user id.</summary>
+    private async Task<string> LinkUserToAuthor(int authorId, string firstName, string lastName)
+    {
+        using var context = _dbFactory.CreateDbContext();
+
+        var user = new ApplicationUser
+        {
+            UserName = $"{firstName}.{lastName}@example.com",
+            Email = $"{firstName}.{lastName}@example.com",
+            FirstName = firstName,
+            LastName = lastName
+        };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var author = await context.Authors.FindAsync(authorId);
+        author!.UserId = user.Id;
+        await context.SaveChangesAsync();
+
+        return user.Id;
+    }
+
+    [Fact]
+    public async Task MergeAuthors_ReassignsQuestionAuthorship_AndDeletesSource()
+    {
+        // Arrange
+        var source = await CreateAuthor("Іван", "Петеренко"); // typo
+        var target = await CreateAuthor("Іван", "Петренко");  // correct
+        var questionId = await CreateQuestionAuthoredBy(source.Id);
+
+        // Act
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        using var context = _dbFactory.CreateDbContext();
+        var question = await context.Questions.Include(q => q.Authors).FirstAsync(q => q.Id == questionId);
+        question.Authors.Should().ContainSingle().Which.Id.Should().Be(target.Id);
+        (await context.Authors.FindAsync(source.Id)).Should().BeNull("source author is deleted after merge");
+    }
+
+    [Fact]
+    public async Task MergeAuthors_ReassignsTourEditorRole()
+    {
+        var source = await CreateAuthor("Олена", "Шевченкo"); // typo (latin o)
+        var target = await CreateAuthor("Олена", "Шевченко");
+        var tourId = await CreateTourEditedBy(source.Id);
+
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        result.Success.Should().BeTrue();
+        using var context = _dbFactory.CreateDbContext();
+        var tour = await context.Tours.Include(t => t.Editors).FirstAsync(t => t.Id == tourId);
+        tour.Editors.Should().ContainSingle().Which.Id.Should().Be(target.Id);
+    }
+
+    [Fact]
+    public async Task MergeAuthors_ReassignsBlockEditorRole()
+    {
+        var source = await CreateAuthor("Петро", "Бондаренкo");
+        var target = await CreateAuthor("Петро", "Бондаренко");
+        var blockId = await CreateBlockEditedBy(source.Id);
+
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        result.Success.Should().BeTrue();
+        using var context = _dbFactory.CreateDbContext();
+        var block = await context.Blocks.Include(b => b.Editors).FirstAsync(b => b.Id == blockId);
+        block.Editors.Should().ContainSingle().Which.Id.Should().Be(target.Id);
+    }
+
+    [Fact]
+    public async Task MergeAuthors_ReassignsPackageEditorRole()
+    {
+        var source = await CreateAuthor("Марія", "Коваленкo");
+        var target = await CreateAuthor("Марія", "Коваленко");
+        var packageId = await CreatePackageEditedBy(source.Id);
+
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        result.Success.Should().BeTrue();
+        using var context = _dbFactory.CreateDbContext();
+        var package = await context.Packages.Include(p => p.PackageEditors).FirstAsync(p => p.Id == packageId);
+        package.PackageEditors.Should().ContainSingle().Which.Id.Should().Be(target.Id);
+    }
+
+    [Fact]
+    public async Task MergeAuthors_DeduplicatesSharedQuestion()
+    {
+        // Arrange: a single question authored by BOTH the source and the target.
+        var source = await CreateAuthor("Андрій", "Мельникk"); // typo
+        var target = await CreateAuthor("Андрій", "Мельник");
+        var questionId = await CreateQuestionAuthoredBy(source.Id, target.Id);
+
+        // Act
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        // Assert: exactly one authorship link remains (target), no duplicate.
+        result.Success.Should().BeTrue();
+        using var context = _dbFactory.CreateDbContext();
+        var question = await context.Questions.Include(q => q.Authors).FirstAsync(q => q.Id == questionId);
+        question.Authors.Should().ContainSingle().Which.Id.Should().Be(target.Id);
+        (await context.Authors.FindAsync(source.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MergeAuthors_TransfersUserLink_WhenTargetHasNone()
+    {
+        var source = await CreateAuthor("Сергій", "Іваненкo");
+        var target = await CreateAuthor("Сергій", "Іваненко");
+        var userId = await LinkUserToAuthor(source.Id, "Сергій", "Іваненко");
+
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        result.Success.Should().BeTrue();
+        using var context = _dbFactory.CreateDbContext();
+        var kept = await context.Authors.FindAsync(target.Id);
+        kept!.UserId.Should().Be(userId, "the survivor should inherit the deleted author's user link");
+        (await context.Authors.FindAsync(source.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MergeAuthors_BlocksMerge_WhenBothLinkedToUsers()
+    {
+        var source = await CreateAuthor("Роман", "Литвиненкo");
+        var target = await CreateAuthor("Роман", "Литвиненко");
+        await LinkUserToAuthor(source.Id, "Роман", "Литвиненко-А");
+        await LinkUserToAuthor(target.Id, "Роман", "Литвиненко-Б");
+        var questionId = await CreateQuestionAuthoredBy(source.Id);
+
+        var result = await _service.MergeAuthors(source.Id, target.Id);
+
+        // Assert: refused, and nothing changed.
+        result.Success.Should().BeFalse();
+        using var context = _dbFactory.CreateDbContext();
+        (await context.Authors.FindAsync(source.Id)).Should().NotBeNull("merge was blocked, source is untouched");
+        (await context.Authors.FindAsync(target.Id)).Should().NotBeNull();
+        var question = await context.Questions.Include(q => q.Authors).FirstAsync(q => q.Id == questionId);
+        question.Authors.Should().ContainSingle().Which.Id.Should().Be(source.Id, "authorship was not reassigned");
+    }
+
+    [Fact]
+    public async Task MergeAuthors_SameAuthor_Fails()
+    {
+        var author = await CreateAuthor("Юлія", "Кравченко");
+
+        var result = await _service.MergeAuthors(author.Id, author.Id);
+
+        result.Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MergeAuthors_MissingSource_Fails()
+    {
+        var target = await CreateAuthor("Наталія", "Козак");
+
+        var result = await _service.MergeAuthors(99999, target.Id);
+
+        result.Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MergeAuthors_MissingTarget_Fails()
+    {
+        var source = await CreateAuthor("Василь", "Ткаченко");
+
+        var result = await _service.MergeAuthors(source.Id, 99999);
+
+        result.Success.Should().BeFalse();
+    }
+
+    #endregion
 }

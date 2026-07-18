@@ -523,6 +523,114 @@ public class AuthorService
         return true;
     }
 
+    /// <summary>
+    /// Merges one author (typically a typo-duplicate) into another, then deletes the source.
+    /// All content relationships of the source author — question authorship and editor roles at
+    /// tour, block, and package level — are reassigned to the target author. Where both authors are
+    /// already attached to the same entity, the duplicate link is dropped rather than duplicated.
+    /// </summary>
+    /// <param name="sourceAuthorId">The author to merge and delete (the duplicate/typo).</param>
+    /// <param name="targetAuthorId">The author to keep (the correct one).</param>
+    /// <returns>Result indicating success or failure with a message.</returns>
+    public async Task<AuthorOperationResult> MergeAuthors(int sourceAuthorId, int targetAuthorId)
+    {
+        if (sourceAuthorId == targetAuthorId)
+        {
+            return new AuthorOperationResult(false, "Не можна об'єднати автора із самим собою.");
+        }
+
+        await using var context = await _dbContextFactory.CreateDbContextAsync();
+
+        // Wrapped in an execution strategy because EnableRetryOnFailure forbids a bare
+        // user-initiated transaction; ChangeTracker.Clear() keeps each retry attempt clean.
+        var strategy = context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            context.ChangeTracker.Clear();
+
+            var source = await context.Authors
+                .Include(a => a.Questions)
+                .Include(a => a.Tours)
+                .Include(a => a.Blocks)
+                .Include(a => a.Packages)
+                .FirstOrDefaultAsync(a => a.Id == sourceAuthorId);
+
+            if (source == null)
+            {
+                return new AuthorOperationResult(false, "Автора для об'єднання не знайдено.");
+            }
+
+            var target = await context.Authors
+                .Include(a => a.Questions)
+                .Include(a => a.Tours)
+                .Include(a => a.Blocks)
+                .Include(a => a.Packages)
+                .FirstOrDefaultAsync(a => a.Id == targetAuthorId);
+
+            if (target == null)
+            {
+                return new AuthorOperationResult(false, "Цільового автора не знайдено.");
+            }
+
+            // Both authors linked to (necessarily different) user accounts is a real conflict:
+            // there is no safe automatic resolution, so require the admin to unlink one first.
+            if (source.UserId != null && target.UserId != null)
+            {
+                return new AuthorOperationResult(
+                    false,
+                    "Обидва автори пов'язані з обліковими записами користувачів. Спочатку від'єднайте одного з них.");
+            }
+
+            var sourceName = source.FullName;
+
+            // Reassign every content relationship from source to target, de-duplicating shared links.
+            MoveRelationships(source.Questions, target.Questions, q => q.Id);
+            MoveRelationships(source.Tours, target.Tours, t => t.Id);
+            MoveRelationships(source.Blocks, target.Blocks, b => b.Id);
+            MoveRelationships(source.Packages, target.Packages, p => p.Id);
+
+            // Transfer the user link only when the survivor has none (both-linked is blocked above).
+            var userIdToTransfer = target.UserId == null ? source.UserId : null;
+
+            await using var transaction = await context.Database.BeginTransactionAsync();
+
+            // Delete the source first so its UserId row is gone before the target claims that link,
+            // avoiding a transient violation of the unique Author.UserId index on PostgreSQL.
+            context.Authors.Remove(source);
+            await context.SaveChangesAsync();
+
+            if (userIdToTransfer != null)
+            {
+                target.UserId = userIdToTransfer;
+                await context.SaveChangesAsync();
+            }
+
+            await transaction.CommitAsync();
+
+            return new AuthorOperationResult(true, $"Авторів об'єднано. «{sourceName}» видалено.");
+        });
+    }
+
+    /// <summary>
+    /// Moves all items from <paramref name="from"/> into <paramref name="to"/>, skipping any the
+    /// target already has (by id), and empties <paramref name="from"/>. EF translates this into the
+    /// appropriate join-row inserts and deletes for the underlying many-to-many relationship.
+    /// </summary>
+    private static void MoveRelationships<T>(List<T> from, List<T> to, Func<T, int> idSelector)
+    {
+        var targetIds = to.Select(idSelector).ToHashSet();
+
+        foreach (var item in from.ToList())
+        {
+            if (targetIds.Add(idSelector(item)))
+            {
+                to.Add(item);
+            }
+        }
+
+        from.Clear();
+    }
+
     // ==================== Author-User Linking Methods ====================
 
     /// <summary>
