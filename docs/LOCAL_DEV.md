@@ -46,6 +46,33 @@ Captured 2026-07 during the Shvager feature work.
   ```
   Non-disruptive: the user's running app / debug session is untouched.
 
+## Verifying a UI change when the user's app is already running
+
+The already-running app was started **before** your commits and does **not** hot-reload `.razor`/`.cs`
+changes — driving `:5018` shows the *stale* UI/service, so an admin card or new endpoint you just
+added simply won't be there. Don't kill their app. Instead run a **second live instance** from a
+detached worktree on a **separate port**, against the **same dev Postgres** (Development connection
+string → same DB, so seeded/test rows are visible to both):
+
+```bash
+git worktree add --detach /tmp/qh-verify HEAD          # commit first; worktree checks out HEAD
+mkdir -p /tmp/qh-verify/uploads/handouts               # REQUIRED — see gotcha below
+cd /tmp/qh-verify/QuestionsHub.Blazor
+ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5019 \
+  dotnet run --no-launch-profile > /tmp/qh-verify.log 2>&1 &
+# then drive http://127.0.0.1:5019 in a browser
+```
+
+- **Startup gotcha:** `Program.cs` `ConfigureMediaFileServing` **throws** `Handouts folder not found
+  at '<root>/uploads/handouts'` if that dir is missing. `uploads/` lives outside the repo (gitignored,
+  bind-mounted in real dev) so a fresh worktree lacks it → `mkdir -p uploads/handouts` in the worktree
+  root first, or the app dies on boot.
+- Different port = different origin = **separate auth cookie**; log in again on `:5019`.
+- Cleanup: kill only the `:5019` PID (`netstat -ano | grep 127.0.0.1:5019` → `taskkill //PID <pid> //F`;
+  never the user's `:5018`), then `git worktree remove /tmp/qh-verify --force`.
+- The interactive admin merge uses a native `confirm()` — browser automation freezes on it. Override
+  `window.confirm = () => true` via the JS tool *before* clicking, so the Blazor `JS.InvokeAsync<bool>("confirm", …)` returns true and proceeds.
+
 ## Dev database without the PowerShell script
 
 `start-dev-db.ps1` is just env vars + compose; the bash equivalent:
