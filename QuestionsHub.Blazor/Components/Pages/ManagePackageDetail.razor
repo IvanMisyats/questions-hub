@@ -49,6 +49,10 @@
             <div class="d-flex align-items-center">
                 @if (Id != null)
                 {
+                    <a href="/package/@Id" target="_blank" rel="noopener"
+                       class="btn btn-outline-primary btn-sm me-3" title="Переглянути пакет">
+                        <Icon Name="eye" Class="me-1" />Переглянути
+                    </a>
                     <button class="btn btn-outline-secondary btn-sm me-3" title="Завантажити .qhub" @onclick="ExportPackageAsync" disabled="@_isExporting">
                         <Icon Name="download" />
                     </button>
