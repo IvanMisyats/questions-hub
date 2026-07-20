@@ -2345,8 +2345,8 @@
                 context.Tours.Remove(dbTour);
                 await context.SaveChangesAsync();
 
-                _package.Tours.Remove(_tourToDelete);
-                _package.TotalQuestions -= _tourToDelete.Questions.Count;
+                // Renumber the remaining tours/themes, reload and reinitialize sortables
+                await RenumberAndReload();
             }
 
             _showDeleteTourModal = false;
@@ -2484,15 +2484,14 @@
                 context.Questions.Remove(dbQuestion);
                 await context.SaveChangesAsync();
 
-                _questionToDeleteTour.Questions.Remove(_questionToDelete);
-                _package.TotalQuestions--;
+                // Renumber the remaining questions, reload and reinitialize sortables
+                await RenumberAndReload();
             }
 
             _showDeleteQuestionModal = false;
             _questionToDelete = null;
             _questionToDeleteTour = null;
             _saveStatus = "Запитання видалено";
-            _needsSortableInit = true;
         }
         catch (Exception ex)
         {
@@ -3442,12 +3441,6 @@
                 question.BlockId = null;
             }
 
-            // Also update local state
-            foreach (var question in _blockToDeleteTour.Questions.Where(q => q.BlockId == _blockToDelete.Id))
-            {
-                question.BlockId = null;
-            }
-
             // Delete the block
             var dbBlock = await context.Blocks.FindAsync(_blockToDelete.Id);
             if (dbBlock != null)
@@ -3455,17 +3448,21 @@
                 context.Blocks.Remove(dbBlock);
             }
 
+            // Reindex the surviving blocks of the tour so their OrderIndex stays 0..N-1
+            var survivingBlocks = await context.Blocks
+                .Where(b => b.TourId == _blockToDeleteTour.Id && b.Id != _blockToDelete.Id)
+                .OrderBy(b => b.OrderIndex)
+                .ToListAsync();
+
+            for (int i = 0; i < survivingBlocks.Count; i++)
+            {
+                survivingBlocks[i].OrderIndex = i;
+            }
+
             await context.SaveChangesAsync();
 
-            // Remove from local state
-            _blockToDeleteTour.Blocks.Remove(_blockToDelete);
-
-            // Reindex remaining blocks
-            var orderedBlocks = _blockToDeleteTour.Blocks.OrderBy(b => b.OrderIndex).ToList();
-            for (int i = 0; i < orderedBlocks.Count; i++)
-            {
-                orderedBlocks[i].OrderIndex = i;
-            }
+            // Renumber the questions that left the block, reload and reinitialize sortables
+            await RenumberAndReload();
 
             _showDeleteBlockModal = false;
             _blockToDelete = null;

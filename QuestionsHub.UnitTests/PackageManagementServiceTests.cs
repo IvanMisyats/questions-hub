@@ -1185,5 +1185,52 @@ public class PackageManagementServiceTests : IDisposable
         result.Entity!.Number.Should().Be("30");
     }
 
+    [Fact]
+    public async Task DeleteTour_ShvagerPackage_RenumbersSurvivingThemes()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 3, questionsPerTour: 5, type: PackageType.Shvager);
+        var firstTheme = package.Tours.First(t => t.OrderIndex == 0);
+
+        // Act - delete the first theme
+        var result = await _service.DeleteTour(firstTheme.Id);
+
+        // Assert - surviving themes become 1 and 2, values stay 10..50
+        result.Success.Should().BeTrue();
+
+        var reloaded = await GetPackageWithToursAndQuestions(package.Id);
+        var survivingThemes = reloaded.Tours.OrderBy(t => t.OrderIndex).ToList();
+
+        survivingThemes.Select(t => t.OrderIndex).Should().Equal(0, 1);
+        survivingThemes.Select(t => t.Number).Should().Equal("1", "2");
+
+        foreach (var theme in survivingThemes)
+        {
+            theme.Questions.OrderBy(q => q.OrderIndex)
+                .Select(q => q.Number)
+                .Should().Equal("10", "20", "30", "40", "50");
+        }
+    }
+
+    [Fact]
+    public async Task DeleteQuestion_ShvagerPackage_RenumbersSurvivingValues()
+    {
+        // Arrange
+        var package = await CreatePackage(tourCount: 1, questionsPerTour: 5, type: PackageType.Shvager);
+        var theme = package.Tours.First();
+        var secondQuestion = theme.Questions.First(q => q.OrderIndex == 1);
+
+        // Act - delete the 20-point question
+        var result = await _service.DeleteQuestion(secondQuestion.Id);
+
+        // Assert - the remaining four collapse to 10..40
+        result.Success.Should().BeTrue();
+
+        var reloaded = await GetPackageWithToursAndQuestions(package.Id);
+        reloaded.Tours.Single().Questions.OrderBy(q => q.OrderIndex)
+            .Select(q => q.Number)
+            .Should().Equal("10", "20", "30", "40");
+    }
+
     #endregion
 }
