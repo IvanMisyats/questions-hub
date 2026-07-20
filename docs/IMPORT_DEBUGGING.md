@@ -49,6 +49,47 @@ understood, encode it as a permanent synthetic-block test (see below).
 The same replay works for Своя гра imports — substitute `ShvagerParser` for `PackageParser`
 (the job's parser is chosen by `PackageImportJob.Type`, i.e. the upload zone the user picked).
 
+## Replay the whole corpus and diff (do this for any heuristic change)
+
+`uploads/jobs/` accumulates **every** import ever run on the machine, so it is a free
+regression corpus of real documents. Parser detection rules are heuristics: a change that
+fixes the document in front of you routinely breaks another one, and neither the unit tests
+nor the two golden samples will tell you. Replay everything and diff.
+
+Workflow:
+
+1. Write a throwaway `[Fact]` that walks `uploads/jobs/*/`, skips dirs whose
+   `output/package_import.json` has the wrong `"Type"` (`1` = Своя гра), replays
+   `working/extracted.json`, and dumps **one compact line per tour/question** plus warnings.
+2. Capture the output **before** touching the parser — that is the baseline.
+3. Make the change, re-run, `diff -u baseline after`. Every hunk must be an intended
+   improvement; anything else is a regression.
+
+```powershell
+dotnet test QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj `
+    --filter "FullyQualifiedName~<YourReplayTest>" --logger "console;verbosity=detailed" 2>&1 |
+  Select-String -Pattern "^\s*(###|TITLE|\[|WARN)" |
+  ForEach-Object { $_.Line.TrimStart() } | Set-Content -Encoding utf8 baseline.txt
+```
+
+Delete the harness once done — it hard-codes a machine-local path (`uploads/` is gitignored),
+so it cannot live in the repo. Encode what you learned as synthetic-block tests instead.
+
+Two things that cost time when doing this:
+
+- **A tightened guard can silently revert an earlier win.** Narrowing the implicit-theme-list
+  detector to reject numbered *host instructions* also stopped a theme title being recovered in
+  an unrelated package. Only the diff showed it — re-diff after **every** tweak, not just at the
+  end.
+- **Make each dumped line self-identifying** (prefix the package name), and don't trust
+  position alone: in a flat sectioned dump a package's trailing warning sits directly above the
+  *next* `###` header and reads as if it belongs to it. Misattributing one cost a full
+  investigation round-trip.
+- **Tracing from inside parser code:** `Console.WriteLine` is *not* interleaved with
+  `ITestOutputHelper` in the console logger, so temporary traces vanish from the filtered
+  output. Push them through the result object instead (e.g. `ctx.Result.Warnings.Add($"...")`)
+  and strip them afterwards.
+
 ## Parser structure
 
 `PackageParser` is a **`partial class`** under `QuestionsHub.Blazor/Infrastructure/Import/`,
