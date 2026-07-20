@@ -1,3 +1,4 @@
+using System.Globalization;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Utils;
 
@@ -23,6 +24,19 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
     /// <summary>Maximum length of a second header line appended to the package title as a subtitle.</summary>
     private const int MaxSubtitleLength = 60;
+
+    /// <summary>
+    /// Minimum length of an unbroken «1., 2., 3., …» run for it to be read as a theme list
+    /// printed without a «Теми:» header.
+    /// </summary>
+    private const int MinImplicitThemeListEntries = 4;
+
+    /// <summary>
+    /// Maximum length of an entry in such a run. Deliberately far below
+    /// <see cref="MaxBareTitleLength"/>: theme titles are short noun phrases, while the numbered
+    /// lists that could be confused with a theme list — host instructions above all — are prose.
+    /// </summary>
+    private const int MaxImplicitThemeListEntryLength = 70;
 
     private enum Section
     {
@@ -157,8 +171,19 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             return TryProcessThemeListLine(lines, index, ctx);
         }
 
-        // «Тема: Назва (Автори)» / «Тема 1. Назва» — explicit header
-        if (TryMatchThemeHeader(line, out var headerTitle))
+        // The theme list is frequently printed without a «Теми:» header — recognize it by its
+        // own shape so its entries still become anchors
+        if (ctx.CurrentTheme == null && !ctx.ThemeListSeen && LooksLikeImplicitThemeList(lines, index))
+        {
+            ctx.CurrentSection = Section.ThemeList;
+            ctx.ThemeListSeen = true;
+            return TryProcessThemeListLine(lines, index, ctx);
+        }
+
+        // «Тема: Назва (Автори)» / «Тема 1. Назва» — explicit header.
+        // Ignored while the current theme is still empty: a header never directly follows another
+        // header, so there the match is preamble prose («Тема - набірна матриця. Всі відповіді…»).
+        if (TryMatchThemeHeader(line, out var headerTitle) && !IsInsideEmptyTheme(ctx))
         {
             var (title, authors) = SplitTitleAndAuthors(headerTitle);
 
@@ -231,6 +256,15 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         if (TryConsumeAnchorByCore(ctx, candidate, out var byCoreTitle, out var byCoreAuthors))
         {
             StartTheme(ctx, byCoreTitle, byCoreAuthors);
+            return true;
+        }
+
+        // A header carrying its own position number («5. Я І МОЇ КОЗИ» as the fifth theme) is a
+        // theme title even when its wording matches no anchor and a preamble separates it from «10.»
+        if (TryMatchPositionNumberedHeader(lines, index, ctx, out var numberedTitle))
+        {
+            var (title, authors) = SplitTitleAndAuthors(numberedTitle);
+            StartTheme(ctx, title, authors);
             return true;
         }
 
@@ -309,6 +343,19 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             return true;
         }
 
+        // The real header may append an explanatory parenthetical its list entry lacks
+        // («П.Х. (у відповіді два слова…)» ↔ anchor «П.Х.»). Counterpart of the same rule in
+        // TryProcessThemeStart — without it the header is filed as one more list entry and the
+        // theme's preamble ends up as its title.
+        var headerCore = StripTrailingParenthetical(candidate);
+        if (!string.Equals(headerCore, candidate, StringComparison.Ordinal)
+            && ctx.Anchors.TryGetValue(NormalizeTitle(headerCore), out var coreAnchor))
+        {
+            ctx.Anchors.Remove(NormalizeTitle(headerCore));
+            StartTheme(ctx, title, coreAnchor.Authors);
+            return true;
+        }
+
         // A title standing right before the first «10.» question is the real first theme
         if (NextQuestionValueIs10(lines, index))
         {
@@ -380,11 +427,12 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         var match = ParserPatterns.ListEntryNumbered().Match(raw);
         if (!match.Success || !int.TryParse(match.Groups[1].Value, out var number)) return false;
 
-        // Start a run only at «1.» (so a stray number doesn't latch the sequence); afterwards the
-        // number must be exactly the next position.
+        // Start a run only at «1.», and only before any entry has been recorded: a numbered list is
+        // numbered from its first entry, so a «1.» appearing after unnumbered entries is not part of
+        // this list but the first real theme header repeating list position 1.
         if (ctx.ThemeListNextNumber == 0)
         {
-            if (number != 1) return false;
+            if (number != 1 || ctx.AnchorTotal > 0) return false;
         }
         else if (number != ctx.ThemeListNextNumber)
         {
@@ -449,6 +497,102 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         return false;
     }
 
+    /// <summary>
+    /// Whether the current theme was started but has no questions yet — the window in which any
+    /// further title-looking line belongs to that theme's preamble, not to a new theme.
+    /// </summary>
+    private static bool IsInsideEmptyTheme(Context ctx)
+        => ctx.CurrentTheme is { Questions.Count: 0 } theme && !string.IsNullOrWhiteSpace(theme.Title);
+
+    /// <summary>
+    /// Recognizes a theme list printed without its «Теми:» header: an unbroken run of numbered
+    /// entries «1., 2., 3., …» in the package header. Packages routinely list every theme up front
+    /// and then repeat each entry above the theme itself, so those entries make good anchors.
+    ///
+    /// Contiguity is what tells the list from the real headers: both carry the same numbers, but
+    /// only the up-front list has its entries back to back, unseparated by questions.
+    /// </summary>
+    private static bool LooksLikeImplicitThemeList(List<Line> lines, int index)
+    {
+        if (!IsImplicitThemeListEntry(lines[index].Text, 1)) return false;
+
+        var entries = 1;
+        for (var i = index + 1; i < lines.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i].Text)) continue;
+            if (!IsImplicitThemeListEntry(lines[i].Text, entries + 1)) break;
+            entries++;
+        }
+
+        return entries >= MinImplicitThemeListEntries;
+    }
+
+    /// <summary>Whether a line is entry number <paramref name="position"/> of such a run.</summary>
+    private static bool IsImplicitThemeListEntry(string line, int position)
+    {
+        var match = ParserPatterns.ListEntryNumbered().Match(line);
+        if (!match.Success || match.Groups[1].Value != position.ToString(CultureInfo.InvariantCulture))
+        {
+            return false;
+        }
+
+        var title = match.Groups[2].Value.Trim();
+        return title.Length <= MaxImplicitThemeListEntryLength && IsPlausibleBareTitle(title);
+    }
+
+    /// <summary>
+    /// Recognizes a theme header that states its own position — «5. Я І МОЇ КОЗИ» opening the fifth
+    /// theme. The number is an independent signal, so this works where the wording matches no anchor
+    /// and a preamble stands between the title and its «10.» question.
+    ///
+    /// Kept deliberately narrow, because a numbered line can equally be an enumeration inside a
+    /// comment or an entry of the theme list itself: the number must be exactly the next theme's
+    /// position, the previous theme must already be complete, the line must not continue a run of
+    /// numbered entries (that would be the theme list), and the next question in the document must
+    /// be a value-10 one — i.e. a fresh theme really does start here.
+    /// </summary>
+    private static bool TryMatchPositionNumberedHeader(List<Line> lines, int index, Context ctx, out string title)
+    {
+        title = "";
+
+        var line = lines[index].Text;
+        if (IsQuestionStart(line)) return false;
+
+        var match = ParserPatterns.ListEntryNumbered().Match(line);
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var position)) return false;
+        if (position != ctx.Result.Tours.Count + 1) return false;
+
+        if (ctx.CurrentTheme is { } current && current.Questions.Count < CanonicalThemeSize) return false;
+
+        // Part of an unbroken numbered run → this is the theme list, not a header
+        if (NextListEntryNumber(lines, index) == position + 1) return false;
+
+        var candidate = match.Groups[2].Value.Trim();
+        if (!IsPlausibleBareTitle(StripTrailingParenthetical(candidate))) return false;
+        if (!NextQuestionStartValueIs10(lines, index)) return false;
+
+        title = candidate;
+        return true;
+    }
+
+    /// <summary>The leading «N.» / «N)» number of a line, or null when it carries none.</summary>
+    private static int? ListEntryNumber(string line)
+    {
+        var match = ParserPatterns.ListEntryNumbered().Match(line);
+        return match.Success && int.TryParse(match.Groups[1].Value, out var number) ? number : null;
+    }
+
+    /// <summary>The number of the next non-blank line, when that line is a numbered entry.</summary>
+    private static int? NextListEntryNumber(List<Line> lines, int index)
+    {
+        for (var i = index + 1; i < lines.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i].Text)) continue;
+            return ListEntryNumber(lines[i].Text);
+        }
+        return null;
+    }
+
     private static bool IsPlausibleBareTitle(string line)
     {
         if (line.Length > MaxBareTitleLength) return false;
@@ -473,6 +617,24 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
             var match = ParserPatterns.ShvagerQuestionStart().Match(text);
             return match.Success && match.Groups[1].Value == "10";
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the next question anywhere ahead is a value-10 one — i.e. what follows opens a fresh
+    /// theme instead of continuing the current one. Unlike <see cref="NextQuestionValueIs10"/> this
+    /// scans past arbitrary prose (a theme preamble may run for several paragraphs), so only rules
+    /// that already have an independent reason to read the line as a header may use it.
+    /// </summary>
+    private static bool NextQuestionStartValueIs10(List<Line> lines, int index)
+    {
+        for (var i = index + 1; i < lines.Count; i++)
+        {
+            var text = lines[i].Text;
+            if (!IsQuestionStart(text)) continue;
+
+            return ParserPatterns.ShvagerQuestionStart().Match(text).Groups[1].Value == "10";
         }
         return false;
     }
@@ -582,9 +744,21 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         });
     }
 
+    /// <summary>
+    /// Quotes and terminal punctuation a title may be decorated with in one place and not in
+    /// another («"БАНДУРИСТ".» in the header vs «Бандурист» in the «Теми:» list).
+    /// </summary>
+    private static readonly char[] TitleDecorations =
+        ['"', '«', '»', '“', '”', '„', '‟', '‘', '’', '\'', '`', '.', '…', ',', ';'];
+
+    /// <summary>
+    /// Builds the key a title is matched by. Decorations are stripped from both ends so that the
+    /// same theme written differently in the list and in its header still matches.
+    /// </summary>
     private static string NormalizeTitle(string title)
     {
-        var noAccents = TextNormalizer.RemoveAccents(title.Trim().TrimEnd('.', '…'));
+        var stripped = title.Trim().Trim(TitleDecorations).Trim();
+        var noAccents = TextNormalizer.RemoveAccents(stripped);
         return TextNormalizer.NormalizeApostrophes(noAccents)!.ToLowerInvariant();
     }
 
@@ -686,14 +860,10 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
         ctx.HeaderLinesSeen++;
 
-        // First non-empty line is the package title
-        if (ctx.HeaderLinesSeen == 1)
-        {
-            ctx.Result.Title = TextNormalizer.NormalizeApostrophes(TrimSentencePeriod(line));
-            return true;
-        }
-
-        // «Редактор Ім'я Прізвище» (with optional prefix like «Коло 1.») → package editors
+        // «Редактор Ім'я Прізвище» (with optional prefix like «Коло 1.») → package editors.
+        // Checked before the title rule: a document may open straight with its editor line, and
+        // taking that as the package title both names the package wrongly and loses the editor,
+        // who is the fallback author of every question.
         var editorsMatch = ParserPatterns.ShvagerHeaderEditors().Match(line);
         if (editorsMatch.Success && LooksLikeAuthorList(editorsMatch.Groups[2].Value))
         {
@@ -703,8 +873,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             var prefix = editorsMatch.Groups[1].Value.Trim();
             if (!string.IsNullOrEmpty(prefix))
             {
-                ctx.Result.Title = $"{ctx.Result.Title}. {prefix}";
+                ctx.Result.Title = string.IsNullOrWhiteSpace(ctx.Result.Title)
+                    ? TextNormalizer.NormalizeApostrophes(prefix)
+                    : $"{ctx.Result.Title}. {prefix}";
             }
+            return true;
+        }
+
+        // First non-empty line is the package title
+        if (ctx.HeaderLinesSeen == 1)
+        {
+            ctx.Result.Title = TextNormalizer.NormalizeApostrophes(TrimSentencePeriod(line));
             return true;
         }
 

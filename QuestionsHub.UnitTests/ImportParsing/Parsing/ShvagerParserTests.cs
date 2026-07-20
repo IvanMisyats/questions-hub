@@ -897,6 +897,209 @@ public class ShvagerParserTests
 
     #endregion
 
+    #region Theme list without a «Теми:» header
+
+    /// <summary>A theme whose numbered header is separated from «10.» by a preamble paragraph.</summary>
+    private static string[] ThemeWithPreamble(string header, string preamble, int startId = 1) =>
+        [header, "", preamble, "", .. Theme("", startId)[1..]];
+
+    [Fact]
+    public void Parse_UnlabelledThemeList_BecomesAnchorsForTheRealHeaders()
+    {
+        // The list of themes is printed up front with no «Теми:» header — its contiguous 1..N
+        // numbering is what identifies it. Each theme then repeats its entry above its questions.
+        var lines = new List<string>
+        {
+            "Пакет",
+            "1. Bezodnya Music",
+            "2. Stargorod Sport",
+            "3. Nikattica",
+            "4. Твоя підпільна гуманітарка",
+            ""
+        };
+        lines.AddRange(ThemeWithPreamble("1. Bezodnya Music", "Цей канал присвячено українській музиці.", 1));
+        lines.AddRange(ThemeWithPreamble("2. Stargorod Sport", "На цьому каналі автор дивиться біатлон.", 6));
+        lines.AddRange(ThemeWithPreamble("3. Nikattica", "Авторка розповідає про відеоігри.", 11));
+        lines.AddRange(ThemeWithPreamble("4. Твоя підпільна гуманітарка", "Канал про культуру та мову.", 16));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Select(t => t.Title).Should()
+            .Equal("Bezodnya Music", "Stargorod Sport", "Nikattica", "Твоя підпільна гуманітарка");
+
+        // The paragraph after each header is the theme's preamble, never its title
+        result.Tours[0].Preamble.Should().Be("Цей канал присвячено українській музиці.");
+        result.Tours.Should().OnlyContain(t => t.Questions.Count == 5);
+        result.Warnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Parse_NumberedHostInstructions_AreNotReadAsThemeList()
+    {
+        // A numbered run in the header is only a theme list when its entries look like titles;
+        // host instructions are prose and must stay in the preamble.
+        var lines = new List<string>
+        {
+            "Ведучим.",
+            "Шановні ведучі! Дякую за допомогу у проведенні гри! Велике прохання:",
+            "1. Ознайомитися з темами перед тим, як вести бій.",
+            "2. Читати усі коментарі. Я розумію, що вони в мене досить багатослівні, але здавалося важливим не тільки написати запитання, але й допомогти гравцям.",
+            "3. Деякі нАголоси я зробила велИкими лІтерами.",
+            "4. Пояснення до тем треба читати безпосередньо перед темами.",
+            "",
+            "Теми:",
+            "Рік Тигра",
+            ""
+        };
+        lines.AddRange(ThemeWithPreamble("1. Рік Тигра", "Всі запитання стосуються подій у роки Тигра."));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().ContainSingle();
+        result.Tours[0].Title.Should().Be("Рік Тигра");
+        result.Preamble.Should().Contain("Ознайомитися з темами");
+
+        // Only the eight real themes count — the instructions must not have become anchors
+        result.Warnings.Should().NotContain(w => w.Contains("У списку «Теми:»"));
+    }
+
+    [Fact]
+    public void Parse_NumberedHeaderRepeatingUnnumberedListEntry_StartsTheme()
+    {
+        // The «Теми:» entries carry no numbers but the real headers do. The header's «1.» must not
+        // latch the list's own numbering — it is the first theme, not one more list entry.
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "Рік Тигра",
+            "М.С.",
+            ""
+        };
+        lines.AddRange(ThemeWithPreamble("1. Рік тигра", "Всі запитання стосуються подій у роки Тигра.", 1));
+        lines.AddRange(ThemeWithPreamble("2. М.С.", "Ініціальна тема: у відповіді два слова.", 6));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        // «М.С.» loses its sentence-final period, as bare titles always do
+        result.Tours.Select(t => t.Title).Should().Equal("Рік Тигра", "М.С");
+        result.Tours[0].Preamble.Should().Contain("роки Тигра");
+    }
+
+    [Fact]
+    public void Parse_PositionNumberedHeader_StartsThemeWithoutAnchorOrLookahead()
+    {
+        // No theme list at all, and a preamble stands between the header and «10.». The header's
+        // own position number is then the only signal that a new theme begins.
+        var lines = new List<string> { "Пакет", "" };
+        lines.AddRange(Theme("1. Твоя підпільна гуманітарка", 1));
+        lines.AddRange(ThemeWithPreamble("2. Я І МОЇ КОЗИ", "Цей інді-канал присвячений сільському життю.", 6));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Select(t => t.Title).Should().Equal("Твоя підпільна гуманітарка", "Я І МОЇ КОЗИ");
+        result.Tours[1].Preamble.Should().Be("Цей інді-канал присвячений сільському життю.");
+        result.Tours[1].Questions.Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void Parse_NumberedEnumerationInsideComment_DoesNotStartTheme()
+    {
+        // A numbered line mid-theme is an enumeration, not a header: the position rule requires the
+        // previous theme to be complete, so «2. …» inside theme 1's comment stays comment text.
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Тема: Перша",
+            "10. Питання?",
+            "Відповідь: а",
+            "Коментар: перелік:",
+            "2. Другий пункт переліку",
+            "20. Наступне?",
+            "Відповідь: б"
+        };
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().ContainSingle();
+        result.Tours[0].Questions[0].Comment.Should().Contain("Другий пункт переліку");
+    }
+
+    #endregion
+
+    #region Header vs. preamble
+
+    [Fact]
+    public void Parse_QuotedHeader_MatchesUnquotedListEntry()
+    {
+        // The header decorates the title with quotes and a period; the list entry does not
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "1.\tБандурист",
+            ""
+        };
+        lines.AddRange(ThemeWithPreamble("\"БАНДУРИСТ\".", "Тема - набірна матриця. Всі відповіді складаються із літер у слові БАНДУРИСТ."));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().ContainSingle();
+        result.Tours[0].Title.Should().Be("Бандурист");
+        result.Tours[0].Preamble.Should().StartWith("Тема - набірна матриця");
+    }
+
+    [Fact]
+    public void Parse_ThemeLabelledSentenceAfterHeader_StaysPreamble()
+    {
+        // «Тема - набірна матриця…» reads like an explicit «Тема:» header but is preamble prose:
+        // a real header never directly follows another header
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "1.\tБандурист",
+            ""
+        };
+        lines.AddRange(ThemeWithPreamble("Бандурист", "Тема - набірна матриця, всі відповіді складаються із літер у слові БАНДУРИСТ."));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().ContainSingle();
+        result.Tours[0].Title.Should().Be("Бандурист");
+        result.Tours[0].Preamble.Should().Contain("набірна матриця");
+    }
+
+    [Fact]
+    public void Parse_HeaderWithExplanatoryParenthetical_MatchesListEntryWhileStillInList()
+    {
+        // The first real header carries an explanation its list entry lacks, and a preamble
+        // separates it from «10.». Matching on the core title keeps it from being filed as one
+        // more list entry (which left the preamble as the theme's title).
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Теми:",
+            "1. П.Х.",
+            "2. LA",
+            ""
+        };
+        lines.AddRange(ThemeWithPreamble(
+            "1. П.Х. (у відповіді два слова, одно починається на П, а інше на Х)",
+            "Варто зазначити, що деякі власні назви, які російською пишуться через Х, українською пишуться через Г.",
+            1));
+        lines.AddRange(Theme("2. LA", 6));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(2);
+        result.Tours[0].Title.Should().Be("П.Х. (у відповіді два слова, одно починається на П, а інше на Х)");
+        result.Tours[0].Preamble.Should().StartWith("Варто зазначити");
+        result.Tours[1].Title.Should().Be("LA");
+    }
+
+    #endregion
+
     #region Inline labels
 
     [Fact]
@@ -1212,6 +1415,26 @@ public class ShvagerParserTests
         result.SharedEditors.Should().BeFalse();
         result.PackageEditors.Should().BeEmpty();
         result.Preamble.Should().Contain("вдячний за тестування");
+    }
+
+    [Fact]
+    public void Parse_DocumentOpeningWithEditorLine_TakesEditorsNotTitle()
+    {
+        // A package may open straight with its editor line. Reading it as the package title both
+        // names the package wrongly and drops the editor, who is every question's fallback author.
+        var lines = new List<string>
+        {
+            "Редактор: Володимир Островський (Київ)",
+            ""
+        };
+        lines.AddRange(Theme("Тема: Тест"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Title.Should().BeNullOrEmpty();
+        result.SharedEditors.Should().BeTrue();
+        result.PackageEditors.Should().ContainSingle().Which.Should().Be("Володимир Островський");
+        result.Tours[0].Questions.Should().OnlyContain(q => q.Authors.Contains("Володимир Островський"));
     }
 
     [Fact]

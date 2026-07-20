@@ -145,6 +145,38 @@ are now handled (with regression tests), but the mechanics are worth knowing:
   recorded as list position 10, never a question. Symptom: an extra leading theme whose title is a
   later list entry and only holds a `10.` question with no answer.
 
+- **Theme list printed without its `Теми:` header** — the package header just lists `1. Bezodnya
+  Music` … `8. Швагер - ліга` and then repeats each entry above its theme. With no `Теми:` label the
+  list was never read, so no anchors existed, and every theme fell through to the before-`10.`
+  fallback — which then picked up the theme's *preamble* (`Цей канал присвячено українській музиці.`)
+  as the title, or nothing at all when that preamble was too long. Fix: `LooksLikeImplicitThemeList`
+  recognizes the list by its shape — an unbroken `1..N` run of short, title-like entries — and hands
+  it to the normal anchor machinery. Contiguity is the discriminator: the real headers carry the same
+  numbers but are separated by their questions. The entry cap (`MaxImplicitThemeListEntryLength`, 70)
+  is what keeps numbered **host instructions** (`1. Ознайомитися з темами…`, `2. Читати усі
+  коментарі…`) from being mistaken for a theme list — they are prose, and prose is long.
+  Symptom: every theme titled with its own first descriptive sentence.
+
+- **A numbered header repeating an unnumbered list entry** — the `Теми:` list is bare (`Рік Тигра`,
+  `М.С.`) but the real headers are numbered (`1. Рік тигра`). `TryTakeSequentialListEntry` latched
+  its `1..N` run onto that `1.` and filed the header as one more list entry. Fix: a numbered run may
+  only start when no anchor has been recorded yet — a numbered list is numbered from its first entry.
+
+- **Header states its own position** — `5. Я І МОЇ КОЗИ` opening the fifth theme, with a preamble
+  between it and `10.`. `TryMatchPositionNumberedHeader` accepts it purely on the number matching
+  the next theme's position, so it works with no theme list at all. It is deliberately narrow
+  (previous theme complete, not part of a numbered run, next question in the document is a `10.`)
+  because a numbered line is just as often an enumeration inside a comment.
+
+- **Title decorated differently in the list and in the header** — `"БАНДУРИСТ".` vs the list's
+  `Бандурист`. `NormalizeTitle` strips quotes and terminal punctuation from both ends before
+  matching, so the two forms meet.
+
+- **Preamble prose that reads like a header** — `Тема - набірна матриця. Всі відповіді складаються
+  із літер у слові БАНДУРИСТ…` matches `ShvagerThemeStart` and started a second theme whose title was
+  the whole sentence. Fix: an explicit `Тема…` header is ignored while the current theme is still
+  empty (`IsInsideEmptyTheme`) — a real header never directly follows another header.
+
 - **Theme title separated from `10.` by a preamble** — a header shaped `Назва` / `Автор: …` /
   *preamble line* / (blank) / `10.…`. `NextQuestionValueIs10` skips the author line but not the
   preamble, so the title was lost (empty theme; the title leaked into the previous question's
