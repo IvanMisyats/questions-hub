@@ -30,8 +30,11 @@ public static partial class UkrainianNameHelper
 
     /// <summary>
     /// Regex to strip city in parentheses from author name (e.g., "(Одеса)", "(Київ)", "(Харків - Берлін)").
+    /// A mistyped closing bracket ("(Київ}", "(Київ]") or none at all before the end of the string is
+    /// accepted too: such typos occur in real documents, and an unstripped city turns the name into a
+    /// word that fails author-list validation, which silently drops the whole editor line.
     /// </summary>
-    [GeneratedRegex(@"\s*\([^)]*\)\s*")]
+    [GeneratedRegex(@"\s*\([^)\]}]*(?:[)\]}]|$)\s*")]
     private static partial Regex CityInParentheses();
 
     /// <summary>

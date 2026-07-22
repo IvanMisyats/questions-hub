@@ -157,6 +157,10 @@ public class UkrainianNameHelperTests
     [InlineData("Іван Петренко (Київ - Львів)", "Іван Петренко")]
     [InlineData("Іван Петренко", "Іван Петренко")]
     [InlineData("(Київ) Іван Петренко", "Іван Петренко")]
+    // Mistyped or missing closing bracket — seen in real packages ("Едуард Голуб (Київ}")
+    [InlineData("Іван Петренко (Київ}", "Іван Петренко")]
+    [InlineData("Іван Петренко (Київ]", "Іван Петренко")]
+    [InlineData("Іван Петренко (Київ", "Іван Петренко")]
     public void StripCity_RemovesCityParentheses(string input, string expected)
     {
         UkrainianNameHelper.StripCity(input).Should().Be(expected);

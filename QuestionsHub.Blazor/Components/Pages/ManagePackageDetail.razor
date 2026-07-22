@@ -1944,9 +1944,24 @@
         try
         {
             await using var context = await DbContextFactory.CreateDbContextAsync();
-            var dbPackage = await context.Packages
-                .Include(p => p.PackageEditors)
-                .FirstOrDefaultAsync(p => p.Id == _package.Id);
+
+            IQueryable<Package> query = context.Packages.Include(p => p.PackageEditors);
+
+            // Filling the author-less questions needs the whole theme/block/question graph
+            if (IsShvager)
+            {
+                query = query
+                    .Include(p => p.Tours)
+                        .ThenInclude(t => t.Editors)
+                    .Include(p => p.Tours)
+                        .ThenInclude(t => t.Blocks)
+                            .ThenInclude(b => b.Editors)
+                    .Include(p => p.Tours)
+                        .ThenInclude(t => t.Questions)
+                            .ThenInclude(q => q.Authors);
+            }
+
+            var dbPackage = await query.FirstOrDefaultAsync(p => p.Id == _package.Id);
 
             if (dbPackage != null)
             {
@@ -1961,6 +1976,11 @@
                     }
                 }
 
+                if (IsShvager && dbPackage.PackageEditors.Count > 0)
+                {
+                    CascadePackageEditorsToEmptyQuestions(dbPackage);
+                }
+
                 await context.SaveChangesAsync();
             }
             _saveStatus = "Збережено";
@@ -1970,6 +1990,45 @@
             _saveStatus = "Помилка збереження";
         }
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Copies the package-level editors onto every question that still has no author of its own.
+    /// A question whose theme or block carries its own editors is skipped — the nearer level wins,
+    /// mirroring the author cascade the importer applies (<c>ShvagerParser.FinalizeResult</c>).
+    /// Своя гра packages are usually written end to end by one person, so when the editor line was
+    /// not recognized on import, entering the editor once here must fill the whole package.
+    /// Updates both the tracked entities (for the pending save) and the in-memory model.
+    /// </summary>
+    private void CascadePackageEditorsToEmptyQuestions(Package dbPackage)
+    {
+        // Tracked Author instances for the DB graph, and the UI model's own instances for display.
+        var dbAuthors = dbPackage.PackageEditors.ToList();
+        var uiAuthors = _package!.PackageEditors.ToList();
+
+        foreach (var dbTour in dbPackage.Tours)
+        {
+            if (dbTour.Editors.Count > 0) continue;
+
+            var uiTour = _package.Tours.FirstOrDefault(t => t.Id == dbTour.Id);
+
+            foreach (var dbQuestion in dbTour.Questions.Where(q => q.Authors.Count == 0))
+            {
+                var block = dbQuestion.BlockId is { } blockId
+                    ? dbTour.Blocks.FirstOrDefault(b => b.Id == blockId)
+                    : null;
+                if (block is { Editors.Count: > 0 }) continue;
+
+                dbQuestion.Authors.AddRange(dbAuthors);
+
+                // Mirror onto the in-memory model so the page reflects the change immediately.
+                var uiQuestion = uiTour?.Questions.FirstOrDefault(q => q.Id == dbQuestion.Id);
+                if (uiQuestion is { Authors.Count: 0 })
+                {
+                    uiQuestion.Authors.AddRange(uiAuthors);
+                }
+            }
+        }
     }
 
     private void OnPlayedFromChanged(ChangeEventArgs e)

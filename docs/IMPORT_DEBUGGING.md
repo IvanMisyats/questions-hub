@@ -209,6 +209,16 @@ are now handled (with regression tests), but the mechanics are worth knowing:
   (previous theme complete, not part of a numbered run, next question in the document is a `10.`)
   because a numbered line is just as often an enumeration inside a comment.
 
+- **Editor line lost to a mistyped bracket** — `Редактор та автор тем: Едуард Голуб (Київ}` closes the
+  city with `}`. `UkrainianNameHelper.StripCity` only recognized `(…)`, so the city stayed glued to the
+  name, `LooksLikeAuthorList` saw a third "word" starting with `(` and rejected it, and the **whole
+  editor line was silently dropped** — the package landed with no editor and, through the author
+  cascade, no author on any of its 40 questions. `CityInParentheses` now also accepts `}` / `]` and a
+  missing closer before end of string. Symptom to recognize: an editor line visibly present in the
+  DOCX, absent from the import, and every question author-less. Note the failure is *silent* — the
+  line just falls through to the preamble, which is also the correct behaviour for acknowledgment
+  lines («Редактор дякує за тестування: …»), so there is no warning to look for.
+
 - **Title decorated differently in the list and in the header** — `"БАНДУРИСТ".` vs the list's
   `Бандурист`. `NormalizeTitle` strips quotes and terminal punctuation from both ends before
   matching, so the two forms meet.

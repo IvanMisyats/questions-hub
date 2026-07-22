@@ -1398,6 +1398,28 @@ public class ShvagerParserTests
     }
 
     [Fact]
+    public void Parse_EditorHeaderWithMistypedCityBracket_ParsedAsPackageEditors()
+    {
+        // Real package: «Редактор та автор тем: Едуард Голуб (Київ}» — the city closes with «}».
+        // The city then survived stripping, the name failed author-list validation, and the whole
+        // editor line was dropped, leaving every question without an author.
+        var lines = new List<string>
+        {
+            "ШВАҐЕР-ЛІГА - 2022. ОСІНЬ. ТУР 5",
+            "Редактор та автор тем: Едуард Голуб (Київ}"
+        };
+        lines.AddRange(Theme("Тема: Тест"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.SharedEditors.Should().BeTrue();
+        result.PackageEditors.Should().ContainSingle().Which.Should().Be("Едуард Голуб");
+
+        // The package editor is the fallback author of every question in an author-less theme
+        result.Tours[0].Questions.Should().OnlyContain(q => q.Authors.Contains("Едуард Голуб"));
+    }
+
+    [Fact]
     public void Parse_EditorAcknowledgmentLine_NotParsedAsEditors()
     {
         // "Редактор вдячний за тестування: Імена…" is thanks, not an editor line. The enumerated
