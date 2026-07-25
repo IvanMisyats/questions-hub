@@ -1,116 +1,106 @@
-﻿name: CD
+name: CD
 
-env:
-  PROJECT_NAME: ivanmisyats/questions-hub
+# Builds the production image, publishes it to GHCR, and asks the VPS to redeploy.
+#
+# The workflow deliberately holds NO credential that can run commands on the host:
+#   * secrets.DEPLOY_SSH_KEY is pinned server-side to a forced command
+#     (`restrict,command="/usr/local/bin/qh-deploy"`), so the only thing it can express is
+#     "redeploy". It cannot open a shell, forward a port, or copy a file.
+#   * The compose file is NOT shipped from here. It lives root-owned at
+#     /srv/questions-hub/deploy/ so a compromised repo cannot change what runs.
+#   * The image is public, so the VPS needs no registry credential at all. The old REPO_TOKEN
+#     (a packages:write PAT stored on the box) could have been used to poison AnkiLearner's
+#     image too — it is gone.
+#
+# Third-party actions are avoided outright; GitHub-owned ones are pinned by commit SHA.
 
 on:
-  # Trigger after CI workflow completes successfully on main
   workflow_run:
     workflows: ["CI"]
-    types:
-      - completed
-    branches:
-      - main
-  # Allow manual deployment
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+
+# Deny by default; each job opts in to exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/ivanmisyats/questions-hub
+  SSH_PORT: 55055
+  DEPLOY_USER: qh
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Only run if CI succeeded (for workflow_run trigger) or manual trigger
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    timeout-minutes: 30
+
+    # The `branches: [main]` filter above matches the *head* branch of the triggering run, which
+    # for a fork pull request is the fork's branch name — a branch literally named "main" in a
+    # fork would satisfy it. The head_repository check below is what actually keeps this job on
+    # first-party code.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event != 'pull_request')
+
     permissions:
       contents: read
       packages: write
+
     steps:
-      # 1. Check out the code
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      # 2. Log in to GitHub Container Registry (GHCR)
-      - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      # 3. Build Docker image
-      - name: Build Docker image
-        run: docker buildx build --load -f QuestionsHub.Blazor/Dockerfile -t ghcr.io/${{ env.PROJECT_NAME }}:latest .
-
-      # 4. Push Docker image to GHCR
-      - name: Push Docker image
-        run: docker push ghcr.io/${{ env.PROJECT_NAME }}:latest
-
-      # 5. Copy deployment files to VPS
-      - name: Copy deployment files to VPS
-        uses: appleboy/scp-action@v1.0.0
+      - name: Checkout the exact commit CI tested
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          host: ${{ secrets.VPS_HOST }}
-          port: 55055
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "docker-compose.yml,db/"
-          target: "~/questions-hub/"
+          # Without this, a workflow_run checkout defaults to the branch tip and could build a
+          # different commit than the one CI validated.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
-      # 6. Deploy to VPS via SSH
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          port: 55055
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd ~/questions-hub
+      - name: Compute image tags
+        id: tags
+        run: |
+          short="$(git rev-parse --short HEAD)"
+          echo "sha_tag=sha-${short}" >> "$GITHUB_OUTPUT"
+          echo "Building ${IMAGE}:latest and ${IMAGE}:sha-${short}"
 
-            # Load environment variables from .env file
-            # Note: ~/.env file must be pre-created on VPS with:
-            #   - POSTGRES_ROOT_PASSWORD
-            #   - QUESTIONSHUB_PASSWORD
-            #   - ADMIN_EMAIL
-            #   - ADMIN_PASSWORD
-            #   - EMAIL_API_KEY (Mailjet API Key)
-            #   - EMAIL_API_SECRET (Mailjet API Secret)
-            #   - TELEGRAM_BOT_TOKEN (Telegram Bot API token)
-            set -a
-            source ~/.env
-            set +a
+      - name: Log in to GHCR
+        run: |
+          echo '${{ secrets.GITHUB_TOKEN }}' \
+            | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
 
-            # Export variables for docker-compose
-            export POSTGRES_ROOT_PASSWORD
-            export QUESTIONSHUB_PASSWORD
-            export ADMIN_EMAIL
-            export ADMIN_PASSWORD
-            export EMAIL_API_KEY
-            export EMAIL_API_SECRET
-            export TELEGRAM_BOT_TOKEN
-            export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
-            export UPLOADS_PATH=~/questions-hub/uploads
-            export KEYS_PATH=~/questions-hub/keys
+      - name: Build and push
+        run: |
+          docker buildx build \
+            -f QuestionsHub.Blazor/Dockerfile \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${{ steps.tags.outputs.sha_tag }}" \
+            --push .
 
-            # Log in to GHCR on the VPS
-            echo "${{ secrets.REPO_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+      - name: Trigger deploy on the VPS
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY"     > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
 
-            # Pull the latest image from GHCR
-            docker pull ghcr.io/${{ env.PROJECT_NAME }}:latest
+          # No command argument: the server-side forced command decides what runs, and ignores
+          # anything sent from here. Its stdout and exit code are this step's result.
+          ssh -i ~/.ssh/deploy_key \
+              -p "$SSH_PORT" \
+              -o StrictHostKeyChecking=yes \
+              -o BatchMode=yes \
+              -o ConnectTimeout=15 \
+              "${DEPLOY_USER}@${DEPLOY_HOST}"
 
-            # Create required directories (ownership/permissions for uploads
-            # and keys are applied by the fix-permissions service in
-            # docker-compose, which runs as root inside the container and
-            # therefore does not require sudo on the VPS).
-            mkdir -p "$POSTGRES_DATA_PATH" \
-                     "$UPLOADS_PATH/handouts" \
-                     "$UPLOADS_PATH/packages" \
-                     "$UPLOADS_PATH/jobs" \
-                     "$KEYS_PATH"
-
-            # Stop existing containers (if any)
-            docker compose --profile production down 2>/dev/null || true
-
-            # Start services using docker-compose with production profile
-            # This runs: postgres -> db-setup -> web (in dependency order)
-            docker compose --profile production up -d
-
-            # Clean up old images
-            docker image prune -f
-
-            echo "Deployment complete!"
-
+      - name: Clean up the deploy key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

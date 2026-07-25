@@ -19,16 +19,16 @@ On your VPS, create the uploads directory:
 
 ```bash
 # Create uploads directories
-mkdir -p ~/questions-hub/uploads/handouts
-mkdir -p ~/questions-hub/uploads/packages
+mkdir -p /srv/questions-hub/uploads/handouts
+mkdir -p /srv/questions-hub/uploads/packages
 
 # Verify structure
-tree ~/questions-hub/uploads
+tree /srv/questions-hub/uploads
 ```
 
 Expected structure:
 ```
-~/questions-hub/uploads/
+/srv/questions-hub/uploads/
 ├── handouts/         # Question media (images, audio, video) - publicly accessible
 └── packages/         # Original package files (docx, pdf) - not publicly accessible
 ```
@@ -39,12 +39,12 @@ Set secure permissions on upload directories:
 
 ```bash
 # Set directory permissions (read + execute for traversal)
-chmod 755 ~/questions-hub/uploads
+chmod 755 /srv/questions-hub/uploads
 
 # Both folders need write permission for the application
-chmod 755 ~/questions-hub/uploads/handouts
-chmod 755 ~/questions-hub/uploads/packages
-chown -R github-actions:github-actions ~/questions-hub/uploads
+chmod 755 /srv/questions-hub/uploads/handouts
+chmod 755 /srv/questions-hub/uploads/packages
+chown -R qh:qh /srv/questions-hub/uploads
 ```
 
 **Important:** 
@@ -57,13 +57,13 @@ Set the `UPLOADS_PATH` environment variable for Docker Compose:
 
 ```bash
 # Add to your .env file or export before running docker compose
-export UPLOADS_PATH=~/questions-hub/uploads
+export UPLOADS_PATH=/srv/questions-hub/uploads
 ```
 
 Or create a `.env` file in the project root:
 
 ```env
-UPLOADS_PATH=~/questions-hub/uploads
+UPLOADS_PATH=/srv/questions-hub/uploads
 POSTGRES_ROOT_PASSWORD=your_secure_password
 QUESTIONSHUB_PASSWORD=your_secure_password
 ```
@@ -171,7 +171,7 @@ The production nginx configuration is stored in `infra/nginx/questions.com.ua.co
 # Serve media files directly from VPS (bypasses Docker/ASP.NET for performance)
 # Files are immutable - old files are deleted and new ones get new names
 location ^~ /media/ {
-    alias /home/github-actions/questions-hub/uploads/handouts/;
+    alias /srv/questions-hub/uploads/handouts/;
 
     # Only allow specific media file extensions
     location ~* \.(jpg|jpeg|png|gif|webp|svg|mp4|webm|ogg|mp3|wav|m4a)$ {
@@ -219,7 +219,7 @@ Both use the same security rules (extension whitelist, security headers), ensuri
 
 1. **Check file permissions:**
    ```bash
-   ls -la ~/questions-hub/uploads/handouts/
+   ls -la /srv/questions-hub/uploads/handouts/
    ```
    Should show `rw-r--r--` (644) for files
 
@@ -308,7 +308,7 @@ When ready to use a CDN:
 
 ## Summary
 
-- **Location:** `~/questions-hub/uploads/` on VPS
+- **Location:** `/srv/questions-hub/uploads/` on VPS
 - **Structure:** `handouts/` for public media, `packages/` for original files
 - **Permissions:** 755 for directories, 644 for files
 - **Security:** Extension whitelist, no execute, MIME validation

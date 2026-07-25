@@ -1,69 +1,15 @@
-﻿services:
-  # One-shot init container: fixes ownership/permissions on bind-mounted
-  # uploads and keys volumes. Runs as root inside the container so it can
-  # chown to UID 10000 (appuser) without requiring sudo/root on the VPS.
-  fix-permissions:
-    profiles: ["production"]
-    image: alpine:3
-    container_name: questions-hub-fix-permissions
-    user: "0:0"
-    volumes:
-      - ${UPLOADS_PATH:-./uploads}:/uploads
-      - ${KEYS_PATH:-./keys}:/keys
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        apk add --no-cache acl >/dev/null
-        mkdir -p /uploads/handouts /uploads/packages /uploads/jobs
-        chown -R 10000:10000 /uploads /keys
-        chmod 755 /uploads /uploads/handouts /uploads/packages /uploads/jobs
-        chmod 750 /keys
-        find /keys -type f -exec chmod 640 {} +
-        setfacl -d -m g::r /keys
-    restart: "no"
+# QuestionsHub — LOCAL DEVELOPMENT stack.
+#
+#   --profile dev    Postgres + db-setup only (run the app from your IDE / `dotnet run`)
+#   --profile full   the above plus the web app built from source
+#
+# Production lives in infra/docker-compose.yml and is installed on the VPS at
+# /srv/questions-hub/deploy/. It is deliberately a separate file: production runs against an
+# unprivileged rootless Docker daemon with locked-down capabilities and no published DB port, and
+# mixing those settings into the dev file made it too easy to ship the wrong one.
+# See docs/DOCKER_PROFILES.md.
 
-  # Production web service - uses pre-built image from GHCR
-  web:
-    profiles: ["production"]
-    image: ghcr.io/ivanmisyats/questions-hub:latest
-    container_name: questions-hub-web
-    ports:
-      - "8080:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
-      - AdminCredentials__Email=${ADMIN_EMAIL}
-      - AdminCredentials__Password=${ADMIN_PASSWORD}
-      - Email__ApiKey=${EMAIL_API_KEY}
-      - Email__ApiSecret=${EMAIL_API_SECRET}
-      - Email__SenderEmail=noreply@questions.com.ua
-      - "Email__SenderName=База запитань ЩДК"
-      - SiteUrl=https://questions.com.ua
-      - Email__SiteUrl=https://questions.com.ua
-      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
-      - Telegram__ChannelId=@questions_com_ua
-      - Telegram__SiteUrl=https://questions.com.ua
-    volumes:
-      - ${UPLOADS_PATH:-./uploads}:/app/uploads
-      - ${KEYS_PATH:-./keys}:/app/keys
-    depends_on:
-      postgres:
-        condition: service_healthy
-      db-setup:
-        condition: service_completed_successfully
-      fix-permissions:
-        condition: service_completed_successfully
-    restart: unless-stopped
-    mem_limit: 512m
-    memswap_limit: 768m
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
+services:
   # Local web service - builds from Dockerfile
   web-local:
     profiles: ["full"]
@@ -97,7 +43,7 @@
         max-file: "3"
 
   postgres:
-    profiles: ["dev", "production", "full"]
+    profiles: ["dev", "full"]
     image: postgres:16-alpine
     container_name: questions-hub-db
     environment:
@@ -106,7 +52,8 @@
       POSTGRES_DB: questionshub
       POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
     ports:
-      - "5432:5432"
+      # Loopback only, even locally — a bare "5432:5432" binds 0.0.0.0.
+      - "127.0.0.1:5432:5432"
     volumes:
       - ${POSTGRES_DATA_PATH:-./postgres_data}:/var/lib/postgresql/data
       - ./db/dictionaries/uk_UA.dic:/usr/local/share/postgresql/tsearch_data/uk_ua.dict:ro
@@ -124,7 +71,6 @@
       options:
         max-size: "10m"
         max-file: "3"
-    # Optimized for low-memory VPS (2GB RAM)
     command: >
       postgres
       -c shared_buffers=128MB
@@ -134,7 +80,7 @@
       -c max_connections=20
 
   db-setup:
-    profiles: ["dev", "production", "full"]
+    profiles: ["dev", "full"]
     image: postgres:16-alpine
     container_name: questions-hub-db-setup
     depends_on:
@@ -149,18 +95,13 @@
       - sh
       - -c
       - |
+        set -e
         echo "Running database setup scripts..."
         # 1. Extensions (must be first - FTS depends on these)
-        echo "Installing extensions..."
         psql -h postgres -U postgres -d questionshub -f /scripts/01-extensions.sql
         # 2. User and permissions
-        echo "Setting up user and permissions..."
         psql -h postgres -U postgres -d questionshub -v QUESTIONSHUB_PASSWORD="$$QUESTIONSHUB_PASSWORD" -f /scripts/02-user-permissions.sql
         # 3. Full-text search configuration
-        echo "Configuring full-text search..."
         psql -h postgres -U postgres -d questionshub -f /scripts/03-fts-setup.sql
         echo "Database setup complete!"
     restart: "no"
-
-
-

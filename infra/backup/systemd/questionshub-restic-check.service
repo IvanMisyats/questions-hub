@@ -1,8 +1,12 @@
 [Unit]
+# USER unit — install to ~qh/.config/systemd/user/ and enable with:
+#   systemctl --user enable --now questionshub-restic-check.timer
 Description=Weekly restic repository check (QuestionsHub)
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=oneshot
-User=github-actions
-Group=github-actions
-ExecStart=/bin/bash -lc 'set -a; source /home/github-actions/.config/questions-hub-backup/backup.env; set +a; restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" check'
+Environment=RESTIC_CACHE_DIR=/srv/questions-hub/backup/restic-cache
+ExecStart=/bin/bash -c 'set -a; source /srv/questions-hub/backup/backup.env; set +a; restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" check'
+TimeoutStartSec=3600

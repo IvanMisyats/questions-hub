@@ -1,16 +1,20 @@
 # Docker Compose Profiles
 
-This document explains the different Docker Compose profiles used in the project.
+The profiles in the repo-root `docker-compose.yml` are for **local development only**.
+
+> **Production is no longer a profile.** It lives in its own file, `infra/docker-compose.yml`,
+> installed on the VPS at `/srv/questions-hub/deploy/docker-compose.yml`. Production runs against
+> an unprivileged **rootless** Docker daemon with dropped capabilities, a read-only root
+> filesystem, a named Postgres volume and no published database port — settings that have no
+> business in a dev file, and that were too easy to ship by accident while both lived together.
+> See [`VPS_DEPLOYMENT.md`](VPS_DEPLOYMENT.md).
 
 ## Overview
-
-The project uses Docker profiles to support different deployment scenarios:
 
 | Profile | Use Case | Services Started |
 |---------|----------|------------------|
 | **dev** | Local development in IDE | PostgreSQL + db-setup |
 | **full** | Local testing of full stack | PostgreSQL + db-setup + web-local (builds from Dockerfile) |
-| **production** | VPS deployment | PostgreSQL + db-setup + web (pulls from GHCR) |
 
 ## Development Profile (`dev`)
 
@@ -60,33 +64,16 @@ Access the app at `http://localhost:8080`
 
 **Note:** Uses `ASPNETCORE_ENVIRONMENT=Development` and default admin credentials.
 
-## Production Profile (`production`)
+## Production (no longer a profile)
 
-**Purpose:** Deploy to VPS using pre-built image from GitHub Container Registry.
+Production lives in `infra/docker-compose.yml`, installed on the VPS at
+`/srv/questions-hub/deploy/docker-compose.yml` and run by `/usr/local/bin/qh-deploy` as the
+unprivileged `qh` user. Nothing about it is driven from this repo's root compose file.
 
-**Services:**
-- `postgres` - PostgreSQL database
-- `db-setup` - Database initialization
-- `web` - Pre-built image from GHCR
+**Services:** `postgres` (named volume, no published port) → `db-setup` → `web` (GHCR image).
 
-**Usage (on VPS):**
-```bash
-# Load environment variables
-set -a
-source ~/.env
-set +a
-
-export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
-export UPLOADS_PATH=~/questions-hub/uploads
-
-docker-compose --profile production up -d
-```
-
-**Required Environment Variables:**
-- `POSTGRES_ROOT_PASSWORD` - PostgreSQL superuser password
-- `QUESTIONSHUB_PASSWORD` - Application database user password
-- `ADMIN_EMAIL` - Admin user email
-- `ADMIN_PASSWORD` - Admin user password
+**Environment** comes from `/srv/questions-hub/deploy/app.env` (`root:qh` 0640) — template at
+`infra/app.env.example`. Full details: [`VPS_DEPLOYMENT.md`](VPS_DEPLOYMENT.md).
 
 ## Service Details
 
@@ -122,16 +109,17 @@ Exits after completion. Scripts are idempotent.
 - **App User:** questionshub / dev_password_123
 
 ### Production Credentials
-Set via environment variables (stored in `~/.env` on VPS):
+Set in `/srv/questions-hub/deploy/app.env` on the VPS (`root:qh` 0640 — the app user can read it,
+only root can change it):
 ```bash
 POSTGRES_ROOT_PASSWORD=your_secure_root_password
 QUESTIONSHUB_PASSWORD=your_secure_app_password
 ```
 
 ### Data Persistence
-- All profiles use `${POSTGRES_DATA_PATH:-./postgres_data}` for data
-- Data persists across container restarts
-- Folder is in `.gitignore`
+- **Dev profiles** use `${POSTGRES_DATA_PATH:-./postgres_data}` (bind mount, gitignored).
+- **Production** uses a named Docker volume (`questions-hub_pgdata`) inside the `qh` user's
+  rootless Docker root. Backups are logical `pg_dump`s, so the volume is never copied directly.
 
 ## Quick Reference
 
@@ -150,10 +138,12 @@ docker compose --profile full down
 ```
 
 ### Production (VPS)
+Production uses a separate file and runs as the unprivileged `qh` user:
 ```bash
-docker compose --profile production up -d
-docker compose --profile production down
-docker compose --profile production logs -f
+cd /srv/questions-hub/deploy
+docker compose --env-file app.env ps
+docker compose --env-file app.env logs -f web
+/usr/local/bin/qh-deploy          # pull + converge (what CI triggers)
 ```
 
 ## Troubleshooting

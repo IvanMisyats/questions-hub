@@ -1,234 +1,179 @@
-﻿# Backups (OVH Object Storage + restic)
+# Backups (OVH Object Storage + restic)
 
-This repository includes “backup-as-code” for **QuestionsHub**: scripts + systemd units + documentation to reproduce the backup setup on any host.
+"Backup-as-code" for **QuestionsHub**: scripts, systemd units, and the runbook to reproduce the
+setup on any host.
 
 ## What is backed up
 
 ### Database
-- Logical Postgres dump (`pg_dump`) executed inside the DB container and streamed directly into restic.
-- Stored as `db/questionshub_YYYY-MM-DD.dump` in the restic repository.
+Logical `pg_dump` executed inside the DB container and streamed straight into restic (no temp
+file, no disk headroom needed). Stored as `db/questionshub_YYYY-MM-DD.dump`, tag `db`.
 
-Retention:
-- **7 daily**, **4 weekly**, **12 monthly** snapshots (DB-tagged).
+Retention: **7 daily · 4 weekly · 12 monthly**.
 
 ### Files
-Backed up from host paths (no Docker access required for files):
-- `questions-hub/uploads` (user uploads)
-- `questions-hub/keys` (ASP.NET Data Protection keys)
-- `/etc/nginx/conf.d/questions.com.ua.conf` (nginx vhost)
-- `/home/github-actions/.env` (app env — encrypted in restic repo)
+Tag `files`, from host paths:
 
-Retention:
-- **30 daily** snapshots (rewind ~1 month).
+- `/srv/questions-hub/uploads` — user uploads
+- `/srv/questions-hub/keys` — **ASP.NET Data Protection key ring**
+- `/srv/questions-hub/deploy/app.env` — app secrets (encrypted inside restic)
+- `/etc/nginx/conf.d/questions.com.ua.conf` — the vhost
+
+Retention: **30 daily**.
+
+> `keys/` matters as much as the database. Restore it, or every existing auth cookie and session
+> is invalidated the moment the app comes back up.
 
 ## Storage backend
 
-- OVH Object Storage (S3-compatible)
-- Bucket: `lucky-chandrasekhar`
-- Endpoint: `https://s3.de.io.cloud.ovh.net`
-- Restic repository path: `s3:https://s3.de.io.cloud.ovh.net/lucky-chandrasekhar/restic`
+| | |
+|---|---|
+| Backend | OVH Object Storage (S3-compatible) |
+| Endpoint | `https://s3.de.io.cloud.ovh.net` (region `de`) |
+| Bucket | `lucky-chandrasekhar` |
+| restic repo | `s3:https://s3.de.io.cloud.ovh.net/lucky-chandrasekhar/restic` |
+| host-tag | `questions-hub` |
 
-## Monitoring (optional)
+**AnkiLearner shares the VPS but not the backups.** It has its own bucket, its own S3 access key
+and its own `RESTIC_PASSWORD`. This is required rather than tidy: each app's file snapshot
+contains that app's `app.env`, so a shared repository would hand one app's secrets to whoever
+holds the other's credentials. The S3 key here must be scoped to this bucket only.
 
-Healthchecks can be used for alerts if the job fails or doesn’t run:
-- Set `HC_URL="https://hc-ping.com/<uuid>"` in `backup.env`
-- Script pings success URL on completion and `${HC_URL}/fail` on errors.
-- Healthchecks are available at https://healthchecks.io/
+## Who runs it
+
+The unprivileged `qh` user, via a **user** systemd timer.
+
+It needs **no `docker` group** — that group is root-equivalent, and this box hosts a second
+application whose data must stay unreachable — and no `appgroup`/GID-10000 membership. Both were
+required on the old box; under rootless Docker the app's files are plainly `qh:qh` and `pg_dump`
+runs through qh's own Docker socket at `/run/user/$(id -u)/docker.sock`.
+
+## Files on the host (never in git)
+
+| Path | Owner | Mode |
+|---|---|---|
+| `/srv/questions-hub/backup/backup.env` | `qh:qh` | 0600 |
+| `/srv/questions-hub/backup/restic-cache/` | `qh:qh` | 0700 |
+| `/usr/local/bin/qh-backup` | `root:root` | 0755 |
+| `/srv/questions-hub/deploy/backup/restore-*.sh` | `root:qh` | 0750 |
+| `~qh/.config/systemd/user/questionshub-*.{service,timer}` | `qh:qh` | 0644 |
 
 ---
 
-# Runtime files on the host (NOT in git)
+## Quickstart on a new host
 
-These are created on each host:
+Assumes the host is already bootstrapped (rootless Docker for `qh`, `/srv` layout, linger enabled)
+per the private ops repo's `vps/bootstrap.md`.
 
-- Backup secrets:
-  - `/home/github-actions/.config/questions-hub-backup/backup.env`
-- Executable backup script path used by systemd:
-  - `/home/github-actions/questions-hub/infra/backup/runtime/backup.sh`
-  - (Can be a symlink to the version in repo if you prefer.)
-- systemd units:
-  - `/etc/systemd/system/questionshub-backup.service`
-  - `/etc/systemd/system/questionshub-backup.timer`
-  - `/etc/systemd/system/questionshub-restic-check.service`
-  - `/etc/systemd/system/questionshub-restic-check.timer`
+### 1) Install restic
 
----
-
-# Quickstart on a new host
-
-## 1) Install dependencies
-Ubuntu/Debian:
 ```bash
-sudo apt-get update
-sudo apt-get install -y restic curl
+sudo apt-get install -y restic
 ```
 
-## 2) Create secrets file (backup.env) on the host
-Create folder + file:
-```bash
-sudo mkdir -p /home/github-actions/.config/questions-hub-backup
-sudo chown -R github-actions:github-actions /home/github-actions/.config
-sudo chmod 700 /home/github-actions/.config /home/github-actions/.config/questions-hub-backup
+### 2) Create the credentials file
 
-sudo nano /home/github-actions/.config/questions-hub-backup/backup.env
-sudo chown github-actions:github-actions /home/github-actions/.config/questions-hub-backup/backup.env
-sudo chmod 600 /home/github-actions/.config/questions-hub-backup/backup.env
+```bash
+sudo install -o qh -g qh -m 0700 -d /srv/questions-hub/backup
+sudo install -o qh -g qh -m 0600 /dev/null /srv/questions-hub/backup/backup.env
+sudo nano /srv/questions-hub/backup/backup.env      # template: backup.env.example
 ```
 
-Content (fill values):
+### 3) Point at the existing repository — do NOT `restic init`
+
+The restic repository is portable and **already exists**. Initialising over it, or using a
+different `RESTIC_PASSWORD`, makes every stored snapshot undecryptable.
+
 ```bash
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_DEFAULT_REGION="de"
-
-export OVH_S3_ENDPOINT="https://s3.de.io.cloud.ovh.net"
-export OVH_S3_BUCKET="lucky-chandrasekhar"
-
-export RESTIC_PASSWORD="a-long-random-password"
-
-# optional
-export HC_URL="https://hc-ping.com/<uuid>"
+sudo machinectl shell qh@ /bin/bash -c '
+  set -a; source /srv/questions-hub/backup/backup.env; set +a
+  restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" snapshots | tail -20'
 ```
 
-Verify:
+Seeing the existing snapshots proves the endpoint, key and password are all correct.
+
+### 4) Install the scripts and timers
+
 ```bash
-sudo -u github-actions bash -lc 'source /home/github-actions/.config/questions-hub-backup/backup.env; env | grep OVH_S3_'
+sudo install -o root -g root -m 0755 infra/backup/scripts/backup.sh /usr/local/bin/qh-backup
+sudo install -o root -g qh   -m 0750 -d /srv/questions-hub/deploy/backup
+sudo install -o root -g qh   -m 0750 infra/backup/scripts/restore-*.sh /srv/questions-hub/deploy/backup/
+
+sudo -u qh install -d -m 0755 /home/qh/.config/systemd/user
+sudo -u qh install -m 0644 infra/backup/systemd/* /home/qh/.config/systemd/user/
+
+sudo machinectl shell qh@ /bin/bash -c '
+  systemctl --user daemon-reload &&
+  systemctl --user enable --now questionshub-backup.timer questionshub-restic-check.timer &&
+  systemctl --user list-timers'
 ```
 
-## 3) Initialize restic repository (first time only)
+### 5) Smoke test
+
 ```bash
-sudo -u github-actions bash -lc '
-set -e
-source /home/github-actions/.config/questions-hub-backup/backup.env
-RESTIC_REPO="s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic"
-restic -r "${RESTIC_REPO}" init
-'
+sudo machinectl shell qh@ /usr/local/bin/qh-backup
 ```
 
-If the repo already exists (migrating), skip `init` and just run:
-```bash
-sudo -u github-actions bash -lc '
-source /home/github-actions/.config/questions-hub-backup/backup.env
-RESTIC_REPO="s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic"
-restic -r "${RESTIC_REPO}" snapshots
-'
-```
-
-## 4) Ensure github-actions can read container-owned directories
-
-The `keys` directory is owned by the Docker container's `appuser` (UID/GID 10000) with mode `750`.
-The backup user must be in the `appgroup` (GID 10000) to read it:
+Then confirm a fresh snapshot landed:
 
 ```bash
-sudo groupadd -g 10000 appgroup 2>/dev/null || true
-sudo usermod -aG appgroup github-actions
-```
-
-Verify (after re-login or `newgrp`):
-```bash
-sudo -u github-actions ls /home/github-actions/questions-hub/keys/
-```
-
-## 5) Ensure github-actions can run Docker commands
-DB backup calls `docker exec ... pg_dump ...`
-
-Test:
-```bash
-sudo -u github-actions docker ps
-```
-
-If it fails (permission denied), add docker group:
-```bash
-sudo usermod -aG docker github-actions
-```
-
-Re-login or restart services, then re-test.
-
-> Note: docker group is effectively root-equivalent. This is common but be aware.
-
-## 6) Install script and systemd units
-Copy from repo:
-```bash
-sudo install -m 0755 -o github-actions -g github-actions infra/backup/scripts/backup.sh   /home/github-actions/questions-hub/infra/backup/runtime/backup.sh
-
-sudo install -m 0644 infra/backup/systemd/questionshub-backup.service /etc/systemd/system/questionshub-backup.service
-sudo install -m 0644 infra/backup/systemd/questionshub-backup.timer   /etc/systemd/system/questionshub-backup.timer
-sudo install -m 0644 infra/backup/systemd/questionshub-restic-check.service /etc/systemd/system/questionshub-restic-check.service
-sudo install -m 0644 infra/backup/systemd/questionshub-restic-check.timer   /etc/systemd/system/questionshub-restic-check.timer
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now questionshub-backup.timer
-sudo systemctl enable --now questionshub-restic-check.timer
-```
-
-Run a manual smoke test:
-```bash
-sudo -u github-actions /home/github-actions/questions-hub/infra/backup/runtime/backup.sh
+sudo machinectl shell qh@ /bin/bash -c '
+  set -a; source /srv/questions-hub/backup/backup.env; set +a
+  restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" snapshots --host questions-hub | tail -5'
 ```
 
 ---
 
-# Restore
+## Restore
 
-## Restore latest DB
+### Database
+
 ```bash
-sudo -u github-actions bash -lc '
-set -a
-source /home/github-actions/.config/questions-hub-backup/backup.env
-set +a
-RESTIC_REPO="s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic"
-
-restic -r "${RESTIC_REPO}" ls latest --tag db
-
-restic -r "${RESTIC_REPO}" dump latest --tag db "db/questionshub_*.dump"   | docker exec -i questions-hub-db pg_restore -U postgres -d questionshub --clean --if-exists
-'
+sudo machinectl shell qh@
+cd /srv/questions-hub/deploy
+./backup/restore-db-latest.sh
 ```
 
-## Restore uploads/keys “rewind”
-```bash
-sudo -u github-actions bash -lc '
-source /home/github-actions/.config/questions-hub-backup/backup.env
-RESTIC_REPO="s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic"
+**Order matters on a fresh host.** Bring up only the database first, restore, then start the app:
 
-restic -r "${RESTIC_REPO}" snapshots --tag files
-mkdir -p /tmp/qh-restore
-restic -r "${RESTIC_REPO}" restore <SNAPSHOT_ID> --target /tmp/qh-restore
-'
+```bash
+docker compose --env-file app.env up -d postgres db-setup   # schema, roles, extensions, FTS
+./backup/restore-db-latest.sh
+docker compose --env-file app.env up -d                     # now the app
 ```
+
+Starting `web` before the restore lets its EF migrations and admin seeding race
+`pg_restore --clean`, which can leave a half-overwritten schema.
+
+### Files
+
+```bash
+./backup/restore-files.sh latest /tmp/qh-restore
+rsync -a /tmp/qh-restore/srv/questions-hub/uploads/ /srv/questions-hub/uploads/
+rsync -a /tmp/qh-restore/srv/questions-hub/keys/    /srv/questions-hub/keys/
+chmod 700 /srv/questions-hub/keys
+```
+
+No `chown` to UID 10000 any more — under rootless Docker the container writes as `qh`.
 
 ---
 
-# Troubleshooting
+## Verification and maintenance
 
-## “Permission denied” reading backup.env
-Fix ownership/permissions:
-```bash
-sudo chown github-actions:github-actions /home/github-actions/.config
-sudo chmod 700 /home/github-actions/.config
-sudo chown -R github-actions:github-actions /home/github-actions/.config/questions-hub-backup
-sudo chmod 700 /home/github-actions/.config/questions-hub-backup
-sudo chmod 600 /home/github-actions/.config/questions-hub-backup/backup.env
-```
+- `questionshub-restic-check.timer` runs `restic check` weekly.
+- `HC_URL` (Healthchecks.io) is pinged on success and on failure — set it, otherwise a silently
+  broken backup looks identical to a working one.
+- **Run a restore drill quarterly.** A backup that has never been restored is a hypothesis.
+  Restore into a scratch database and confirm row counts, not just that the command exited 0.
+- Consider `restic copy` to a non-OVH bucket: OVH snapshots plus OVH object storage means a single
+  provider holds every copy.
 
-## "Permission denied" reading keys directory
-The `keys` directory is owned by UID/GID 10000 (Docker appuser) with mode 750.
-The backup user must be in `appgroup` (GID 10000):
-```bash
-sudo groupadd -g 10000 appgroup 2>/dev/null || true
-sudo usermod -aG appgroup github-actions
-```
+## Troubleshooting
 
-## Docker permission denied
-```bash
-sudo usermod -aG docker github-actions
-```
-
-## Logs
-```bash
-systemctl list-timers | grep questionshub
-journalctl -u questionshub-backup.service -n 200 --no-pager
-```
-
----
-
-**Never** place `backup.env` inside the repo.
+| Symptom | Cause |
+|---|---|
+| `permission denied` on the Docker socket | `DOCKER_HOST` unset — the scripts export it, but ad-hoc shells need `export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock` |
+| Timer never fires | `loginctl enable-linger qh` missing; user timers only run while the user has a session |
+| `wrong password or no key found` | `RESTIC_PASSWORD` differs from the one the repo was created with. There is no recovery — check 1Password |
+| `pg_dump: error: connection` | The stack is down, or the service is named something other than `postgres` in the compose project |
+| Backup succeeds but files are missing | A path in `backup.sh` does not exist on this host — restic warns and continues |

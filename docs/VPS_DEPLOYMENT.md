@@ -1,296 +1,181 @@
 # VPS Deployment Guide
 
-This guide explains how to set up and deploy the Questions Hub application on a VPS.
+How QuestionsHub is deployed in production, and how to operate it.
 
-## Architecture Overview
+> **Host bootstrap is not in this repo.** Installing Docker, creating users, firewall, TLS and DNS
+> are host-level concerns shared with the other application on the same box, and they live in the
+> private ops repo's `vps/bootstrap.md`. This guide starts from a bootstrapped host.
 
-The production deployment uses Docker Compose on the VPS with:
-- **PostgreSQL** container for the database
-- **db-setup** container for database initialization
-- **Web** container for the Blazor application
+## Architecture
 
-The CI/CD pipeline automatically:
-1. Builds the Docker image
-2. Pushes to GitHub Container Registry (GHCR)
-3. Copies deployment files to VPS
-4. Deploys using `docker compose --profile production`
-
-## VPS Requirements
-
-- Docker and Docker Compose v2 installed
-- SSH access for the `github-actions` user
-- Ports: 8080 (web), 5432 (optional, for DB management)
-
-## Initial VPS Setup
-
-### 1. Install Docker and Compose
-
-```bash
-# Remove old versions
-sudo apt-get remove docker docker-engine docker.io containerd runc docker-compose
-
-# Install prerequisites
-sudo apt-get update
-sudo apt-get install ca-certificates curl gnupg
-
-# Add Docker's GPG key
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Add Docker repository
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker + Compose
-sudo apt-get update
-sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Verify
-docker compose version
+```
+GitHub Actions                    VPS
+──────────────                    ───
+CI: build + test
+        │
+CD: build image
+    push ghcr.io/…:latest
+         and  …:sha-abc1234
+        │
+        │ ssh (forced command, no shell)
+        └─────────────────────────► /usr/local/bin/qh-deploy   (root-owned)
+                                      docker compose pull
+                                      docker compose up -d
+                                      wait for /health
+                                              │
+                        ┌─────────────────────┴──────────────────┐
+                        │  rootless Docker daemon, user `qh`     │
+                        │   questions-hub-web   127.0.0.1:8080   │
+                        │   questions-hub-db    (no host port)   │
+                        └────────────────────────────────────────┘
+                                              ▲
+                              host nginx ──────┘  (TLS: Cloudflare Origin CA)
 ```
 
-### 2. Create Deployment User
+Three properties are deliberate:
+
+1. **The app runs as an unprivileged user with its own rootless Docker daemon.** `qh` has no sudo
+   and is not in the `docker` group — that group is root-equivalent, and this box hosts a second,
+   unrelated application whose data must stay unreachable.
+2. **CI cannot run commands on the host.** The deploy key is pinned server-side to a forced
+   command, so the only sentence it can utter is "redeploy".
+3. **CI cannot change what runs.** The compose file lives root-owned at
+   `/srv/questions-hub/deploy/`; it is *not* shipped by the pipeline.
+
+## Layout on the host
+
+| Path | Owner | Mode | Contents |
+|---|---|---|---|
+| `/srv/questions-hub/deploy/` | `root:qh` | 0750 | `docker-compose.yml`, `app.env`, `db/` |
+| `/srv/questions-hub/uploads/` | `qh:qh` | 0755 | user uploads; `handouts/` served by nginx |
+| `/srv/questions-hub/keys/` | `qh:qh` | 0700 | ASP.NET Data Protection key ring |
+| `/srv/questions-hub/backup/` | `qh:qh` | 0700 | `backup.env`, restic cache |
+| `/usr/local/bin/qh-deploy` | `root:root` | 0755 | the forced command |
+| `/usr/local/bin/qh-backup` | `root:root` | 0755 | backup entry point |
+
+Postgres data is a **named Docker volume** (`questions-hub_pgdata`), not a bind mount — under
+rootless Docker the container's postgres UID maps into `qh`'s subuid range, which makes host-side
+bind mounts awkward for no benefit. Backups are logical dumps, so nothing is lost.
+
+Nothing lives under `/home/`: home directories are `0750` on Ubuntu, so nginx could not traverse
+into one to serve `/media/`.
+
+## Installing / updating the deployment files
+
+Image updates are automatic. Everything below is a deliberate admin action, because these files
+are root-owned on purpose.
 
 ```bash
-# SSH to VPS as root or admin user
-sudo adduser github-actions
-sudo usermod -aG docker github-actions
+git clone https://github.com/IvanMisyats/questions-hub /tmp/qh && cd /tmp/qh
+
+# Compose file + DB init scripts
+sudo install -o root -g qh   -m 0640 infra/docker-compose.yml /srv/questions-hub/deploy/
+sudo install -o root -g root -m 0755 -d /srv/questions-hub/deploy/db/scripts \
+                                       /srv/questions-hub/deploy/db/dictionaries
+sudo install -o root -g root -m 0644 db/scripts/*.sql        /srv/questions-hub/deploy/db/scripts/
+sudo install -o root -g root -m 0644 db/dictionaries/uk_UA.* /srv/questions-hub/deploy/db/dictionaries/
+
+# Deploy + backup entry points
+sudo install -o root -g root -m 0755 infra/deploy/qh-deploy.sh   /usr/local/bin/qh-deploy
+sudo install -o root -g root -m 0755 infra/backup/scripts/backup.sh /usr/local/bin/qh-backup
+
+# nginx vhost
+sudo install -m 0644 infra/nginx/questions.com.ua.conf /etc/nginx/conf.d/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### 3. Setup SSH Key Authentication
+> `db/` is world-readable (0755/0644) on purpose: the Postgres container runs as its own UID,
+> which maps into a subuid range rather than to `qh`, so it cannot read `root:qh 0640` files.
+> These are public SQL scripts and dictionaries — there is nothing to protect. `app.env` and the
+> compose file stay `0640`.
 
-Add your deployment SSH public key:
+## Secrets
+
+`/srv/questions-hub/deploy/app.env`, owned `root:qh` mode 0640 — readable by the app user,
+writable only by root, so a stolen deploy key cannot rewrite the environment its own container
+runs with. Template: `infra/app.env.example`. Real values are in 1Password.
 
 ```bash
-sudo -u github-actions mkdir -p /home/github-actions/.ssh
-sudo -u github-actions nano /home/github-actions/.ssh/authorized_keys
-# Paste your public key, save and exit
-
-# Set permissions
-sudo chmod 700 /home/github-actions/.ssh
-sudo chmod 600 /home/github-actions/.ssh/authorized_keys
-sudo chown -R github-actions:github-actions /home/github-actions/.ssh
+sudo install -o root -g qh -m 0640 /dev/null /srv/questions-hub/deploy/app.env
+sudo nano /srv/questions-hub/deploy/app.env
 ```
 
-### 4. Create Environment File
+## GitHub secrets
 
-The `.env` file stores sensitive credentials and must be created on the VPS:
+Three, none of which grants a shell:
+
+| Secret | Value |
+|---|---|
+| `DEPLOY_SSH_KEY` | private half of the forced-command key |
+| `DEPLOY_HOST` | VPS address |
+| `DEPLOY_KNOWN_HOSTS` | the host's SSH public key line, so CI verifies what it connects to |
+
+Generate `DEPLOY_KNOWN_HOSTS` once, from a machine you trust, and eyeball it against the host:
 
 ```bash
-# Create directory
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub
-
-# Create .env file
-sudo -u github-actions bash -c 'cat > /home/github-actions/.env << EOF
-POSTGRES_ROOT_PASSWORD=your_secure_root_password
-QUESTIONSHUB_PASSWORD=your_secure_app_password
-ADMIN_EMAIL=admin@yourdomain.com
-ADMIN_PASSWORD=YourSecureAdminPassword123!
-EOF'
-
-# Set secure permissions
-sudo chmod 600 /home/github-actions/.env
+ssh-keyscan -p 55055 <vps-host>
 ```
 
-**Important:**
-- Change all passwords to secure values
-- Admin password must meet requirements: 8+ chars, digit, uppercase, lowercase, special char
-- The `.env` file is NOT committed to Git - it lives only on the VPS
+The container image is **public** on GHCR, so the VPS holds no registry credential at all. Do not
+reintroduce a `packages:write` PAT on the host — the previous one could push to any package on the
+account, including the other application's.
 
-### 5. Create Required Directories
+## Manual operations
+
+All as the `qh` user (`sudo machinectl shell qh@`):
 
 ```bash
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub/data/postgres
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub/uploads/handouts
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub/uploads/packages
-sudo -u github-actions mkdir -p /home/github-actions/questions-hub/keys
+cd /srv/questions-hub/deploy
+alias dc='docker compose --env-file app.env'
 
-# Keys directory needs restricted permissions (only owner can read/write)
-sudo chmod 700 /home/github-actions/questions-hub/keys
-
-# Uploads directory needs correct ownership for Docker container
-# The container runs as UID 1000, so we need to set ownership accordingly
-sudo chown -R 1000:1000 /home/github-actions/questions-hub/uploads
-sudo chmod -R 755 /home/github-actions/questions-hub/uploads
+dc ps                 # status
+dc logs -f web        # follow logs
+dc restart web        # restart just the app
+/usr/local/bin/qh-deploy   # pull + converge (same thing CI triggers)
 ```
 
-### 6. Verify Setup
+## Rollback
+
+Every CI build publishes `:latest` **and** `:sha-<short>`. To pin an older build:
 
 ```bash
-# Test SSH connection
-ssh -p 55055 github-actions@your-vps-host
-
-# Verify Docker access
-docker ps
-
-# Verify Compose version
-docker compose version
-
-# Verify .env file exists
-cat ~/.env
+sudo sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=sha-1a2b3c4/' /srv/questions-hub/deploy/app.env
+sudo machinectl shell qh@ /usr/local/bin/qh-deploy
 ```
 
-## GitHub Secrets Configuration
+Set `IMAGE_TAG=latest` again once the fix ships, or the next deploy will appear to do nothing.
 
-Configure these secrets in your GitHub repository (Settings → Secrets → Actions):
+## First-time / disaster-recovery bring-up
 
-| Secret | Description |
-|--------|-------------|
-| `VPS_HOST` | VPS IP address or hostname |
-| `VPS_USER` | Deployment user (`github-actions`) |
-| `VPS_SSH_KEY` | Private SSH key for authentication |
-| `REPO_TOKEN` | GitHub Personal Access Token with `packages:write` |
-
-**Note:** Database passwords are stored in `.env` on VPS, not in GitHub Secrets.
-
-## Deployment Process
-
-### Automatic Deployment
-
-Every push to `main` branch triggers the CI/CD pipeline:
-
-1. Build and test the .NET application
-2. Build Docker image
-3. Push image to GHCR
-4. Copy `docker-compose.yml` and `db/` folder to VPS
-5. Deploy using `docker compose --profile production up -d`
-
-### Manual Deployment
-
-SSH to VPS and run:
+Order matters — start the database, restore, *then* start the app. Starting `web` first lets its
+EF migrations and admin seeding race the `pg_restore --clean`.
 
 ```bash
-cd ~/questions-hub
-
-# Load environment variables
-set -a
-source ~/.env
-set +a
-
-# Export for docker compose
-export POSTGRES_ROOT_PASSWORD
-export QUESTIONSHUB_PASSWORD
-export ADMIN_EMAIL
-export ADMIN_PASSWORD
-export POSTGRES_DATA_PATH=~/questions-hub/data/postgres
-export UPLOADS_PATH=~/questions-hub/uploads
-export KEYS_PATH=~/questions-hub/keys
-
-# Pull latest image
-docker pull ghcr.io/ivanmisyats/questions-hub:latest
-
-# Deploy
-docker compose --profile production up -d
+cd /srv/questions-hub/deploy
+docker compose --env-file app.env up -d postgres db-setup   # schema, roles, extensions, FTS
+./backup/restore-db-latest.sh                                # DB from restic
+./backup/restore-files.sh latest /tmp/qh-restore             # uploads + keys, then move into place
+docker compose --env-file app.env up -d                      # now the app
 ```
 
-## File Locations on VPS
-
-| Path | Purpose |
-|------|---------|
-| `~/questions-hub/` | Application files |
-| `~/questions-hub/docker-compose.yml` | Docker Compose configuration |
-| `~/questions-hub/db/` | Database scripts and dictionaries |
-| `~/questions-hub/data/postgres/` | PostgreSQL data files |
-| `~/questions-hub/uploads/` | Uploaded files (handouts, packages) |
-| `~/questions-hub/keys/` | Data Protection encryption keys |
-| `~/.env` | Environment variables |
-
-## Monitoring and Logs
-
-```bash
-# View all containers
-docker ps
-
-# View logs
-docker compose --profile production logs -f
-
-# View specific service logs
-docker logs questions-hub-web
-docker logs questions-hub-db
-
-# Check container health
-docker inspect --format='{{.State.Health.Status}}' questions-hub-db
-```
+**Restore `keys/`.** It is the ASP.NET Data Protection key ring; without it every existing auth
+cookie and session is invalidated.
 
 ## Troubleshooting
 
-### Containers Won't Start
+| Symptom | Likely cause |
+|---|---|
+| `web` exits immediately after an app change | `read_only: true` — the app tried to write outside `/tmp`, `/app/uploads`, `/app/keys` |
+| `permission denied` on the Docker socket | `DOCKER_HOST` unset in a non-login shell. Export `DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock` |
+| Containers gone after reboot | `loginctl enable-linger qh` missing, or the user `docker` unit not enabled |
+| `db-setup` cannot read `/scripts` | `deploy/db/` is not world-readable — see the note above |
+| 413 on a large import | `client_max_body_size` in the vhost is below the app's 50 MB limit |
+| `curl --resolve` to the origin fails TLS | Working as intended — Authenticated Origin Pulls. Test via a proxied Cloudflare hostname |
+| Deploy step succeeds but nothing changed | `IMAGE_TAG` is pinned to an old `sha-…` in `app.env` |
 
-```bash
-# Check logs
-docker compose --profile production logs
+## See also
 
-# Verify environment variables are loaded
-echo $POSTGRES_ROOT_PASSWORD
-
-# Check disk space
-df -h
-```
-
-### Database Connection Issues
-
-```bash
-# Check database is healthy
-docker exec questions-hub-db pg_isready -U postgres -d questionshub
-
-# View database logs
-docker logs questions-hub-db
-
-# Connect to database
-docker exec -it questions-hub-db psql -U postgres -d questionshub
-```
-
-### Web App Won't Start
-
-```bash
-# Check web app logs
-docker logs questions-hub-web
-
-# Verify database connection
-docker exec questions-hub-web env | grep ConnectionStrings
-```
-
-### Rollback Deployment
-
-```bash
-# Stop current deployment
-docker compose --profile production down
-
-# Pull specific version (if tagged)
-docker pull ghcr.io/ivanmisyats/questions-hub:v1.0.0
-
-# Restart with specific version
-docker compose --profile production up -d
-```
-
-## Security Considerations
-
-- SSH key authentication only (no password login)
-- Database passwords in `.env` file with 600 permissions
-- `github-actions` user has no sudo access
-- Containers run with memory limits
-- Media directory has write access for file uploads (ownership must match container user)
-- Keys directory has restrictive permissions (700)
-
-## Nginx Reverse Proxy
-
-Nginx handles HTTPS termination and serves static media files directly for optimal performance.
-
-### Install Configuration
-
-```bash
-# Copy nginx config from repo to server
-sudo cp infra/nginx/questions.com.ua.conf /etc/nginx/conf.d/questions.com.ua.conf
-
-# Test and reload
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### Media Files
-
-Nginx serves `/media/*` requests directly from the VPS filesystem, bypassing Docker/ASP.NET for better performance. See [MEDIA_SETUP.md](MEDIA_SETUP.md#nginx-direct-serving-production) for detailed documentation.
-
+- [`DOCKER_PROFILES.md`](DOCKER_PROFILES.md) — local dev profiles (production is a separate file)
+- [`../infra/backup/backups.md`](../infra/backup/backups.md) — backup + restore runbook
+- [`../infra/nginx/README.md`](../infra/nginx/README.md) — vhost, TLS, Cloudflare
+- [`../infra/ufw/README.md`](../infra/ufw/README.md) — firewall policy

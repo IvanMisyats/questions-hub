@@ -1,0 +1,171 @@
+# QuestionsHub — PRODUCTION stack.
+#
+# Installed on the VPS at /srv/questions-hub/deploy/docker-compose.yml, owned by root:qh 0640 —
+# the app user can read it but not change it, so a stolen CI deploy key cannot rewrite what runs.
+# Updating it is a deliberate admin action; see docs/VPS_DEPLOYMENT.md.
+#
+# Runs against the unprivileged `qh` user's own ROOTLESS Docker daemon:
+#   cd /srv/questions-hub/deploy && docker compose --env-file app.env up -d
+# In normal operation nothing invokes this by hand — infra/deploy/qh-deploy.sh does.
+#
+# For local development use the repo-root docker-compose.yml instead (profiles dev/full).
+
+name: questions-hub
+
+services:
+  web:
+    image: ghcr.io/ivanmisyats/questions-hub:${IMAGE_TAG:-latest}
+    container_name: questions-hub-web
+
+    # Container UID 0 maps to the unprivileged host user `qh` under rootless Docker, so
+    # bind-mounted files land owned by qh (readable by the backup timer and by nginx) with no
+    # chown dance, and every capability is dropped below — this is "root" in name only.
+    # NEVER copy this line to a rootful daemon: there it would be real root.
+    user: "0:0"
+
+    # Loopback only. nginx is the sole client.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
+      - AdminCredentials__Email=${ADMIN_EMAIL}
+      - AdminCredentials__Password=${ADMIN_PASSWORD}
+      - Email__ApiKey=${EMAIL_API_KEY}
+      - Email__ApiSecret=${EMAIL_API_SECRET}
+      - Email__SenderEmail=noreply@questions.com.ua
+      - "Email__SenderName=База запитань ЩДК"
+      - SiteUrl=https://questions.com.ua
+      - Email__SiteUrl=https://questions.com.ua
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
+      - Telegram__ChannelId=@questions_com_ua
+      - Telegram__SiteUrl=https://questions.com.ua
+
+    volumes:
+      - ${UPLOADS_PATH:-/srv/questions-hub/uploads}:/app/uploads
+      - ${KEYS_PATH:-/srv/questions-hub/keys}:/app/keys
+
+    # Immutable root filesystem: the app only ever writes to the two bind mounts above and /tmp.
+    # If the container fails to start after an app change, this is the first thing to check.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-setup:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+    # Resource ceilings so neither app can starve the other on a 2 vCPU / 4 GB box.
+    mem_limit: 512m
+    memswap_limit: 768m
+    cpus: 1.5
+    pids_limit: 512
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: questions-hub-db
+
+    # No `ports:` at all. The DB is reachable only over the compose network, by `web` and by
+    # `docker compose exec` from the qh account. Publishing it was the old box's worst exposure.
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      POSTGRES_DB: questionshub
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
+
+    volumes:
+      # Named volume, not a bind mount: under rootless Docker the container's postgres UID maps
+      # into qh's subuid range, so host-side bind mounts would need awkward ownership. Backups
+      # are logical (pg_dump), so nothing is lost — and the old POSTGRES_DATA_PATH ambiguity goes
+      # away with it.
+      - pgdata:/var/lib/postgresql/data
+      - ./db/dictionaries/uk_UA.dic:/usr/local/share/postgresql/tsearch_data/uk_ua.dict:ro
+      - ./db/dictionaries/uk_UA.aff:/usr/local/share/postgresql/tsearch_data/uk_ua.affix:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d questionshub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Minimum the official postgres entrypoint needs: chown the data dir, then gosu to postgres.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+
+    restart: unless-stopped
+    mem_limit: 768m
+    memswap_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Tuned small: this box also hosts AnkiLearner.
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c effective_cache_size=256MB
+      -c max_connections=20
+
+  # One-shot: extensions -> app user/permissions -> full-text search config. Idempotent.
+  db-setup:
+    image: postgres:16-alpine
+    container_name: questions-hub-db-setup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      QUESTIONSHUB_PASSWORD: ${QUESTIONSHUB_PASSWORD}
+    volumes:
+      - ./db/scripts:/scripts:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "Running database setup scripts..."
+        psql -h postgres -U postgres -d questionshub -f /scripts/01-extensions.sql
+        psql -h postgres -U postgres -d questionshub -v QUESTIONSHUB_PASSWORD="$$QUESTIONSHUB_PASSWORD" -f /scripts/02-user-permissions.sql
+        psql -h postgres -U postgres -d questionshub -f /scripts/03-fts-setup.sql
+        echo "Database setup complete!"
+    restart: "no"
+
+volumes:
+  pgdata:
