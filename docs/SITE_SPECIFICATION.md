@@ -188,6 +188,7 @@ Single-page editor; the header shows the package's type badge. Common to both ty
 - No NumberingMode select, no warmup/shootout, no blocks
 - Themes accordion: «Додати тему»; each theme has a **Title** input, authors (theme editors), preamble
 - Questions within a theme get values automatically by position (10, 20, 30, 40, 50, …); drag & drop reordering reassigns values; themes reorder freely («Тема N» renumbers)
+- **Pinned values survive renumbering.** Reserve and shoot-out questions — the substitutes printed after the last theme — carry a *range* value («10-30», «40-50») meaning they may replace any question in that band. Any value that isn't a plain integer is treated as chosen rather than positional, so `PackageRenumberingService` leaves it alone while the question still occupies its slot (`[10, 20, 10-30, 40, 50]` stays exactly that; neighbours keep the value their own position gives them). Such values can only arrive from the import — the modal's value field is read-only
 - Question editor modal: value (read-only), Text, Answer, Залік, Незалік, **Форма**, Comment + media, Source, handout text/media, authors (no HostInstructions)
 - **Soft validation on publish**: warnings (non-blocking) for themes without a title, themes with ≠5 questions
 

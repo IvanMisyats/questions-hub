@@ -65,14 +65,40 @@ Workflow:
 3. Make the change, re-run, `diff -u baseline after`. Every hunk must be an intended
    improvement; anything else is a regression.
 
-```powershell
-dotnet test QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj `
-    --filter "FullyQualifiedName~<YourReplayTest>" --logger "console;verbosity=detailed" 2>&1 |
-  Select-String -Pattern "^\s*(###|TITLE|\[|WARN)" |
-  ForEach-Object { $_.Line.TrimStart() } | Set-Content -Encoding utf8 baseline.txt
+**Have the harness write the dump to a file** instead of scraping it back out of the test
+logger. One `File.WriteAllText` beats a `Select-String` filter that must be kept in sync with
+every prefix the dump emits, and it keeps xUnit's own chatter out of the diff:
+
+```csharp
+var dump = Path.Combine(Path.GetTempPath(), "shvager_corpus_dump.txt");
+File.WriteAllText(dump, sb.ToString(), new UTF8Encoding(false));
+output.WriteLine($"written to {dump}");
 ```
 
-Delete the harness once done — it hard-codes a machine-local path (`uploads/` is gitignored),
+```bash
+dotnet test QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj \
+  -p:BaseOutputPath=/tmp/qh-testbin/ -p:UseAppHost=false \
+  --filter "FullyQualifiedName~ReplayShvagerCorpus"
+cp "$(cygpath "$TMP")/shvager_corpus_dump.txt" /tmp/shvager_baseline.txt   # Windows temp → msys
+```
+
+Two things about running it:
+
+- **Find `uploads/jobs/` via `[CallerFilePath]`, never by walking up from
+  `AppContext.BaseDirectory`.** The walk-up only works while the test runs out of the repo's
+  `bin/`. Add the bin-lock workaround `-p:BaseOutputPath=/tmp/qh-testbin/`
+  ([`LOCAL_DEV.md`](LOCAL_DEV.md)) — which you will, since the corpus is usually replayed while
+  the app is running — and the assembly executes from the temp dir, so the walk-up sails past the
+  drive root and throws `DirectoryNotFoundException: uploads/jobs not found`. `[CallerFilePath]`
+  is baked in at compile time and is immune (`..` count follows where you put the harness):
+  ```csharp
+  private static string RepoRoot([CallerFilePath] string thisFile = "")
+      => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", ".."));
+  ```
+- Run the **rest** of the suite without the slow harness by negating the filter:
+  `--filter "FullyQualifiedName!~ReplayShvagerCorpus"`.
+
+Delete the harness once done — it reads a machine-local path (`uploads/` is gitignored),
 so it cannot live in the repo. Encode what you learned as synthetic-block tests instead.
 
 Two things that cost time when doing this:
