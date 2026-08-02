@@ -62,8 +62,8 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
     /// <summary>
     /// Renumbers a Своя гра package: themes get sequential numbers 1..N by OrderIndex,
     /// questions get values derived from position — (index + 1) × 10 (10, 20, 30, 40, 50...).
-    /// Questions with a pinned value (see <see cref="HasPinnedValue"/>) keep it but still occupy
-    /// their slot, so their neighbours keep the value their position gives them.
+    /// Questions with a pinned value (see <see cref="ShvagerValues.IsPinned"/>) keep it but still
+    /// occupy their slot, so their neighbours keep the value their position gives them.
     /// NumberingMode, special tour types, and blocks are not applicable and are ignored.
     /// </summary>
     private static void RenumberShvagerPackage(Package package)
@@ -81,24 +81,13 @@ public class PackageRenumberingService(IDbContextFactory<QuestionsHubDbContext> 
             {
                 orderedQuestions[j].OrderIndex = j;
 
-                if (HasPinnedValue(orderedQuestions[j].Number))
+                if (ShvagerValues.IsPinned(orderedQuestions[j].Number))
                     continue;
 
                 orderedQuestions[j].Number = ((j + 1) * 10).ToString(CultureInfo.InvariantCulture);
             }
         }
     }
-
-    /// <summary>
-    /// Whether a Своя гра question's value was chosen rather than derived from its position.
-    /// Reserve and shoot-out questions — the substitutes printed after the last theme — are valued
-    /// as a range («10-30», «40-50»), meaning they may replace any question in that band. Position
-    /// says nothing about such a value, so renumbering must leave it alone; every plain number is
-    /// recomputed from the question's place in its theme.
-    /// </summary>
-    private static bool HasPinnedValue(string? number)
-        => !string.IsNullOrWhiteSpace(number)
-           && !int.TryParse(number, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
 
     /// <summary>
     /// Ensures the warmup tour (if any) has OrderIndex = 0, and the shootout tour (if any) has the highest OrderIndex.

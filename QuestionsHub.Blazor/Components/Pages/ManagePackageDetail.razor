@@ -2111,6 +2111,8 @@
     /// <summary>
     /// Collects non-blocking warnings for publishing a Своя гра package:
     /// themes without a title and themes with a non-canonical question count (≠5).
+    /// Reserve themes are exempt from the count warning — they hold however many substitutes
+    /// the editors printed (see <see cref="ShvagerValues.IsReserveTheme"/>).
     /// </summary>
     private List<string> GetShvagerPublishWarnings()
     {
@@ -2124,7 +2126,8 @@
                 warnings.Add($"Тема {theme.Number} не має назви");
             }
 
-            if (theme.Questions.Count != 5)
+            if (theme.Questions.Count != 5
+                && !ShvagerValues.IsReserveTheme(theme.Questions.Select(q => q.Number)))
             {
                 warnings.Add($"{theme.ThemeDisplayName}: {theme.Questions.Count} запитань замість 5");
             }

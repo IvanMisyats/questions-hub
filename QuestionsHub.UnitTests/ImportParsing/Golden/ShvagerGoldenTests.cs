@@ -152,5 +152,9 @@ public class ShvagerGoldenTests : IDisposable
             w.Contains("Природа Північної Америки")
             || w.Contains("корейське кіно")
             || w.Contains("У списку «Теми:»"));
+
+        // Both reserve themes hold fewer than five questions by design; their range values exempt
+        // them from the count warning, so the sample must not produce one at all
+        result.Warnings.Should().NotContain(w => w.Contains("запитань замість"));
     }
 }

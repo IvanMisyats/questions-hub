@@ -673,6 +673,56 @@ public class ShvagerParserTests
     }
 
     [Fact]
+    public void Parse_ReserveTheme_NoQuestionCountWarning()
+    {
+        // Reserve themes hold however many substitutes the editors printed; the range values are
+        // what marks them, so counting them against the canonical five is noise.
+        var result = Parse(
+            "Тема: Запас",
+            "10-30. Замінне?",
+            "Відповідь: а",
+            "40-50. Ще одне замінне?",
+            "Відповідь: б");
+
+        result.Tours[0].Questions.Should().HaveCount(2);
+        result.Warnings.Should().NotContain(w => w.Contains("запитань замість"));
+    }
+
+    [Fact]
+    public void Parse_ReserveThemeMixingRangeAndPlainValues_NoQuestionCountWarning()
+    {
+        // Real reserve themes mix the two forms («10-20», «30», «40-50») — one range is enough.
+        var result = Parse(
+            "Тема: Голосні лише «У»",
+            "10-20. Перше?",
+            "Відповідь: а",
+            "30. Друге?",
+            "Відповідь: б",
+            "40-50. Третє?",
+            "Відповідь: в");
+
+        result.Tours[0].Questions.Should().HaveCount(3);
+        result.Warnings.Should().NotContain(w => w.Contains("запитань замість"));
+    }
+
+    [Fact]
+    public void Parse_ShortThemeWithPlainValues_StillWarns()
+    {
+        // The mirror of the two above: no range value means an ordinary theme that really is
+        // missing questions — a parse defect the warning must keep reporting.
+        var result = Parse(
+            "Тема: Доктор Хто",
+            "10. Перше?",
+            "Відповідь: а",
+            "20. Друге?",
+            "Відповідь: б",
+            "40. Четверте?",
+            "Відповідь: в");
+
+        result.Warnings.Should().Contain(w => w.Contains("3 запитань замість 5"));
+    }
+
+    [Fact]
     public void Parse_QuestionWithoutAnswer_AddsWarning()
     {
         var result = Parse(

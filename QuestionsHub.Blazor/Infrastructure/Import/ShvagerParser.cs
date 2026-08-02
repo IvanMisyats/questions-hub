@@ -1343,7 +1343,10 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         var theme = ctx.CurrentTheme;
         if (theme == null) return;
 
-        if (theme.Questions.Count != CanonicalThemeSize)
+        // A reserve theme holds however many substitutes the editors printed — usually one to three.
+        // Counting those against the canonical five is noise, not a finding.
+        if (theme.Questions.Count != CanonicalThemeSize
+            && !ShvagerValues.IsReserveTheme(theme.Questions.Select(q => q.Number)))
         {
             ctx.Result.Warnings.Add(
                 $"Тема «{theme.Title}»: {theme.Questions.Count} запитань замість {CanonicalThemeSize}");
