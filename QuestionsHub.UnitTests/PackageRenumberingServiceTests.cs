@@ -485,8 +485,104 @@ public class PackageRenumberingServiceTests
         package.NumberingMode = QuestionNumberingMode.Manual;
 
         var theme = CreateTour(1, 0);
-        theme.Questions.Add(CreateQuestion(1, 0, "X"));
-        theme.Questions.Add(CreateQuestion(2, 1, "Y"));
+        theme.Questions.Add(CreateQuestion(1, 0, "999"));
+        theme.Questions.Add(CreateQuestion(2, 1, "888"));
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        Assert.Equal("10", theme.Questions.First(q => q.Id == 1).Number);
+        Assert.Equal("20", theme.Questions.First(q => q.Id == 2).Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_RangeValuedQuestions_KeepTheirValue()
+    {
+        // Reserve/shoot-out questions are valued as a range («10-30») — position says nothing
+        // about that value, so editing or moving them must not collapse it to a plain «10».
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var reserve = CreateTour(1, 0);
+        reserve.Title = "Запас";
+        reserve.Questions.Add(CreateQuestion(1, 0, "10-30"));
+        reserve.Questions.Add(CreateQuestion(2, 1, "40-50"));
+
+        package.Tours.Add(reserve);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert - values survive, order indices are still normalized
+        Assert.Equal("10-30", reserve.Questions.First(q => q.Id == 1).Number);
+        Assert.Equal("40-50", reserve.Questions.First(q => q.Id == 2).Number);
+        Assert.Equal(0, reserve.Questions.First(q => q.Id == 1).OrderIndex);
+        Assert.Equal(1, reserve.Questions.First(q => q.Id == 2).OrderIndex);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_RangeValuedQuestion_StillOccupiesItsSlot()
+    {
+        // A pinned value does not shift its neighbours: the questions around it keep the value
+        // their own position gives them, so a range dropped mid-theme leaves the rest intact.
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme = CreateTour(1, 0);
+        theme.Questions.Add(CreateQuestion(1, 0, "999"));
+        theme.Questions.Add(CreateQuestion(2, 1, "999"));
+        theme.Questions.Add(CreateQuestion(3, 2, "10-30"));
+        theme.Questions.Add(CreateQuestion(4, 3, "999"));
+        theme.Questions.Add(CreateQuestion(5, 4, "999"));
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        var questions = theme.Questions.OrderBy(q => q.OrderIndex).ToList();
+        Assert.Equal(["10", "20", "10-30", "40", "50"], questions.Select(q => q.Number));
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_RangeValuedQuestionMovedToAnotherTheme_KeepsItsValue()
+    {
+        // Moving a reserve question into a regular theme is the case that used to destroy the
+        // range: the move triggers a full renumber of the receiving theme.
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme = CreateTour(1, 0);
+        theme.Questions.Add(CreateQuestion(1, 0, "10"));
+        theme.Questions.Add(CreateQuestion(2, 1, "20"));
+        theme.Questions.Add(CreateQuestion(9, 2, "10-30")); // just dragged in from «Запас»
+
+        package.Tours.Add(theme);
+
+        // Act
+        service.RenumberPackageInMemory(package);
+
+        // Assert
+        Assert.Equal("10-30", theme.Questions.First(q => q.Id == 9).Number);
+        Assert.Equal("10", theme.Questions.First(q => q.Id == 1).Number);
+        Assert.Equal("20", theme.Questions.First(q => q.Id == 2).Number);
+    }
+
+    [Fact]
+    public void RenumberPackageInMemory_Shvager_BlankValue_IsAssignedByPosition()
+    {
+        // A blank value is not a pin — a freshly created question arrives with a placeholder
+        // and must get its value from its position like any other.
+        var service = CreateService();
+        var package = CreateShvagerPackage();
+
+        var theme = CreateTour(1, 0);
+        theme.Questions.Add(CreateQuestion(1, 0, "0"));
+        theme.Questions.Add(CreateQuestion(2, 1, " "));
 
         package.Tours.Add(theme);
 
