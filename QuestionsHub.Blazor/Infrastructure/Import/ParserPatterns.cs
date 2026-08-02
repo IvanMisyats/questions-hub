@@ -191,6 +191,20 @@ public static partial class ParserPatterns
     [GeneratedRegex(@"^\s*Форма\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
     public static partial Regex FormLabel();
 
+    // Form hint wrapped in parentheses to the end of the line: "(Форма: іграшки у вигляді НЬОГО)".
+    // Group 1 is the unwrapped label, so a replace with "$1" removes both parens at once — the
+    // opening one would otherwise stay glued to the question text and the closing one to the form.
+    // The separator after «Форма» is required, which is what keeps the host-instruction line
+    // "(Форма запитання вказана після запитання в дужках курсивом)" from matching.
+    [GeneratedRegex(@"\(\s*(Форма\s*(?::|[.]\s?)\s*.*)\)\s*$", RegexOptions.IgnoreCase)]
+    public static partial Regex ParenthesizedFormLabel();
+
+    // Preamble label opening a theme preamble: "Преамбула: у відповіді два слова", "Преамбула. …".
+    // The separator must follow the word directly, so the package-header headings
+    // «Преамбула для ведучих» / «Преамбула від редактора:» are left alone.
+    [GeneratedRegex(@"^\s*Преамбула\s*(?::|[.]\s?)\s*(.*)$", RegexOptions.IgnoreCase)]
+    public static partial Regex ShvagerPreambleLabel();
+
     // Theme header: "Тема: Назва (Автор)", "Тема. Назва", "Тема – Назва"
     [GeneratedRegex(@"^\s*Тема\s*[:.\-–—]\s*(.+)$", RegexOptions.IgnoreCase)]
     public static partial Regex ShvagerThemeStart();

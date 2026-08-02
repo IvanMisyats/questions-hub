@@ -964,6 +964,15 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         // «[Роздатковий матеріал: …]» bracket — its content is the handout text
         if (ctx.CurrentQuestion != null && TryProcessHandoutBracket(line, ctx)) return;
 
+        // The form hint is routinely printed parenthesized on its own line — «(Форма: ЦЯ ТВАРИНКА)».
+        // Unwrap it before label detection, otherwise the label is only found by the inline rule and
+        // the pair is split across two fields: «(» is appended to the question text and the form
+        // keeps the closing «)».
+        if (ctx.CurrentQuestion != null)
+        {
+            line = ParserPatterns.ParenthesizedFormLabel().Replace(line, "$1", 1);
+        }
+
         var (section, remainder) = DetectLabel(line);
         if (section != null)
         {
@@ -1181,7 +1190,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         {
             if (ctx.CurrentTheme != null)
             {
-                ctx.CurrentTheme.Preamble = Append(ctx.CurrentTheme.Preamble, text);
+                ctx.CurrentTheme.Preamble = Append(ctx.CurrentTheme.Preamble, StripPreambleLabel(text));
             }
             else
             {
@@ -1224,6 +1233,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
                 question.Text = Append(question.Text, ExtractPictureBrackets(text, question, ctx))!;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Drops the «Преамбула:» label a theme preamble often announces itself with — the field is
+    /// already labelled in the UI, so repeating the word in its text is noise. Only the bare label
+    /// is recognized, so package-header headings like «Преамбула від редактора:» keep their wording.
+    /// </summary>
+    private static string StripPreambleLabel(string text)
+    {
+        var match = ParserPatterns.ShvagerPreambleLabel().Match(text);
+        return match.Success ? match.Groups[1].Value.Trim() : text;
     }
 
     /// <summary>

@@ -219,6 +219,14 @@ are now handled (with regression tests), but the mechanics are worth knowing:
   line just falls through to the preamble, which is also the correct behaviour for acknowledgment
   lines («Редактор дякує за тестування: …»), so there is no warning to look for.
 
+- **Label wrapped in its own decoration** — two labels routinely arrive decorated, and the decoration
+  used to leak into the stored field. `(Форма: ЦЯ ТВАРИНКА)` matched no label at line start, so only
+  the *inline* rule found it: `(` was appended to the question text and the form kept the closing `)`.
+  `Преамбула: у відповіді два слова…` kept its label inside the preamble text. Both are now stripped
+  (`ParenthesizedFormLabel`, `ShvagerPreambleLabel`). The separator after the keyword is the
+  discriminator in both cases — it is what keeps the host-instruction prose `(Форма запитання вказана
+  після запитання в дужках курсивом)` and the header heading `Преамбула від редактора:` intact.
+
 - **Title decorated differently in the list and in the header** — `"БАНДУРИСТ".` vs the list's
   `Бандурист`. `NormalizeTitle` strips quotes and terminal punctuation from both ends before
   matching, so the two forms meet.

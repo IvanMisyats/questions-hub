@@ -862,6 +862,47 @@ public class ShvagerParserTests
         result.Tours[0].Questions[0].Comment.Should().Be("перший рядок\nдругий рядок");
     }
 
+    [Fact]
+    public void Parse_ParenthesizedForm_UnwrappedFromBothParens()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. У онлайн-магазині продають ІГРАШКИ ДЛЯ ВАННИ у ВИГЛЯДІ НЬОГО.",
+            "(Форма: іграшки для ванни у вигляді НЬОГО)",
+            "Відповідь: Качкодзьоб.");
+
+        var q = result.Tours[0].Questions[0];
+        q.Form.Should().Be("іграшки для ванни у вигляді НЬОГО");
+        q.Text.Should().Be("У онлайн-магазині продають ІГРАШКИ ДЛЯ ВАННИ у ВИГЛЯДІ НЬОГО.");
+    }
+
+    [Fact]
+    public void Parse_ParenthesizedFormAfterQuestionText_SplitsWithoutStrayParens()
+    {
+        var result = Parse(
+            "Тема: Тест",
+            "10. Назвіть ЙОГО. (Форма: ВІН двома словами)",
+            "Відповідь: снігопад навпаки");
+
+        var q = result.Tours[0].Questions[0];
+        q.Form.Should().Be("ВІН двома словами");
+        q.Text.Should().Be("Назвіть ЙОГО.");
+    }
+
+    [Fact]
+    public void Parse_ParentheticalWithoutFormSeparator_StaysQuestionText()
+    {
+        // «Форма запитання…» is prose, not a label — the missing «:» is what tells them apart
+        var result = Parse(
+            "Тема: Тест",
+            "10. Питання? (Форма запитання вказана в дужках курсивом)",
+            "Відповідь: а");
+
+        var q = result.Tours[0].Questions[0];
+        q.Form.Should().BeNull();
+        q.Text.Should().Contain("(Форма запитання вказана в дужках курсивом)");
+    }
+
     #endregion
 
     #region Numbered bare titles
@@ -1096,6 +1137,49 @@ public class ShvagerParserTests
         result.Tours[0].Title.Should().Be("П.Х. (у відповіді два слова, одно починається на П, а інше на Х)");
         result.Tours[0].Preamble.Should().StartWith("Варто зазначити");
         result.Tours[1].Title.Should().Be("LA");
+    }
+
+    [Fact]
+    public void Parse_ThemePreambleAnnouncedByLabel_LabelStripped()
+    {
+        var lines = new List<string> { "Пакет" };
+        lines.AddRange(ThemeWithPreamble(
+            "Тема: М. Н.",
+            "Преамбула: У відповіді завжди два слова, перше починається на М, друге - на Н."));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours[0].Preamble.Should()
+            .Be("У відповіді завжди два слова, перше починається на М, друге - на Н.");
+    }
+
+    [Fact]
+    public void Parse_PreambleLabelOnItsOwnLine_LeavesOnlyTheProse()
+    {
+        var lines = new List<string> { "Пакет", "Тема: Тест", "Преамбула:", "Тема про котиків.", "" };
+        lines.AddRange(Theme("")[1..]);
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours[0].Preamble.Should().Be("Тема про котиків.");
+    }
+
+    [Fact]
+    public void Parse_PreambleHeadingWithoutSeparator_KeepsItsWording()
+    {
+        // «Преамбула для ведучих» / «Преамбула від редактора:» are package-header headings,
+        // not the label — only «Преамбула» directly followed by the separator is stripped
+        var lines = new List<string>
+        {
+            "Пакет",
+            "Преамбула від редактора:",
+            "Вітаю вас на другому тижні турніру."
+        };
+        lines.AddRange(Theme("Тема: Тест"));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Preamble.Should().Contain("Преамбула від редактора:");
     }
 
     #endregion

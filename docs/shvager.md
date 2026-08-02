@@ -101,6 +101,21 @@ Here is a sample of a package with one theme:
 
 Two sample files of the packages are located in the `_shvager` folder.
 
+### Label variants the importer normalizes
+
+The sample above shows the canonical shapes. Two decorated variants are just as common in real
+documents, and the parser strips the decoration so the stored field holds only the content:
+
+* **Parenthesized form** — the form hint often follows the question text wrapped in parentheses
+  and set in italics: `(Форма: іграшки для ванни у вигляді НЬОГО)`. Both parens are removed;
+  the form is stored as `іграшки для ванни у вигляді НЬОГО`. The separator after `Форма` is
+  what identifies the label — a parenthetical like `(Форма запитання вказана в дужках курсивом)`
+  is prose and stays in the text it belongs to.
+* **Labelled theme preamble** — the preamble announces itself with `Преамбула: …`. The label is
+  dropped, since the field is already labelled in the UI. Only the bare word directly followed by
+  the separator counts, so package-header headings like `Преамбула для ведучих` and
+  `Преамбула від редактора:` keep their wording.
+
 
 More packages:
 https://docs.google.com/spreadsheets/d/1bBELr8BbAQqjSA1CDWgDHls0CfmW-L_XrGTRHTEKqQ0/edit?gid=1511873199#gid=1511873199
