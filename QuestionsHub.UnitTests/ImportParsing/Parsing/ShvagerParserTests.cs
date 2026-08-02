@@ -1044,6 +1044,48 @@ public class ShvagerParserTests
     }
 
     [Fact]
+    public void Parse_TenthThemeHeader_IsNotReadAsValue10Question()
+    {
+        // «10. За (Костянтин Каунін)» opening the tenth theme has the exact shape of a value-10
+        // question. Read as one, it split the theme in two: a spurious 1-question theme holding
+        // the title as its text, then the real questions under an untitled theme.
+        var lines = new List<string> { "Пакет", "" };
+        for (var i = 1; i <= 9; i++)
+        {
+            lines.AddRange(Theme($"{i}. Тема {i}", i * 10));
+        }
+        lines.AddRange(Theme("10. За (Костянтин Каунін)", 100));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(10);
+        result.Tours[9].Title.Should().Be("За");
+        result.Tours[9].Editors.Should().Equal("Костянтин Каунін");
+        result.Tours[9].Questions.Select(q => q.Number).Should().Equal("10", "20", "30", "40", "50");
+    }
+
+    [Fact]
+    public void Parse_TenthThemeFirstQuestion_IsNotReadAsPositionNumberedHeader()
+    {
+        // The mirror case: the tenth theme carries an ordinary title, so its own «10.» question
+        // sits where a position-numbered header could. The lookahead separates them — a header is
+        // followed by the «10.» it introduces, a first question by its theme's «20.».
+        var lines = new List<string> { "Пакет", "" };
+        for (var i = 1; i <= 9; i++)
+        {
+            lines.AddRange(Theme($"{i}. Тема {i}", i * 10));
+        }
+        lines.AddRange(Theme("Десята", 100));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(10);
+        result.Tours[9].Title.Should().Be("Десята");
+        result.Tours[9].Questions.Should().HaveCount(5);
+        result.Tours[9].Questions[0].Text.Should().Be("Питання 100?");
+    }
+
+    [Fact]
     public void Parse_NumberedEnumerationInsideComment_DoesNotStartTheme()
     {
         // A numbered line mid-theme is an enumeration, not a header: the position rule requires the

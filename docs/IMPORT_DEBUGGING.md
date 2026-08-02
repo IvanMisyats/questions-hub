@@ -209,6 +209,18 @@ are now handled (with regression tests), but the mechanics are worth knowing:
   (previous theme complete, not part of a numbered run, next question in the document is a `10.`)
   because a numbered line is just as often an enumeration inside a comment.
 
+- **The tenth theme's numbered header reads as a value-10 question** — `10. За (Костянтин Каунін)`
+  opening theme 10 is shape-identical to a `10.` question, so it was parsed as one: a spurious
+  1-question theme holding the *title* as its question text, then the real five questions under an
+  untitled theme, and every later theme shifted by one. Positions 10/20/… are the only ones that can
+  collide (a value must be a multiple of 10), which is why themes 1-9 were unaffected. Fix:
+  `TryMatchPositionNumberedHeader` no longer bails on `IsQuestionStart` — its existing guards already
+  discriminate, the decisive one being the lookahead (`NextQuestionStartValueIs10`): a theme's own
+  first question is followed by its `20.`, a header by the `10.` it introduces. Its result also
+  gates the list-number strip in `TryProcessThemeStart`, so the anchor rules see the bare title.
+  Symptom: an extra theme whose single `10.` question text is literally the next theme's title,
+  plus `У списку «Теми:» N тем, а в пакеті знайдено N+1`.
+
 - **Editor line lost to a mistyped bracket** — `Редактор та автор тем: Едуард Голуб (Київ}` closes the
   city with `}`. `UkrainianNameHelper.StripCity` only recognized `(…)`, so the city stayed glued to the
   name, `LooksLikeAuthorList` saw a third "word" starting with `(` and rejected it, and the **whole

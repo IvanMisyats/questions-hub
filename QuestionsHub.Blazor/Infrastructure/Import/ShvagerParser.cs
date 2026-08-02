@@ -197,10 +197,12 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             return true;
         }
 
-        // Headers may carry a list-style number («5. ПОЛІТИКИ…») — strip it for matching,
-        // but never from question-value lines («10. …»)
+        // Headers may carry a list-style number («5. ПОЛІТИКИ…») — strip it for matching.
+        // Question-value lines («10. …») keep theirs, unless the number is demonstrably the
+        // next theme's own position («10. За (Костянтин Каунін)» opening the tenth theme):
+        // stripping it there is what lets the anchor rules below see the bare title.
         var candidate = line;
-        if (!IsQuestionStart(line))
+        if (!IsQuestionStart(line) || TryMatchPositionNumberedHeader(lines, index, ctx, out _))
         {
             var numberMatch = ParserPatterns.ListNumberPrefix().Match(line);
             if (numberMatch.Success)
@@ -550,14 +552,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
     /// position, the previous theme must already be complete, the line must not continue a run of
     /// numbered entries (that would be the theme list), and the next question in the document must
     /// be a value-10 one — i.e. a fresh theme really does start here.
+    ///
+    /// Those same guards are what makes it safe to run on a line that also reads as a question:
+    /// the tenth theme's header «10. За (Костянтин Каунін)» is indistinguishable from a value-10
+    /// question by shape alone. The discriminator is the lookahead — a theme's own first question
+    /// is followed by its «20.», a header by the «10.» it introduces.
     /// </summary>
     private static bool TryMatchPositionNumberedHeader(List<Line> lines, int index, Context ctx, out string title)
     {
         title = "";
 
         var line = lines[index].Text;
-        if (IsQuestionStart(line)) return false;
-
         var match = ParserPatterns.ListEntryNumbered().Match(line);
         if (!match.Success || !int.TryParse(match.Groups[1].Value, out var position)) return false;
         if (position != ctx.Result.Tours.Count + 1) return false;
