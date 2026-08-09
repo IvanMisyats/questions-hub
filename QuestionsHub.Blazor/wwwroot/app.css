@@ -68,12 +68,12 @@ html {
 }
 
 html, body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Nunito Sans', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    font-family: 'Nunito', 'Inter', sans-serif;
+    font-family: 'Nunito', 'Nunito Sans', sans-serif;
     font-weight: 600;
     letter-spacing: -0.025em;
 }
