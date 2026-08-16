@@ -286,4 +286,203 @@ public class SourceLinkifierTests
         result.Value.Should().Contain("<a href=\"https://example.com\"");
         result.Value.Should().Contain("<a href=\"https://test.org\"");
     }
+
+    // ==================== Boundary detection ====================
+
+    [Fact]
+    public void Linkify_UrlInParenthesesEndingSentence_ExcludesBracketAndPeriod()
+    {
+        // Arrange - real case from "укр. Simply Red.docx"
+        var text = "1. J. Forsyth, «Xueqin and Xakespeare: Reading The Story of the Stone through Hamlet» (https://ibb.co/mVgbHSbP).";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert - neither ")" nor "." belongs to the URL, and both survive outside the link
+        result.Value.Should().Contain("<a href=\"https://ibb.co/mVgbHSbP\" target=\"_blank\" rel=\"noopener noreferrer\">https://ibb.co/mVgbHSbP</a>).");
+    }
+
+    [Fact]
+    public void Linkify_UrlWithBalancedParentheses_KeepsBrackets()
+    {
+        // Arrange - Wikipedia disambiguation links legitimately end in ")"
+        var text = "https://en.wikipedia.org/wiki/Cat_(disambiguation)";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Contain("<a href=\"https://en.wikipedia.org/wiki/Cat_(disambiguation)\" target=\"_blank\" rel=\"noopener noreferrer\">https://en.wikipedia.org/wiki/Cat_(disambiguation)</a>");
+    }
+
+    [Fact]
+    public void Linkify_UrlEndingSentence_ExcludesTrailingPeriod()
+    {
+        // Arrange
+        var text = "2. https://en.wikipedia.org/wiki/Simply_Red.";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Contain(">https://en.wikipedia.org/wiki/Simply_Red</a>.");
+        result.Value.Should().NotContain("Simply_Red.\"");
+    }
+
+    [Fact]
+    public void Linkify_UrlInGuillemets_ExcludesClosingQuote()
+    {
+        // Arrange
+        var text = "«https://example.com/page»";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Contain("<a href=\"https://example.com/page\" target=\"_blank\" rel=\"noopener noreferrer\">https://example.com/page</a>");
+        result.Value.Should().EndWith("&#187;");
+    }
+
+    [Fact]
+    public void Linkify_BareDomainFollowedByPunctuation_ExcludesPunctuation()
+    {
+        // Arrange
+        var text = "3) www.bbc.co.uk/news; 4) tsn.ua.";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Contain(">www.bbc.co.uk/news</a>;");
+        result.Value.Should().Contain(">tsn.ua</a>.");
+    }
+
+    // ==================== List numbering must not be swallowed ====================
+
+    [Fact]
+    public void Linkify_NumberedSourceWithoutSpace_ExcludesTheNumber()
+    {
+        // Arrange - "1." is the source list's numbering, not a subdomain
+        var text = "1.www.pravda.com.ua/news/";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().StartWith("1.<a href=\"https://www.pravda.com.ua/news/\"");
+        result.Value.Should().Contain(">www.pravda.com.ua/news/</a>");
+    }
+
+    [Fact]
+    public void Linkify_NumberedSchemeUrlWithoutSpace_ExcludesTheNumber()
+    {
+        // Arrange - the number must not end up inside the host, nor the scheme inside the path
+        var text = "1.http://site.com.ua";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Be("1.<a href=\"http://site.com.ua\" target=\"_blank\" rel=\"noopener noreferrer\">http://site.com.ua</a>");
+    }
+
+    [Fact]
+    public void Linkify_HostWithLeadingDigits_IsStillLinkified()
+    {
+        // Arrange - only an all-digit label is rejected; "24tv" is a real host label
+        var text = "1.24tv.ua/sport";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().StartWith("1.<a href=\"https://24tv.ua/sport\"");
+    }
+
+    // ==================== False positives in prose ====================
+
+    [Fact]
+    public void Linkify_MissingSpaceAfterSentence_DoesNotCreateLink()
+    {
+        // Arrange - "end.Next" is prose, not a host: "next" is not a known TLD
+        var text = "the end.Next sentence starts here";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Be("the end.Next sentence starts here");
+    }
+
+    [Fact]
+    public void Linkify_FileName_DoesNotCreateLink()
+    {
+        // Arrange
+        var text = "photo.jpg, Vol.II, Simply Red.docx";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().NotContain("<a href=");
+    }
+
+    [Fact]
+    public void Linkify_EmailAddress_DoesNotLinkifyDomainPart()
+    {
+        // Arrange - linking "example.com" out of the middle of an address is worse than no link
+        var text = "mail: info@example.com";
+
+        // Act
+        var result = SourceLinkifier.Linkify(text);
+
+        // Assert
+        result.Value.Should().Be("mail: info@example.com");
+    }
+
+    // ==================== Encoded (search results) path ====================
+
+    [Fact]
+    public void Linkify_MarkupString_UrlFollowedByEncodedGuillemet_ExcludesEntity()
+    {
+        // Arrange - HighlightSanitizer encodes « and » as numeric entities
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
+            "&#171;https://example.com/page&#187;");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert - the entity is punctuation around the URL, not part of it
+        result.Value.Should().Be(
+            "&#171;<a href=\"https://example.com/page\" target=\"_blank\" rel=\"noopener noreferrer\">https://example.com/page</a>&#187;");
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_UrlWithQueryString_DoesNotDoubleEncodeAmpersand()
+    {
+        // Arrange - the input is already encoded, so "&" arrives as "&amp;"
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
+            "https://example.com/s?a=1&amp;b=2");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert - the href must resolve to "?a=1&b=2", not "?a=1&amp;b=2"
+        result.Value.Should().Contain("<a href=\"https://example.com/s?a=1&amp;b=2\"");
+        result.Value.Should().NotContain("&amp;amp;");
+    }
+
+    [Fact]
+    public void Linkify_MarkupString_UrlInParenthesesEndingSentence_ExcludesBracketAndPeriod()
+    {
+        // Arrange
+        var sanitizedHtml = new Microsoft.AspNetCore.Components.MarkupString(
+            "1. Forsyth (https://ibb.co/mVgbHSbP).");
+
+        // Act
+        var result = SourceLinkifier.Linkify(sanitizedHtml);
+
+        // Assert
+        result.Value.Should().EndWith(">https://ibb.co/mVgbHSbP</a>).");
+    }
 }
