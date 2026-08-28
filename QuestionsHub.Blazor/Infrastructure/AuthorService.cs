@@ -501,9 +501,6 @@ public class AuthorService
     public async Task<bool> TryDeleteAuthorIfOrphaned(QuestionsHubDbContext context, int authorId)
     {
         var author = await context.Authors
-            .Include(a => a.Questions)
-            .Include(a => a.Tours)
-            .Include(a => a.Blocks)
             .FirstOrDefaultAsync(a => a.Id == authorId);
 
         if (author == null)
@@ -511,8 +508,15 @@ public class AuthorService
             return false;
         }
 
+        // Ask whether anything references the author rather than loading it. Including the three
+        // collections made EF emit one LEFT JOIN each, returning their cartesian product — ~575k
+        // rows for the worst author here, enough to exhaust the process's memory.
+        var hasContent = await context.Authors
+            .AnyAsync(a => a.Id == authorId
+                && (a.Questions.Any() || a.Tours.Any() || a.Blocks.Any()));
+
         // Don't delete if author has any questions, tours, blocks, or is linked to a user
-        if (author.Questions.Count > 0 || author.Tours.Count > 0 || author.Blocks.Count > 0 || author.UserId != null)
+        if (hasContent || author.UserId != null)
         {
             return false;
         }
@@ -548,11 +552,15 @@ public class AuthorService
         {
             context.ChangeTracker.Clear();
 
+            // Split into one query per collection. A single query would LEFT JOIN all four, and the
+            // cartesian product of a prolific author's questions, tours, blocks, and packages is
+            // large enough to exhaust the process's memory.
             var source = await context.Authors
                 .Include(a => a.Questions)
                 .Include(a => a.Tours)
                 .Include(a => a.Blocks)
                 .Include(a => a.Packages)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(a => a.Id == sourceAuthorId);
 
             if (source == null)
@@ -565,6 +573,7 @@ public class AuthorService
                 .Include(a => a.Tours)
                 .Include(a => a.Blocks)
                 .Include(a => a.Packages)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(a => a.Id == targetAuthorId);
 
             if (target == null)

@@ -719,4 +719,100 @@ public class AuthorServiceTests : IDisposable
     }
 
     #endregion
+
+    #region TryDeleteAuthorIfOrphaned Tests
+
+    /// <summary>True when the author row is gone from the database.</summary>
+    private async Task<bool> AuthorIsDeleted(int authorId)
+    {
+        using var context = _dbFactory.CreateDbContext();
+        return await context.Authors.FindAsync(authorId) == null;
+    }
+
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_NoRelationships_DeletesAuthor()
+    {
+        var author = await CreateAuthor("Орест", "Самотній");
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeTrue();
+        (await AuthorIsDeleted(author.Id)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_AuthorsAQuestion_KeepsAuthor()
+    {
+        var author = await CreateAuthor("Петро", "Питальний");
+        await CreateQuestionAuthoredBy(author.Id);
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeFalse();
+        (await AuthorIsDeleted(author.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_EditsATour_KeepsAuthor()
+    {
+        var author = await CreateAuthor("Тарас", "Турівський");
+        await CreateTourEditedBy(author.Id);
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeFalse();
+        (await AuthorIsDeleted(author.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_EditsABlock_KeepsAuthor()
+    {
+        var author = await CreateAuthor("Богдан", "Блоковий");
+        await CreateBlockEditedBy(author.Id);
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeFalse();
+        (await AuthorIsDeleted(author.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_LinkedToUser_KeepsAuthor()
+    {
+        var author = await CreateAuthor("Оксана", "Зареєстрована");
+        await LinkUserToAuthor(author.Id, "Оксана", "Зареєстрована");
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeFalse();
+        (await AuthorIsDeleted(author.Id)).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The reason the orphan check no longer materialises the collections: an author holding all
+    /// three roles used to produce their cartesian product in a single result set.
+    /// </summary>
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_HoldsEveryRole_KeepsAuthor()
+    {
+        var author = await CreateAuthor("Всеволод", "Багаторолевий");
+        await CreateQuestionAuthoredBy(author.Id);
+        await CreateTourEditedBy(author.Id);
+        await CreateBlockEditedBy(author.Id);
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeFalse();
+        (await AuthorIsDeleted(author.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_MissingAuthor_ReturnsFalse()
+    {
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(99999);
+
+        deleted.Should().BeFalse();
+    }
+
+    #endregion
 }
