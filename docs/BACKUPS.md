@@ -27,15 +27,18 @@ Daily automated backups using **restic** to **OVH Object Storage** (S3-compatibl
 ## Monitoring
 
 Optional [Healthchecks](https://healthchecks.io/) integration:
-- On success: pings `HC_URL`
-- On failure: pings `HC_URL/fail` (via `trap ... ERR`)
+- Pings `HC_URL/<exit code>` after every run: `/0` is success, anything else is a failure.
+- The ping body is the last 50 lines of the run's output, so the DOWN email shows the error.
 - Configure by setting `HC_URL` in `backup.env` on the host.
+
+Healthchecks emails only when the status changes. A check that stays DOWN sends nothing more,
+and in the monthly report the "All good!" columns are past months, not the current status.
 
 ## Host details
 
 | Item | Value |
 |------|-------|
-| Backup user | `github-actions` (UID 1001, member of `appgroup` GID 10000 for keys access) |
+| Backup user | `github-actions` (UID 1001); the unit grants `CAP_DAC_READ_SEARCH` to read the container-owned `keys/` |
 | App directory | `/home/github-actions/questions-hub/` |
 | Backup secrets | `/home/github-actions/.config/questions-hub-backup/backup.env` |
 | Backup script (runtime) | `/home/github-actions/questions-hub/infra/backup/runtime/backup.sh` |
@@ -74,8 +77,9 @@ restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" snapshots
 
 ### Run backup manually
 ```bash
-sudo -u github-actions /home/github-actions/questions-hub/infra/backup/runtime/backup.sh
+sudo systemctl start questionshub-backup.service   # blocks until done
 ```
+Not `sudo -u github-actions .../backup.sh`: that skips the unit's capability and fails on `keys/`.
 
 ### Check logs
 ```bash

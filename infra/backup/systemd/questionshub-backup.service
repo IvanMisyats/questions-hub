@@ -7,4 +7,7 @@ After=network-online.target docker.service
 Type=oneshot
 User=github-actions
 Group=github-actions
+# Read every source file whatever its owner. The app creates each rotated Data Protection key
+# 0600 as the container's UID 10000, so appgroup membership can't reach a fresh key.
+AmbientCapabilities=CAP_DAC_READ_SEARCH
 ExecStart=/home/github-actions/questions-hub/infra/backup/runtime/backup.sh

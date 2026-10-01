@@ -14,13 +14,11 @@
     command:
       - |
         set -e
-        apk add --no-cache acl >/dev/null
         mkdir -p /uploads/handouts /uploads/packages /uploads/jobs
         chown -R 10000:10000 /uploads /keys
         chmod 755 /uploads /uploads/handouts /uploads/packages /uploads/jobs
         chmod 750 /keys
         find /keys -type f -exec chmod 640 {} +
-        setfacl -d -m g::r /keys
     restart: "no"
 
   # Production web service - uses pre-built image from GHCR

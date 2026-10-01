@@ -116,18 +116,14 @@ restic -r "${RESTIC_REPO}" snapshots
 
 ## 4) Ensure github-actions can read container-owned directories
 
-The `keys` directory is owned by the Docker container's `appuser` (UID/GID 10000) with mode `750`.
-The backup user must be in the `appgroup` (GID 10000) to read it:
+The `keys` directory is owned by the Docker container's `appuser` (UID/GID 10000). ASP.NET Data
+Protection writes every new key (one per ~90-day rotation) as **0600**. Group membership,
+default ACLs and the deploy-time `chmod 640` therefore can't make a freshly rotated key readable.
+The 2026-09-22 rotation broke backups for 9 days this way.
 
-```bash
-sudo groupadd -g 10000 appgroup 2>/dev/null || true
-sudo usermod -aG appgroup github-actions
-```
-
-Verify (after re-login or `newgrp`):
-```bash
-sudo -u github-actions ls /home/github-actions/questions-hub/keys/
-```
+The backup service gets `AmbientCapabilities=CAP_DAC_READ_SEARCH` in its unit instead, which lets
+it read any file. This adds no privilege `github-actions` lacks: it is already in the `docker`
+group (root-equivalent). Because of this, run backups via `systemctl start`, never `sudo -u`.
 
 ## 5) Ensure github-actions can run Docker commands
 DB backup calls `docker exec ... pg_dump ...`
@@ -161,9 +157,10 @@ sudo systemctl enable --now questionshub-backup.timer
 sudo systemctl enable --now questionshub-restic-check.timer
 ```
 
-Run a manual smoke test:
+Run a manual smoke test (through systemd, so the unit's capability applies):
 ```bash
-sudo -u github-actions /home/github-actions/questions-hub/infra/backup/runtime/backup.sh
+sudo systemctl start questionshub-backup.service
+journalctl -u questionshub-backup.service -n 40 --no-pager
 ```
 
 ---
@@ -211,11 +208,12 @@ sudo chmod 600 /home/github-actions/.config/questions-hub-backup/backup.env
 ```
 
 ## "Permission denied" reading keys directory
-The `keys` directory is owned by UID/GID 10000 (Docker appuser) with mode 750.
-The backup user must be in `appgroup` (GID 10000):
+Symptom: `error: open .../keys/key-<id>.xml: permission denied`. restic still saves the snapshot
+but exits 3, so the run counts as failed and retention is skipped. Either the unit lost its
+`AmbientCapabilities=CAP_DAC_READ_SEARCH` line, or the script was run with `sudo -u` instead of
+`systemctl start`. Check:
 ```bash
-sudo groupadd -g 10000 appgroup 2>/dev/null || true
-sudo usermod -aG appgroup github-actions
+systemctl show questionshub-backup.service -p AmbientCapabilities
 ```
 
 ## Docker permission denied
