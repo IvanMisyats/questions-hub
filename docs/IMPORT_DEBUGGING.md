@@ -243,9 +243,26 @@ are now handled (with regression tests), but the mechanics are worth knowing:
   `TryMatchPositionNumberedHeader` no longer bails on `IsQuestionStart` — its existing guards already
   discriminate, the decisive one being the lookahead (`NextQuestionStartValueIs10`): a theme's own
   first question is followed by its `20.`, a header by the `10.` it introduces. Its result also
-  gates the list-number strip in `TryProcessThemeStart`, so the anchor rules see the bare title.
+  gates the list-number strip in `TryProcessThemeStart` (via `IsQuestionShapedThemeHeader`), so
+  the anchor rules see the bare title.
   Symptom: an extra theme whose single `10.` question text is literally the next theme's title,
   plus `У списку «Теми:» N тем, а в пакеті знайдено N+1`.
+
+- **…and the position rule fails once the theme count is off** — `10. П.Л.` (MIDSOMMER 2023) was
+  still read as a question, because an *earlier* theme had been mis-split: ЧЕРЕПАХИ numbered its
+  third question `40.` instead of `30.`, the value reset `40 → 40` started an untitled theme, and
+  from then on «10» no longer equalled the next theme's position. Two fixes: (1) a question-shaped
+  line is also a header when its stripped text names an unconsumed `Теми:` anchor
+  (`IsQuestionShapedThemeHeader` → `IsKnownAnchorTitle`), still gated by the same lookahead;
+  (2) a value reset only starts a new theme when it resets to **10** or the current theme already
+  has five questions — a repeat mid-theme (`10, 20, 40, 40, 50`) is a value typo and only warns.
+  Corpus side effect: a reserve block of single range-valued questions (`40-50`, `40-50`) now stays
+  one reserve theme instead of splitting into untitled ones. Symptom: an untitled 2-question theme
+  right after a 3-question one, and an `N+2` count in the `Теми:` mismatch warning.
+
+- **Initials titles lost their final period** — `TrimSentencePeriod` turned `П.Л.` / `К. К.` into
+  `П.Л` / `К. К`. A period after a lone letter now counts as closing an initial and is kept
+  (`EndsWithInitial`); matching was never affected, since `NormalizeTitle` trims dots anyway.
 
 - **Editor line lost to a mistyped bracket** — `Редактор та автор тем: Едуард Голуб (Київ}` closes the
   city with `}`. `UkrainianNameHelper.StripCity` only recognized `(…)`, so the city stayed glued to the

@@ -198,16 +198,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         }
 
         // Headers may carry a list-style number («5. ПОЛІТИКИ…») — strip it for matching.
-        // Question-value lines («10. …») keep theirs, unless the number is demonstrably the
-        // next theme's own position («10. За (Костянтин Каунін)» opening the tenth theme):
-        // stripping it there is what lets the anchor rules below see the bare title.
+        // Question-value lines («10. …») keep theirs, unless the line is demonstrably the tenth
+        // theme's header («10. За (Костянтин Каунін)», «10. П.Л.»): stripping it there is what
+        // lets the anchor rules below see the bare title.
         var candidate = line;
-        if (!IsQuestionStart(line) || TryMatchPositionNumberedHeader(lines, index, ctx, out _))
+        var numberMatch = ParserPatterns.ListNumberPrefix().Match(line);
+        if (numberMatch.Success)
         {
-            var numberMatch = ParserPatterns.ListNumberPrefix().Match(line);
-            if (numberMatch.Success)
+            var stripped = numberMatch.Groups[1].Value.Trim();
+            if (!IsQuestionStart(line) || IsQuestionShapedThemeHeader(lines, index, ctx, stripped))
             {
-                candidate = numberMatch.Groups[1].Value.Trim();
+                candidate = stripped;
             }
         }
 
@@ -580,6 +581,31 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         return true;
     }
 
+    /// <summary>
+    /// Whether a line shaped like a value-10 question («10. П.Л.») is really a theme header carrying
+    /// its list number. Either the number is the next theme's position, or — independent of the
+    /// theme count, which an earlier mis-split throws off — the text names a theme from the «Теми:»
+    /// list. Both require the lookahead: a header is followed by the «10.» it introduces, whereas a
+    /// genuine first question is followed by its theme's «20.».
+    /// </summary>
+    private static bool IsQuestionShapedThemeHeader(List<Line> lines, int index, Context ctx, string title)
+        => TryMatchPositionNumberedHeader(lines, index, ctx, out _)
+           || (IsKnownAnchorTitle(ctx, title) && NextQuestionStartValueIs10(lines, index));
+
+    /// <summary>
+    /// Whether a header title matches a not-yet-consumed «Теми:» anchor under any of the forms the
+    /// anchor rules in <see cref="TryProcessThemeStart"/> accept: verbatim, with its «(Автори)»
+    /// stripped, with a trailing parenthetical stripped, or by the anchor's core title.
+    /// </summary>
+    private static bool IsKnownAnchorTitle(Context ctx, string title)
+    {
+        var (bareTitle, _) = SplitTitleAndAuthors(title);
+        string[] keys = [NormalizeTitle(title), NormalizeTitle(bareTitle), NormalizeTitle(StripTrailingParenthetical(title))];
+
+        return keys.Any(key => ctx.Anchors.ContainsKey(key)
+            || (ctx.AnchorCores.TryGetValue(key, out var fullKey) && ctx.Anchors.ContainsKey(fullKey)));
+    }
+
     /// <summary>The leading «N.» / «N)» number of a line, or null when it carries none.</summary>
     private static int? ListEntryNumber(string line)
     {
@@ -685,12 +711,17 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
 
     /// <summary>
     /// Strips a single sentence-ending period, preserving trailing ellipses
-    /// (titles like «Каркасна ...С...Я...Н...» must keep their dots).
+    /// (titles like «Каркасна ...С...Я...Н...» must keep their dots) and the period closing an
+    /// abbreviation of initials («П.Л.», «В. В.»).
     /// </summary>
     private static string TrimSentencePeriod(string text)
-        => text.EndsWith('.') && !text.EndsWith("..", StringComparison.Ordinal)
+        => text.EndsWith('.') && !text.EndsWith("..", StringComparison.Ordinal) && !EndsWithInitial(text)
             ? text[..^1]
             : text;
+
+    /// <summary>Whether the text ends in a lone letter plus period — the last initial of «П.Л.».</summary>
+    private static bool EndsWithInitial(string text)
+        => text.Length >= 2 && char.IsLetter(text[^2]) && (text.Length == 2 || !char.IsLetter(text[^3]));
 
     /// <summary>
     /// Returns the title with a single trailing «(…)» group removed, whatever it contains
@@ -795,12 +826,15 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             ctx.Result.Warnings.Add($"Запитання за {value} з'явилося до першої теми — створено тему без назви");
             StartTheme(ctx, "", []);
         }
-        else if (ctx.CurrentTheme.Questions.Count > 0 && value <= LastQuestionStartValue(ctx.CurrentTheme))
+        else if (ctx.CurrentTheme.Questions.Count > 0 && value <= LastQuestionStartValue(ctx.CurrentTheme)
+                 && (value == 10 || ctx.CurrentTheme.Questions.Count >= CanonicalThemeSize))
         {
             // Within a theme, question values strictly increase (10 → 20 → 30 → 40 → 50). A value
             // that does not exceed the previous question's means the current theme is complete and
             // a new one began — recover even when its title line was not recognized (e.g. a long
             // descriptive header, or a title separated from its first question by a preamble).
+            // A fresh theme opens at 10, so a repeat mid-theme («10, 20, 40, 40, 50») is a typo in
+            // the value instead; it stays in the theme and only draws the out-of-order warning below.
             ctx.Result.Warnings.Add(
                 $"Тема «{ctx.CurrentTheme.Title}»: запитання за {value} йде після запитання за більшу вартість — розпочато нову тему без назви");
             StartTheme(ctx, "", []);

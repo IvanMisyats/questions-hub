@@ -1072,8 +1072,8 @@ public class ShvagerParserTests
 
         var result = _parser.Parse(Blocks(lines.ToArray()), []);
 
-        // «М.С.» loses its sentence-final period, as bare titles always do
-        result.Tours.Select(t => t.Title).Should().Equal("Рік Тигра", "М.С");
+        // «М.С.» keeps its final period: it closes the last initial, not a sentence
+        result.Tours.Select(t => t.Title).Should().Equal("Рік Тигра", "М.С.");
         result.Tours[0].Preamble.Should().Contain("роки Тигра");
     }
 
@@ -1112,6 +1112,94 @@ public class ShvagerParserTests
         result.Tours[9].Title.Should().Be("За");
         result.Tours[9].Editors.Should().Equal("Костянтин Каунін");
         result.Tours[9].Questions.Select(q => q.Number).Should().Equal("10", "20", "30", "40", "50");
+    }
+
+    [Fact]
+    public void Parse_TenthThemeHeaderMatchingListEntry_IsHeaderEvenWhenThemeCountIsOff()
+    {
+        // The position rule alone is not enough: once an earlier theme is mis-split the theme count
+        // is off by one, «10.» no longer matches the next position and «10. П.Л.» was read as a
+        // value-10 question. Its text naming a «Теми:» entry is an independent signal.
+        var lines = new List<string> { "Пакет", "Теми:" };
+        lines.AddRange(Enumerable.Range(1, 9).Select(i => $"{i}. Тема {i}"));
+        lines.AddRange(["10. П.Л.", ""]);
+
+        // An untitled extra theme in front shifts the count by one
+        lines.AddRange(Theme("", 0)[1..]);
+        for (var i = 1; i <= 9; i++)
+        {
+            lines.AddRange(Theme($"{i}. Тема {i}", i * 10));
+        }
+        lines.AddRange(Theme("10. П.Л.", 100));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(11);
+        result.Tours[10].Title.Should().Be("П.Л.");
+        result.Tours[10].Questions.Select(q => q.Number).Should().Equal("10", "20", "30", "40", "50");
+        result.Tours[10].Questions[0].Text.Should().Be("Питання 100?");
+    }
+
+    [Fact]
+    public void Parse_QuestionTextMatchingListEntry_StaysQuestion()
+    {
+        // The anchor rule still needs the lookahead: a first question whose text happens to equal a
+        // later theme's title is followed by its own «20.», not by a fresh «10.».
+        var lines = new List<string> { "Пакет", "Теми:", "1. Перша", "2. П.Л.", "" };
+        lines.AddRange(["Перша", "10. П.Л.", "Відповідь: а", .. Theme("", 2)[3..]]);
+        lines.AddRange(Theme("П.Л.", 6));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Select(t => t.Title).Should().Equal("Перша", "П.Л.");
+        result.Tours[0].Questions.Should().HaveCount(5);
+        result.Tours[0].Questions[0].Text.Should().Be("П.Л.");
+    }
+
+    [Fact]
+    public void Parse_RepeatedValueMidTheme_IsTypoNotNewTheme()
+    {
+        // «10, 20, 40, 40, 50» — the third question's value is a typo for 30. A fresh theme opens at
+        // 10, so the repeat must not split the theme; it only warns.
+        var lines = new List<string> { "Пакет", "Черепахи" };
+        lines.AddRange(Theme("", 1)[1..].Select(l => l.Replace("30. ", "40. ")));
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().ContainSingle().Which.Title.Should().Be("Черепахи");
+        result.Tours[0].Questions.Select(q => q.Number).Should().Equal("10", "20", "40", "40", "50");
+        result.Warnings.Should().ContainSingle().Which.Should().Contain("очікувалося запитання за 30, знайдено за 40");
+    }
+
+    [Fact]
+    public void Parse_ValueResetTo10_StillStartsUntitledTheme()
+    {
+        // The counterpart: a reset to 10 inside an incomplete theme is still a new theme whose
+        // header went unrecognized.
+        var lines = new List<string>
+        {
+            "Пакет", "Перша",
+            "10. Питання 1?", "Відповідь: а",
+            "20. Питання 2?", "Відповідь: б",
+            "10. Питання 3?", "Відповідь: в"
+        };
+
+        var result = _parser.Parse(Blocks(lines.ToArray()), []);
+
+        result.Tours.Should().HaveCount(2);
+        result.Tours[1].Title.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("П.Л.", "П.Л.")]
+    [InlineData("Г. Г.", "Г. Г.")]
+    [InlineData("Миші.", "Миші")]
+    [InlineData("Каркасна ...С...Я...Н...", "Каркасна ...С...Я...Н...")]
+    public void Parse_BareTitlePeriod_StrippedOnlyWhenSentenceFinal(string header, string expected)
+    {
+        var result = Parse(Theme(header));
+
+        result.Tours.Should().ContainSingle().Which.Title.Should().Be(expected);
     }
 
     [Fact]
