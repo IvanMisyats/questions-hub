@@ -192,7 +192,9 @@ Single-page editor; the header shows the package's type badge. Common to both ty
 - Question editor modal: value (read-only), Text, Answer, Залік, Незалік, **Форма**, Comment + media, Source, handout text/media, authors (no HostInstructions)
 - **Soft validation on publish**: warnings (non-blocking) for themes without a title, themes with ≠5 questions. A **reserve theme is exempt from the count warning** — a theme holding at least one range-valued question holds however many substitutes the editors printed. Same rule at import time (`ShvagerValues.IsReserveTheme`); an empty theme is never a reserve theme, so it still warns
 
-**Package Status**: Draft (owner/admin only) → Published (visible per access level) → Archived (hidden from lists, direct link only).
+**Package Status**: Draft (owner/admin only) → Published (visible per access level) → Archived (hidden from lists, direct link only). The editor shows a publication bar in the package card's footer: the current state (and publication date — editable only while Published) plus one button per status the package can move to (Опублікувати / Архівувати / У чернетки).
+
+**Deleting tours/themes/blocks** asks for confirmation only when there is something to lose: a tour/theme or block with no questions and an empty preamble is deleted immediately.
 
 **Package Access Level**: Всі / Зареєстровані користувачі / Лише редактори. Admins and owners always have access.
 

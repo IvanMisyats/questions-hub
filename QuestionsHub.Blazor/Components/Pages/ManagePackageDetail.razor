@@ -109,37 +109,6 @@
                                   placeholder="Інформація від редактора, подяки тестерам тощо"></textarea>
                     </div>
                     <div class="col-md-4">
-                        <label for="packageStatus" class="form-label">Статус</label>
-                        @* @bind:get/@bind:set (not @onchange) so the DOM select reverts when the
-                           setter declines the change — e.g. cancelling the publish-warnings modal *@
-                        <select class="form-select" id="packageStatus"
-                                @bind:get="_package.Status"
-                                @bind:set="OnStatusSet">
-                            <option value="@PackageStatus.Draft">Чернетка</option>
-                            <option value="@PackageStatus.Published">Опубліковано</option>
-                            <option value="@PackageStatus.Archived">Архів</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="packagePublicationDate" class="form-label">Дата публікації</label>
-                        @if (_package.Status == PackageStatus.Published)
-                        {
-                            <input type="datetime-local" class="form-control" id="packagePublicationDate"
-                                   value="@(_package.PublicationDate?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm"))"
-                                   @onchange="OnPublicationDateChanged" />
-                        }
-                        else if (_package.PublicationDate.HasValue)
-                        {
-                            <input type="text" class="form-control" id="packagePublicationDate" readonly
-                                   value="@_package.PublicationDate.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")" />
-                        }
-                        else
-                        {
-                            <input type="text" class="form-control" id="packagePublicationDate" readonly
-                                   value="" placeholder="—" />
-                        }
-                    </div>
-                    <div class="col-md-4">
                         <label for="packageAccessLevel" class="form-label">Доступ</label>
                         <select class="form-select" id="packageAccessLevel"
                                 @bind="_package.AccessLevel" @onblur="SavePackageAsync">
@@ -207,6 +176,50 @@
                                      OnSelectionChanged="SavePackageTagsAsync"
                                      OnTagRemoved="TryDeleteOrphanedTagAsync" />
                     </div>
+                </div>
+            </div>
+            <!-- Publication bar: current state + date on the left, one button per reachable status on the right -->
+            <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2 me-auto">
+                    @if (_package.Status == PackageStatus.Published)
+                    {
+                        <label for="packagePublicationDate" class="mb-0">Опубліковано</label>
+                        <input type="datetime-local" class="form-control form-control-sm w-auto" id="packagePublicationDate"
+                               title="Дата публікації"
+                               value="@(_package.PublicationDate?.ToLocalTime().ToString("yyyy-MM-ddTHH:mm"))"
+                               @onchange="OnPublicationDateChanged" />
+                    }
+                    else
+                    {
+                        <span>@(_package.Status == PackageStatus.Archived ? "В архіві — пакет прихований зі списків" : "Чернетка — пакет не опубліковано")</span>
+                        @if (_package.PublicationDate.HasValue)
+                        {
+                            <span class="text-muted small">(дата публікації: @_package.PublicationDate.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm"))</span>
+                        }
+                    }
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    @if (_package.Status != PackageStatus.Draft)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_isSaving"
+                                @onclick="() => ChangeStatus(PackageStatus.Draft)">
+                            <Icon Name="pencil" Class="me-1" />У чернетки
+                        </button>
+                    }
+                    @if (_package.Status != PackageStatus.Archived)
+                    {
+                        <button type="button" class="btn btn-outline-warning btn-sm" disabled="@_isSaving"
+                                @onclick="() => ChangeStatus(PackageStatus.Archived)">
+                            <Icon Name="box" Class="me-1" />Архівувати
+                        </button>
+                    }
+                    @if (_package.Status != PackageStatus.Published)
+                    {
+                        <button type="button" class="btn btn-success btn-sm" disabled="@_isSaving"
+                                @onclick="() => ChangeStatus(PackageStatus.Published)">
+                            <Icon Name="check" Class="me-1" />Опублікувати
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -729,10 +742,20 @@
                 </div>
                 <div class="modal-body">
                     <p>Ви впевнені, що хочете видалити <strong>@(IsShvager ? _tourToDelete.ThemeDisplayName : $"Тур {_tourToDelete.Number}")</strong>?</p>
-                    <p class="text-danger mb-0">
-                        <Icon Name="exclamation-triangle" Class="me-2" />
-                        Всі @_tourToDelete.Questions.Count запитань @(IsShvager ? "теми" : "туру") будуть видалені.
-                    </p>
+                    @if (_tourToDelete.Questions.Count > 0)
+                    {
+                        <p class="text-danger mb-0">
+                            <Icon Name="exclamation-triangle" Class="me-2" />
+                            Всі @_tourToDelete.Questions.Count запитань @(IsShvager ? "теми" : "туру") будуть видалені.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="text-danger mb-0">
+                            <Icon Name="exclamation-triangle" Class="me-2" />
+                            Преамбула @(IsShvager ? "теми" : "туру") буде видалена.
+                        </p>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CancelDeleteTour">Скасувати</button>
@@ -2055,16 +2078,13 @@
         }
     }
 
-    private async Task OnStatusSet(PackageStatus newStatus)
+    private async Task ChangeStatus(PackageStatus newStatus)
     {
-        if (_package == null) return;
+        if (_package == null || _package.Status == newStatus) return;
 
         // Soft validation on publishing a Своя гра package: warn (don't block) about
-        // incomplete themes. Status is applied only after the user confirms; until then
-        // _package.Status stays unchanged and the bound select reverts.
-        if (newStatus == PackageStatus.Published
-            && _package.Status != PackageStatus.Published
-            && IsShvager)
+        // incomplete themes. Status is applied only after the user confirms.
+        if (newStatus == PackageStatus.Published && IsShvager)
         {
             var warnings = GetShvagerPublishWarnings();
             if (warnings.Count > 0)
@@ -2146,7 +2166,7 @@
 
     private void CancelPublishWithWarnings()
     {
-        // Status was never changed — closing the modal re-renders the select with the current value
+        // Status was never changed — just close the modal
         _showPublishWarningsModal = false;
         _publishWarnings = [];
     }
@@ -2372,9 +2392,17 @@
         StateHasChanged();
     }
 
-    private void ConfirmDeleteTour(Tour tour)
+    private async Task ConfirmDeleteTour(Tour tour)
     {
         _tourToDelete = tour;
+
+        // Nothing to lose — delete an empty tour/theme without asking
+        if (tour.Questions.Count == 0 && string.IsNullOrWhiteSpace(tour.Preamble))
+        {
+            await DeleteTourAsync();
+            return;
+        }
+
         _showDeleteTourModal = true;
     }
 
@@ -3471,10 +3499,18 @@
         StateHasChanged();
     }
 
-    private void ConfirmDeleteBlock(Tour tour, Block block)
+    private async Task ConfirmDeleteBlock(Tour tour, Block block)
     {
         _blockToDelete = block;
         _blockToDeleteTour = tour;
+
+        // Nothing to lose — delete an empty block without asking
+        if (!tour.Questions.Any(q => q.BlockId == block.Id) && string.IsNullOrWhiteSpace(block.Preamble))
+        {
+            await DeleteBlockAsync();
+            return;
+        }
+
         _showDeleteBlockModal = true;
     }
 
