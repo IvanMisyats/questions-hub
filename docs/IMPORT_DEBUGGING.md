@@ -49,6 +49,27 @@ understood, encode it as a permanent synthetic-block test (see below).
 The same replay works for Своя гра imports — substitute `ShvagerParser` for `PackageParser`
 (the job's parser is chosen by `PackageImportJob.Type`, i.e. the upload zone the user picked).
 
+**Import ran on production → there is no local job.** Don't go fetching artifacts from the
+server; replay straight from the user's DOCX. Run the real extractor in the throwaway test, and
+pass the path through an env var so no machine path lands in the repo:
+
+```csharp
+var path = Environment.GetEnvironmentVariable("QH_DOCX")!;
+var assets = Path.Combine(Path.GetTempPath(), "qh_replay_" + Guid.NewGuid().ToString("N"));
+var extraction = await new DocxExtractor(NullLogger<DocxExtractor>.Instance).Extract(path, assets, CancellationToken.None);
+var result = new ShvagerParser(NullLogger<ShvagerParser>.Instance).Parse(extraction.Blocks, extraction.Assets);
+// dump extraction.Blocks ("[Index] Text") followed by the parsed themes/questions/warnings to a file
+```
+
+```bash
+QH_DOCX='C:\...\Пакет.docx' dotnet test QuestionsHub.UnitTests/QuestionsHub.UnitTests.csproj \
+  -p:BaseOutputPath=/tmp/qh-testbin/ -p:UseAppHost=false --filter "FullyQualifiedName~ReplayOneDocx"
+```
+
+Dump the blocks *and* the parse together. The defect is often far ahead of the symptom, and you
+need the raw lines to find it: «10. П.Л.» read as a question was really caused by a value typo
+three themes earlier.
+
 ## Replay the whole corpus and diff (do this for any heuristic change)
 
 `uploads/jobs/` accumulates **every** import ever run on the machine, so it is a free
@@ -101,7 +122,7 @@ Two things about running it:
 Delete the harness once done — it reads a machine-local path (`uploads/` is gitignored),
 so it cannot live in the repo. Encode what you learned as synthetic-block tests instead.
 
-Two things that cost time when doing this:
+Things that cost time when doing this:
 
 - **A tightened guard can silently revert an earlier win.** Narrowing the implicit-theme-list
   detector to reject numbered *host instructions* also stopped a theme title being recovered in
@@ -111,6 +132,15 @@ Two things that cost time when doing this:
   position alone: in a flat sectioned dump a package's trailing warning sits directly above the
   *next* `###` header and reads as if it belongs to it. Misattributing one cost a full
   investigation round-trip.
+- **A wide but uniform diff** (one rule touching dozens of packages the same way, e.g. initials
+  titles regaining their final period) is unreadable hunk by hunk. Strip the package prefix and
+  count the distinct changes, so a stray change stands out:
+  `diff before after | grep '^[<>]' | sed -E 's/^([<>]) [0-9a-f]{8} /\1 /' | sort | uniq -c`.
+  Don't filter titles with `\b` in `grep -E`: it doesn't treat Cyrillic letters as word
+  characters, so the exclusion silently matches nothing.
+- **Prove the new tests bite:** swap the old parser back in, run the test class, then restore —
+  `cp ShvagerParser.cs /tmp/new.cs && git show HEAD:<path> > ShvagerParser.cs`, test, `cp` back.
+  Every new test should fail against the old code. If one fails for an unrelated reason, note why.
 - **Tracing from inside parser code:** `Console.WriteLine` is *not* interleaved with
   `ITestOutputHelper` in the console logger, so temporary traces vanish from the filtered
   output. Push them through the result object instead (e.g. `ctx.Result.Warnings.Add($"...")`)

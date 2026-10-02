@@ -37,6 +37,10 @@ Captured 2026-07 during the Shvager feature work.
     isn't, so leave it at the default.
   - Often only the apphost **`.exe`** is locked (a plain `dotnet run`, not a debugger), not the
     `.dll` — in that case `-p:UseAppHost=false` **alone** lets the build/test succeed.
+  - A one-off `CS2012: Cannot open '…\obj\Debug\net10.0\QuestionsHub.Blazor.dll' for writing`
+    while the app is running is transient, so just rerun the same command. It is a brief clash
+    with another build, not a lock to work around (2026-10-02: it passed on the next try, with the
+    app still running).
 - **Cleanest fallback: a detached git worktree** — fully isolates `bin/` *and* `obj/`, so it always
   works regardless of what's locked. Commit first (a worktree checks out a committed state):
   ```bash
