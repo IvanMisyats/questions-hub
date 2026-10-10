@@ -156,6 +156,23 @@ public class ChangesetEngineFieldTests : ChangesetTestBase
     }
 
     [Fact]
+    public async Task CreatingAnAuthorOrTagByName_IsAWarning_OncePerName()
+    {
+        var ids = await SeedWww();
+        using var session = await Open(ids.PackageId);
+
+        await Apply(session, $$"""
+            [ { "op": "setQuestionAuthors", "questionId": {{ids.Q1}}, "authors": [ { "firstName": "Анна", "lastName": "Коваль" }, { "firstName": "Нова", "lastName": "Авторка" } ] },
+              { "op": "setQuestionAuthors", "questionId": {{ids.Q2}}, "authors": [ { "firstName": "Нова", "lastName": "Авторка" } ] },
+              { "op": "setTags", "tags": [ "Зовсім новий тег" ] } ]
+            """);
+
+        session.Engine.Warnings.Should().Equal(
+            "New author 'Нова Авторка' will be created (no author with exactly this name exists).",
+            "New tag 'Зовсім новий тег' will be created.");
+    }
+
+    [Fact]
     public async Task SetQuestionAuthors_UnknownIdOrBlankName_IsRejected()
     {
         var ids = await SeedWww();
@@ -236,7 +253,8 @@ public class ChangesetEngineFieldTests : ChangesetTestBase
         (await LoadPackage(www.PackageId)).Tours.Single(t => t.Id == www.Tour1).Preamble.Should().Be("Тестери");
         (await LoadPackage(shvager.PackageId)).Tours.Single(t => t.Id == shvager.Theme1).Title
             .Should().Be(QuestionsHub.Blazor.Utils.TextNormalizer.Normalize("  Нова  тема  "));
-        changes.Single().Label.Should().Be("Тема 1");
+        changes.Single().Label.Should().Be($"Тема 1 «{QuestionsHub.Blazor.Utils.TextNormalizer.Normalize("  Нова  тема  ")}»",
+            "Своя гра labels name the theme");
     }
 
     [Fact]

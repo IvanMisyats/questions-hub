@@ -119,6 +119,14 @@ public static class ChangesetParser
     public const int MaxTags = 30;
     public const int MaxNewTourQuestions = 30;
 
+    /// <summary>Every operation the parser accepts (names are case-insensitive), as documented.</summary>
+    public static readonly IReadOnlyList<string> OperationNames =
+    [
+        "updatePackage", "setPackageEditors", "setSharedEditors", "setNumberingMode", "setTags",
+        "updateTour", "setTourEditors", "updateBlock", "setBlockEditors", "updateQuestion", "setQuestionAuthors",
+        "addQuestion", "deleteQuestion", "moveQuestion", "addTour", "deleteTour", "moveTour", "setTourType"
+    ];
+
     public static List<ChangesetOperation> Parse(JsonElement operations)
     {
         if (operations.ValueKind != JsonValueKind.Array)
@@ -173,7 +181,8 @@ public static class ChangesetParser
             "movetour" => new MoveTourOp(index, props.RequiredInt("tourId"), props.OptionalPosition("position")
                 ?? throw new ChangesetValidationException(index, "Missing required property 'position'.")),
             "settourtype" => new SetTourTypeOp(index, props.RequiredInt("tourId"), props.RequiredString("type")),
-            _ => throw new ChangesetValidationException(index, $"Unknown operation '{op}'.")
+            _ => throw new ChangesetValidationException(index,
+                $"Unknown operation '{op}'. Operations: {string.Join(", ", OperationNames)}.")
         };
 
         props.EnsureAllConsumed();
@@ -187,9 +196,13 @@ public static class ChangesetParser
         private readonly Dictionary<string, JsonElement> _properties = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _consumed = new(StringComparer.OrdinalIgnoreCase);
 
-        public OperationProperties(int index, JsonElement element)
+        /// <summary>Where a nested object sits in the operation (e.g. "questions[2]"); null for the operation itself.</summary>
+        private readonly string? _path;
+
+        public OperationProperties(int index, JsonElement element, string? path = null)
         {
             _index = index;
+            _path = path;
             foreach (var property in element.EnumerateObject())
             {
                 if (!_properties.TryAdd(property.Name, property.Value))
@@ -286,7 +299,7 @@ public static class ChangesetParser
                 if (item.ValueKind != JsonValueKind.Object)
                     throw new ChangesetValidationException(_index, $"Each entry of '{name}' must be an object with optional 'set' and 'authors'.");
 
-                var nested = new OperationProperties(_index, item);
+                var nested = new OperationProperties(_index, item, $"{name}[{result.Count}]");
                 result.Add(new NewQuestion(nested.OptionalSet(), nested.OptionalAuthors("authors")));
                 nested.EnsureAllConsumed();
             }
@@ -395,9 +408,15 @@ public static class ChangesetParser
 
         public void EnsureAllConsumed()
         {
+            // Every property the operation reads was requested by now, so _consumed is its full list
             var unknown = _properties.Keys.Where(k => !_consumed.Contains(k)).ToList();
             if (unknown.Count > 0)
-                throw new ChangesetValidationException(_index, $"Unknown property(ies): {string.Join(", ", unknown)}.");
+            {
+                var known = string.Join(", ", _consumed.Where(k => !k.Equals("op", StringComparison.OrdinalIgnoreCase)));
+                throw new ChangesetValidationException(_index, _path == null
+                    ? $"Unknown property(ies): {string.Join(", ", unknown)}. This operation takes: {known}."
+                    : $"Unknown property(ies) in '{_path}': {string.Join(", ", unknown)}. It takes: {known}.");
+            }
         }
     }
 }

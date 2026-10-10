@@ -178,6 +178,12 @@ public static partial class ChangeDisplay
             return $"Запитання {empty.Groups[1].Value}: поле «{FieldLabel(empty.Groups[2].Value)}» порожнє.";
         if (warning.StartsWith("A new question has empty 'text'", StringComparison.Ordinal))
             return "Нове запитання без тексту.";
+        var author = NewAuthorWarning().Match(warning);
+        if (author.Success)
+            return $"Створено нового автора: {author.Groups[1].Value}.";
+        var tag = NewTagWarning().Match(warning);
+        if (tag.Success)
+            return $"Створено новий тег: {tag.Groups[1].Value}.";
         return warning;
     }
 
@@ -192,4 +198,10 @@ public static partial class ChangeDisplay
 
     [GeneratedRegex(@"^Question (\d+): '(\w+)' is empty\.$")]
     private static partial Regex EmptyFieldWarning();
+
+    [GeneratedRegex(@"^New author '(.+)' will be created")]
+    private static partial Regex NewAuthorWarning();
+
+    [GeneratedRegex(@"^New tag '(.+)' will be created\.$")]
+    private static partial Regex NewTagWarning();
 }

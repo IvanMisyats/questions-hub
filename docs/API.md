@@ -314,9 +314,12 @@ All errors return JSON:
 
 ---
 
+<!-- agent-reference:start — from here to agent-reference:end is served to agents by the MCP tool get_api_reference -->
 ## Agent API
 
-Lets an agent (Claude Code, Codex, an MCP client, a script) edit packages **as a site user**: same rights as the user, narrowed by the token. Design: `docs/AGENT_API_PLAN.md`.
+Lets an agent (Claude Code, Codex, an MCP client, a script) edit packages **as a site user**: same rights as the user, narrowed by the token.
+
+**Over MCP** (`/mcp`) every endpoint below is a tool (see the table in [MCP](#mcp)) taking the same fields as arguments. HTTP errors become tool errors whose text is the `error` message described here — e.g. `Operation 2: …` for an invalid operation (`422`), a stale `expectedVersion` for a conflict (`409`).
 
 ### Getting a token
 
@@ -362,6 +365,17 @@ Enum values are camelCase strings (`www`/`shvager`, `draft`, `global`/`perTour`/
 
 Like the public detail, plus everything needed to address changes: ids, `orderIndex`, `blockId`, `status`, `accessLevel`, `numberingMode`, `sharedEditors`, package `editors` and `tags` with ids, author ids, `hasResults`, and `version` — a SHA-256 fingerprint of the editable content. Questions inside blocks are listed under `tours[].blocks[].questions`; `tours[].questions` holds the questions outside blocks.
 
+#### Package model
+
+- **Game types.** «Що? Де? Коли?» (ЩДК, `gameType: "www"`): tours of numbered questions; one tour may be the warmup (`type: "warmup"`, розминка, always first) and one the shootout (`"shootout"`, перестрілка, always last). «Своя гра» (`"shvager"`): every tour is a theme — its `title` is the theme name and a question's `number` is its value, set by position (normally five questions: 10, 20, 30, 40, 50; a sixth would be 60). Non-numeric values such as a reserve question's `10-30` are kept as they are.
+- **Structure.** Package → tours → optional blocks → questions. A tour either has blocks (then every question belongs to one) or none. `numberingMode` (ЩДК): `global` (numbers run through the regular tours and the shootout), `perTour` (restart at 1 in each tour) or `manual` (numbers are typed by hand and never recomputed). The warmup always restarts at 1 and does not advance the global count, so a package can have both a warmup question 1 and a regular question 1 — identify a question by its tour as well.
+- **Finding what to change.** People name questions by tour and displayed number («тур 2, питання 17», «тема "Річки", 30»). Look the `id` up in the package tree — never guess ids.
+- **Question fields** (label in the editor → field): Текст → `text`; Відповідь → `answer`; Залік → `acceptedAnswers`; Незалік → `rejectedAnswers`; Коментар → `comment`; Джерело → `source`; Автори → `authors`; Роздатка → `handoutText` (its picture: `handoutUrl`); Вказівка ведучому → `hostInstructions` (ЩДК); Форма → `answerForm` (Своя гра); Ілюстрація до коментаря → `commentAttachmentUrl`. Media URLs cannot be changed through the API.
+- **People.** Question `authors`; tour (theme) and block `editors`; package `editors`. The package-level `editors` list is the one the site shows only when `sharedEditors` is `true`; when it is `false` the site shows the editors of the tours and blocks, so change those (`setTourEditors`, `setBlockEditors`) — the stored package list may be empty or outdated then.
+- **Text.** Content is Ukrainian; keep the wording exactly as given (the API normalizes apostrophes, dashes and whitespace itself). Stress marks (a combining acute accent, U+0301, as in «о́піки») are part of the text: kept exactly as sent, never added or removed by the API.
+- **Editing a field.** `set` replaces a field's whole value. To add to a field — another accepted answer, a sentence in a comment — send the current value with the addition. `acceptedAnswers` (Залік) and `rejectedAnswers` (Незалік) are free text: variants separated by `; `, ending with a period. «точна відповідь.» in Залік means that only the exact answer is accepted, so it no longer applies once another variant is accepted.
+- **Своя гра and `numberingMode`.** The returned `numberingMode` does not control Своя гра numbering and `setNumberingMode` is rejected: a theme's values follow the positions of its questions, except non-numeric values (such as `10-30`), which stay as they are.
+
 ### Changesets
 
 A changeset is an ordered list of operations applied **atomically**: all of them or none.
@@ -401,6 +415,7 @@ Common rules (violations → `422` with the operation index):
 
 - `set` objects: a key that is absent leaves the field unchanged; `null` clears an optional field; at least one key; unknown or duplicate keys are rejected (names are case-insensitive).
 - Author references (≤ 20 per array): `{ "id": n }` or `{ "firstName", "lastName" }` — both names required, trimmed; an existing author with exactly that name is reused, otherwise one is created. Duplicates are ignored.
+- `authors`, `editors` and `tags` **replace the whole list**; `[]` clears it. To add one co-author or tag, send the current entries (ids from the package tree) plus the new one; to remove one, send the rest. Example — keep author 3 and add a new co-author: `{ "op": "setQuestionAuthors", "questionId": 501, "authors": [ { "id": 3 }, { "firstName": "Олена", "lastName": "Коваленко" } ] }`.
 - Ids are positive integers. Unknown operation names and properties are rejected.
 - Text: question fields and Своя гра theme titles are normalized like in the editor (apostrophes, dashes, special whitespace; `source` keeps apostrophes for URLs); package fields, tour preamble/comment and block fields are trimmed. Whitespace-only optional text is stored as `null`.
 - Lengths: package `title` 500, `description` 2000; author names 100 each; tag 100; tour `title` 200, `comment` 2000; block `name` 200; question `number` 20; `answer`, `hostInstructions`, `acceptedAnswers`, `rejectedAnswers`, `answerForm` 1000 each.
@@ -460,6 +475,7 @@ Every property is always present (`null` when not applicable).
 
 - Every change is listed with the operation that caused it; renumbering side effects have `operationIndex: null`. Question moves have `field: "location"` with `{ tourId, blockId, position }`; tour moves show as `orderIndex` changes.
 - Added entities have `kind: "added"` and a `snapshot` of their final state; deleted ones `kind: "deleted"` and a full `snapshot` of what was removed. Ids of new entities are `null` in a dry run.
+- `created` lists new questions and tours. Authors and tags that a changeset creates (referenced by a name that does not exist yet) are reported in `warnings` — `New author 'Ім'я Прізвище' will be created …` — so check their spelling in the preview.
 - `versionAfter` is the package `version` after the changeset (`null` on a dry run; `changesetId` is `null` too) — use it as the next `expectedVersion`. For a dry run use `versionBefore`.
 
 #### History
@@ -497,7 +513,7 @@ All errors are JSON `{ "error": "…" }` (400 binding errors add `details`). Eve
 
 ### MCP
 
-The same API as MCP tools at `https://questions.com.ua/mcp` (Streamable HTTP, stateless), with the same token, rights, limits and rules. Connect Claude Code with:
+The same API as MCP tools at `https://questions.com.ua/mcp` (Streamable HTTP, stateless), with the same token, rights, limits and rules. The server is self-describing: it sends usage instructions when a client connects, `apply_changeset` lists every operation with its fields, and `get_api_reference` (also the resource `questions-hub://docs/agent-api`) returns this whole "Agent API" section. Connect Claude Code with:
 
 ```bash
 claude mcp add --transport http questions-hub https://questions.com.ua/mcp \
@@ -512,10 +528,14 @@ claude mcp add --transport http questions-hub https://questions.com.ua/mcp \
 | `search_authors` (`search`), `search_tags` (`search`) | `GET /authors`, `GET /tags` |
 | `apply_changeset` (`packageId`, `operations`, `dryRun` = **true** by default, `requestId`?, `expectedVersion`?, `summary`?) | `POST /packages/{id}/changesets` |
 | `list_changesets` (`packageId`, `page`?, `pageSize`?), `get_changeset` (`packageId`, `changesetId`) | history endpoints |
+| `get_api_reference` | this section of the documentation |
 
 Unlike REST, `apply_changeset` previews unless `dryRun: false` is passed. Results are returned both as JSON text and as structured content. Failures are tool errors carrying the REST error message (operation errors contain `Operation N: …`); `apply_changeset` with a read-only token is a tool error. Bodies are capped at 512 KB like the REST changeset endpoint.
+<!-- agent-reference:end -->
 
 ### Agent API implementation
+
+Design, decisions and review notes: `docs/AGENT_API_PLAN.md`.
 
 | Component | Location |
 |-----------|----------|

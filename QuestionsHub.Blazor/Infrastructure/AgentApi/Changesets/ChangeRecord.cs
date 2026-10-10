@@ -90,7 +90,7 @@ public static class ChangeFormatter
             .ToList();
     }
 
-    /// <summary>"Тур 2, запитання 14" / "Тема 3, 40" / "Тур 1, блок «Назва»" / "Пакет".</summary>
+    /// <summary>"Тур 2, запитання 14" / "Тема 3 «Річки», 40" / "Тур 1, блок «Назва»" / "Пакет".</summary>
     public static string Label(object target, Package package)
     {
         var shvager = package.Type == PackageType.Shvager;
@@ -106,9 +106,13 @@ public static class ChangeFormatter
         };
     }
 
-    private static string TourLabel(Tour? tour, bool shvager) => tour == null
-        ? "?"
-        : (shvager ? "Тема " : "Тур ") + tour.Number;
+    private static string TourLabel(Tour? tour, bool shvager) => tour switch
+    {
+        null => "?",
+        _ when !shvager => "Тур " + tour.Number,
+        _ when string.IsNullOrWhiteSpace(tour.Title) => "Тема " + tour.Number,
+        _ => $"Тема {tour.Number} «{tour.Title}»"
+    };
 
     private static string BlockName(Block block) =>
         string.IsNullOrWhiteSpace(block.Name) ? $"№{block.OrderIndex + 1}" : $"«{block.Name}»";

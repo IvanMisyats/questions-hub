@@ -38,8 +38,13 @@ public static class AgentApiServiceExtensions
                 .RequireClaim(AgentClaims.Scope, nameof(TokenScope.ReadWrite)));
 
         // MCP server for agents: Streamable HTTP, stateless (no server-side sessions to pin or expire).
-        services.AddMcpServer(options => options.ServerInfo = new() { Name = "questions-hub", Version = "1.0" })
+        services.AddMcpServer(options =>
+            {
+                options.ServerInfo = new() { Name = "questions-hub", Version = "1.0" };
+                options.ServerInstructions = AgentApiReference.Instructions;
+            })
             .WithHttpTransport(options => options.Stateless = true)
+            .WithResources<AgentMcpResources>()
             .WithTools<AgentMcpTools>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
             {
                 // camelCase like the REST API; reflection-based contracts for the tool DTOs.

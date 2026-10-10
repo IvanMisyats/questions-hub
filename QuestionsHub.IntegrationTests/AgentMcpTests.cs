@@ -61,9 +61,75 @@ public sealed class AgentMcpTests(PostgresFixture database)
 
         tools.Select(t => t.Name).Should().BeEquivalentTo(
             "whoami", "list_packages", "get_package", "search_authors", "search_tags",
-            "apply_changeset", "list_changesets", "get_changeset");
+            "apply_changeset", "list_changesets", "get_changeset", "get_api_reference");
         tools.Single(t => t.Name == "apply_changeset").ProtocolTool.Annotations!.DestructiveHint.Should().BeTrue();
         tools.Single(t => t.Name == "get_package").ProtocolTool.Annotations!.ReadOnlyHint.Should().BeTrue();
+    }
+
+    [SkippableFact]
+    public async Task Server_DescribesItself()
+    {
+        await using var factory = CreateFactory();
+        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        await using var client = await Connect(factory, await TestData.CreateToken(factory, editor.Id));
+
+        client.ServerInstructions.Should().Contain("get_api_reference").And.Contain("Залік acceptedAnswers");
+
+        var reference = await client.CallToolAsync("get_api_reference", new Dictionary<string, object?>());
+        var text = string.Concat(reference.Content.OfType<TextContentBlock>().Select(t => t.Text));
+        reference.IsError.Should().NotBe(true);
+        text.Should().StartWith("## Agent API").And.Contain("#### Operations").And.Contain("`setTourType`");
+
+        var tools = await client.ListToolsAsync();
+        var apply = tools.Single(t => t.Name == "apply_changeset");
+        apply.Description.Should().Contain("updateQuestion: questionId, set {");
+        var operations = apply.JsonSchema.GetProperty("properties").GetProperty("operations");
+        operations.GetProperty("type").ToString().Should().Contain("array");
+        operations.GetProperty("items").GetProperty("properties").TryGetProperty("op", out _).Should().BeTrue(operations.ToString());
+
+        var resources = await client.ListResourcesAsync();
+        resources.Select(r => r.Uri).Should().Contain("questions-hub://docs/agent-api");
+        var resource = await client.ReadResourceAsync("questions-hub://docs/agent-api");
+        resource.Contents.OfType<TextResourceContents>().Single().Text.Should().Be(text);
+    }
+
+    [SkippableFact]
+    public async Task Operations_ReachTheParserAsSent_SoValidationAndReplayMatchRest()
+    {
+        await using var factory = CreateFactory();
+        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        var package = await TestData.CreatePackage(factory, editor.Id);
+        var token = await TestData.CreateToken(factory, editor.Id, packageIds: [package.Id]);
+        await using var client = await Connect(factory, token);
+
+        var read = await Call(client, "get_package", new() { ["packageId"] = package.Id });
+        var questionId = read.Json!["tours"]![0]!["questions"]![0]!["id"]!.GetValue<int>();
+
+        // A duplicate key is rejected as over REST, not silently collapsed by the typed binding
+        var duplicate = await Call(client, "apply_changeset", new()
+        {
+            ["packageId"] = package.Id,
+            ["operations"] = JsonDocument.Parse($$"""[ { "op": "updateQuestion", "questionId": {{questionId}}, "questionId": {{questionId}}, "set": { "text": "X" } } ]""").RootElement
+        });
+        duplicate.IsError.Should().BeTrue();
+        duplicate.Text.Should().Contain("Duplicate property 'questionId'");
+
+        // Applied over REST with "OP", the very same request retried over MCP replays (same hash)
+        var requestId = Guid.NewGuid().ToString();
+        var operations = $$"""[ { "OP": "updateQuestion", "questionId": {{questionId}}, "set": { "text": "Через REST" } } ]""";
+        using var http = factory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var rest = await http.PostAsync($"/api/v1/manage/packages/{package.Id}/changesets", new StringContent(
+            $$"""{ "requestId": "{{requestId}}", "dryRun": false, "operations": {{operations}} }""", System.Text.Encoding.UTF8, "application/json"));
+        rest.IsSuccessStatusCode.Should().BeTrue(await rest.Content.ReadAsStringAsync());
+
+        var retried = await Call(client, "apply_changeset", new()
+        {
+            ["packageId"] = package.Id, ["operations"] = JsonDocument.Parse(operations).RootElement,
+            ["dryRun"] = false, ["requestId"] = requestId
+        });
+        retried.IsError.Should().BeFalse(retried.Text);
+        retried.Json!["replayed"]!.GetValue<bool>().Should().BeTrue();
     }
 
     [SkippableFact]
@@ -163,6 +229,13 @@ public sealed class AgentMcpTests(PostgresFixture database)
         using var http = factory.CreateClient();
         using var response = await http.PostAsync("/mcp", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("/Account/Profile", "the error says where tokens come from");
+        response.Headers.WwwAuthenticate.ToString().Should().Be("Bearer");
+
+        using var invalid = new HttpRequestMessage(HttpMethod.Post, "/mcp") { Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json") };
+        invalid.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "qh_pat_00000000000000000000000000000000");
+        using var rejected = await http.SendAsync(invalid);
+        rejected.Headers.WwwAuthenticate.ToString().Should().Be("Bearer error=\"invalid_token\"");
     }
 
     [SkippableFact]

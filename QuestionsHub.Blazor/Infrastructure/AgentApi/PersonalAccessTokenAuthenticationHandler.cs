@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Unicode;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -24,6 +26,9 @@ public class PersonalAccessTokenAuthenticationHandler(
     : AuthenticationHandler<PersonalAccessTokenAuthenticationOptions>(options, logger, encoder)
 {
     private const string BearerPrefix = "Bearer ";
+
+    /// <summary>Error bodies keep Ukrainian text readable (no \uXXXX escapes).</summary>
+    private static readonly JsonSerializerOptions ErrorJson = new() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) };
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -68,10 +73,18 @@ public class PersonalAccessTokenAuthenticationHandler(
 
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        // The body tells an agent (or its user) where tokens come from; RFC 6750 error only when one was sent
+        var sentToken = Request.Headers.Authorization.ToString().StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase);
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-        Response.Headers.WWWAuthenticate = "Bearer";
+        Response.Headers.WWWAuthenticate = sentToken ? "Bearer error=\"invalid_token\"" : "Bearer";
         Response.ContentType = "application/json";
-        return Response.WriteAsync("""{"error":"Missing or invalid token. Provide Authorization: Bearer qh_pat_..."}""");
+        var error = JsonSerializer.Serialize(new
+        {
+            error = (sentToken ? "Invalid, expired or revoked token." : "Missing token.")
+                + " Send Authorization: Bearer qh_pat_… — a personal access token that an editor or admin creates on their"
+                + $" profile page ({Request.Scheme}://{Request.Host}/Account/Profile, «Токени доступу для агентів»)."
+        }, ErrorJson);
+        return Response.WriteAsync(error);
     }
 
     protected override Task HandleForbiddenAsync(AuthenticationProperties properties)

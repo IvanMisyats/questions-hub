@@ -801,6 +801,7 @@ public sealed class ChangesetEngine(
         {
             author = new Author { FirstName = first, LastName = last };
             context.Authors.Add(author);
+            _warnings.Add($"New author '{first} {last}' will be created (no author with exactly this name exists).");
         }
         else
         {
@@ -827,6 +828,7 @@ public sealed class ChangesetEngine(
         {
             tag = new Tag { Name = name };
             context.Tags.Add(tag);
+            _warnings.Add($"New tag '{name}' will be created.");
         }
 
         _tagsByName[key] = tag;

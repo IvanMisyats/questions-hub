@@ -79,6 +79,8 @@ public class ChangeDisplayTests
     [Theory]
     [InlineData("Question 501: 'answer' is empty.", "Запитання 501: поле «Відповідь» порожнє.")]
     [InlineData("A new question has empty 'text'.", "Нове запитання без тексту.")]
+    [InlineData("New author 'Олена Коваленко' will be created (no author with exactly this name exists).", "Створено нового автора: Олена Коваленко.")]
+    [InlineData("New tag 'Історія' will be created.", "Створено новий тег: Історія.")]
     [InlineData("Something else.", "Something else.")]
     public void Warnings_AreShownInUkrainianWhenKnown(string warning, string expected)
     {
