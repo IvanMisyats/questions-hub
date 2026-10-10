@@ -1,0 +1,279 @@
+@using System.Globalization
+@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure.AgentApi
+@inject PersonalAccessTokenService TokenService
+@inject ILogger<AgentTokens> Logger
+
+@* Personal access tokens for agents (Claude Code, Codex, MCP clients) acting on the user's behalf. *@
+
+<div class="card shadow">
+    <div class="card-body">
+        <h4 class="card-title mb-2">Токени доступу для агентів</h4>
+        <p class="text-muted small mb-4">
+            Токен дозволяє ШІ-агенту (Claude Code, Codex, MCP-клієнт) читати й редагувати ваші пакети від вашого імені
+            через API. Агент ніколи не отримує більше прав, ніж маєте ви; кожна зміна записується в історію пакета.
+        </p>
+
+        @if (_errorMessage != null)
+        {
+            <div class="alert alert-danger" role="alert">@_errorMessage</div>
+        }
+
+        @if (_newRawToken != null)
+        {
+            <div class="alert alert-warning" role="alert">
+                <strong>Збережіть токен зараз — він більше не буде показаний.</strong>
+                <div class="d-flex align-items-center gap-2 mt-2">
+                    <code id="new-agent-token" class="user-select-all fs-6 text-break">@_newRawToken</code>
+                    <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                            onclick="navigator.clipboard.writeText(document.getElementById('new-agent-token').textContent)">
+                        Копіювати
+                    </button>
+                </div>
+                <div class="small mt-2">
+                    Передайте агенту заголовок <code>Authorization: Bearer &lt;токен&gt;</code>.
+                    Перевірка: <code>GET /api/v1/manage/me</code>.
+                </div>
+                <button type="button" class="btn btn-sm btn-link px-0 mt-1" @onclick="() => _newRawToken = null">Сховати</button>
+            </div>
+        }
+
+        <div class="border rounded p-3 mb-4">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="token-name" class="form-label">Назва</label>
+                    <input id="token-name" type="text" class="form-control" maxlength="@PersonalAccessTokenService.MaxNameLength"
+                           placeholder="Claude — пакет 512" @bind="_name" />
+                </div>
+                <div class="col-md-3">
+                    <label for="token-expiry" class="form-label">Діє</label>
+                    <select id="token-expiry" class="form-select" @bind="_validDays">
+                        <option value="7">7 днів</option>
+                        <option value="30">30 днів</option>
+                        <option value="90">90 днів</option>
+                        <option value="365">1 рік</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="token-scope" class="form-label">Доступ</label>
+                    <select id="token-scope" class="form-select" @bind="_scope">
+                        <option value="@TokenScope.ReadWrite">Читання і зміни</option>
+                        <option value="@TokenScope.Read">Лише читання</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="token-packages" id="token-packages-some"
+                               checked="@(!_allPackages)" @onchange="() => _allPackages = false" />
+                        <label class="form-check-label" for="token-packages-some">Лише вибрані пакети</label>
+                    </div>
+                    @if (!_allPackages)
+                    {
+                        <input type="text" class="form-control mt-1 mb-2" placeholder="Номери пакетів через кому, напр. 512, 513"
+                               @bind="_packageIdsText" aria-label="Номери пакетів" />
+                        <div class="form-text mb-2">Номер пакета — число в адресі сторінки, напр. /manage/package/<strong>512</strong>.</div>
+                    }
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="token-packages" id="token-packages-all"
+                               checked="@_allPackages" @onchange="() => _allPackages = true" />
+                        <label class="form-check-label" for="token-packages-all">
+                            @(IsAdmin ? "Усі пакети сайту" : "Усі мої пакети")
+                        </label>
+                    </div>
+                    @if (_allPackages && IsAdmin)
+                    {
+                        <div class="alert alert-warning small mt-2 mb-0">
+                            Ви адміністратор: такий токен матиме доступ до <strong>будь-якого</strong> пакета на сайті@(_scope == TokenScope.ReadWrite ? " і зможе його змінювати" : "").
+                            Краще обмежити його конкретними пакетами й коротким терміном.
+                        </div>
+                    }
+                </div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-primary" @onclick="Create"
+                            disabled="@(string.IsNullOrWhiteSpace(_name) || _isProcessing)">
+                        <Icon Name="plus" Class="me-1" />Створити токен
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        @if (_tokens.Count == 0)
+        {
+            <p class="text-muted mb-0">Токенів ще немає.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Назва</th>
+                            <th>Токен</th>
+                            <th>Доступ</th>
+                            <th>Пакети</th>
+                            <th>Створено</th>
+                            <th>Використано</th>
+                            <th>Діє до</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var token in _tokens)
+                        {
+                            var active = token.IsActive(DateTime.UtcNow);
+                            <tr class="@(active ? "" : "text-muted")">
+                                <td>@token.Name</td>
+                                <td><code>@(token.TokenPrefix)…</code></td>
+                                <td>@ScopeLabel(token.Scope)</td>
+                                <td>@PackagesLabel(token)</td>
+                                <td>@FormatTime(token.CreatedAt)</td>
+                                <td>@(token.LastUsedAt is { } lastUsed ? FormatTime(lastUsed) : "—")</td>
+                                <td>@FormatTime(token.ExpiresAt)</td>
+                                <td class="text-end">
+                                    @if (active)
+                                    {
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                                @onclick="() => Revoke(token)" disabled="@_isProcessing">
+                                            Відкликати
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">@(token.RevokedAt != null ? "Відкликано" : "Прострочено")</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>The signed-in user (an editor or admin).</summary>
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+
+    [Parameter] public bool IsAdmin { get; set; }
+
+    private List<PersonalAccessToken> _tokens = [];
+
+    private string _name = "";
+    private TokenScope _scope = TokenScope.ReadWrite;
+    private int _validDays = 30;
+    private bool _allPackages;
+    private string _packageIdsText = "";
+
+    private string? _newRawToken;
+    private string? _errorMessage;
+    private bool _isProcessing;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    /// <summary>Reloads the list; returns false (and sets an error) when the database is unavailable.</summary>
+    private async Task<bool> Reload()
+    {
+        try
+        {
+            _tokens = await TokenService.GetForUser(UserId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading agent tokens failed for user {UserId}", UserId);
+            _errorMessage = "Не вдалося завантажити список токенів. Оновіть сторінку.";
+            return false;
+        }
+    }
+
+    private async Task Create()
+    {
+        // Events can arrive before the disabled button re-renders; never run two at once.
+        if (_isProcessing)
+            return;
+
+        _errorMessage = null;
+        _newRawToken = null;
+
+        List<int>? packageIds = null;
+        if (!_allPackages)
+        {
+            packageIds = PackageIdList.Parse(_packageIdsText);
+            if (packageIds == null)
+            {
+                _errorMessage = "Вкажіть номери пакетів цілими числами через кому.";
+                return;
+            }
+        }
+
+        _isProcessing = true;
+        try
+        {
+            CreateTokenResult result;
+            try
+            {
+                result = await TokenService.Create(UserId, new CreateTokenRequest(_name, _scope, _validDays, packageIds));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Creating an agent token failed for user {UserId}", UserId);
+                _errorMessage = "Не вдалося створити токен. Спробуйте ще раз.";
+                return;
+            }
+
+            if (!result.Success)
+            {
+                _errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            // Show the secret before anything else can fail: it exists only here.
+            _newRawToken = result.RawToken;
+            _name = "";
+            _packageIdsText = "";
+            await Reload();
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task Revoke(PersonalAccessToken token)
+    {
+        if (_isProcessing)
+            return;
+
+        _errorMessage = null;
+        _isProcessing = true;
+        try
+        {
+            if (!await TokenService.Revoke(token.Id, UserId))
+                _errorMessage = "Токен не знайдено.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Revoking agent token {TokenId} failed", token.Id);
+            _errorMessage = "Не вдалося відкликати токен. Спробуйте ще раз.";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+
+        await Reload();
+    }
+
+    /// <summary>Same convention as the rest of the site: server local time.</summary>
+    private static string FormatTime(DateTime utc) =>
+        utc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    private static string ScopeLabel(TokenScope scope) =>
+        scope == TokenScope.ReadWrite ? "Читання і зміни" : "Лише читання";
+
+    private string PackagesLabel(PersonalAccessToken token) =>
+        token.PackageIds == null
+            ? (IsAdmin ? "усі пакети сайту" : "усі мої")
+            : string.Join(", ", token.PackageIds);
+}

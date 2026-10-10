@@ -508,14 +508,15 @@ public class AuthorService
             return false;
         }
 
-        // Ask whether anything references the author rather than loading it. Including the three
+        // Ask whether anything references the author rather than loading it. Including the
         // collections made EF emit one LEFT JOIN each, returning their cartesian product — ~575k
         // rows for the worst author here, enough to exhaust the process's memory.
+        // Package-level editor links count too: deleting the author would cascade them away.
         var hasContent = await context.Authors
             .AnyAsync(a => a.Id == authorId
-                && (a.Questions.Any() || a.Tours.Any() || a.Blocks.Any()));
+                && (a.Questions.Any() || a.Tours.Any() || a.Blocks.Any() || a.Packages.Any()));
 
-        // Don't delete if author has any questions, tours, blocks, or is linked to a user
+        // Don't delete if author has any questions, tours, blocks, packages, or is linked to a user
         if (hasContent || author.UserId != null)
         {
             return false;

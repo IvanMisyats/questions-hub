@@ -5,6 +5,7 @@
 
 @using System.Net
 @inject QuestionsHub.Blazor.Infrastructure.Api.ApiKeyService ApiKeyService
+@inject QuestionsHub.Blazor.Infrastructure.Auth.AccessControlService AccessControl
 
 <PageTitle>API-ключі - База українських запитань</PageTitle>
 
@@ -131,6 +132,11 @@
             </div>
         </div>
     }
+
+    @if (_adminUserId != null)
+    {
+        <AgentTokensAdmin AdminUserId="@_adminUserId" />
+    }
 </div>
 
 @code {
@@ -144,9 +150,12 @@
     private string _newEmail = "";
     private string? _newlyCreatedKey;
 
+    private string? _adminUserId;
+
     protected override async Task OnInitializedAsync()
     {
         _clients = await ApiKeyService.GetAll();
+        _adminUserId = await AccessControl.GetCurrentUserId();
         _isLoading = false;
     }
 

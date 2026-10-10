@@ -18,6 +18,11 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<ResultsSource> ResultsSources => Set<ResultsSource>();
     public DbSet<TeamResult> TeamResults => Set<TeamResult>();
     public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
+    public DbSet<PersonalAccessToken> PersonalAccessTokens => Set<PersonalAccessToken>();
+    public DbSet<PackageChangeset> PackageChangesets => Set<PackageChangeset>();
+
+    /// <summary>Unique index that makes changeset requests idempotent (violations mean "already applied").</summary>
+    public const string PackageChangesetRequestIndex = "IX_PackageChangesets_TokenId_RequestId";
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -152,7 +157,9 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
 
-            // Case-insensitive unique index on tag name
+            // Unique per exact name. NB: "und-x-icu" is deterministic, so this index is NOT
+            // case-insensitive; migration TagsCaseInsensitiveUnique adds IX_Tags_Name_Lower on
+            // lower("Name") (an expression index, not expressible in the EF model) for that.
             entity.HasIndex(t => t.Name)
                 .IsUnique()
                 .HasDatabaseName("IX_Tags_Name_CI")
@@ -175,6 +182,66 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
             entity.HasIndex(a => a.KeyHash)
                 .IsUnique()
                 .HasDatabaseName("IX_ApiClients_KeyHash");
+        });
+
+        builder.Entity<PersonalAccessToken>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.UserId).IsRequired();
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
+            entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(64); // SHA-256 hex
+            entity.Property(t => t.TokenPrefix).IsRequired().HasMaxLength(16);
+
+            entity.HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(t => t.TokenHash)
+                .IsUnique()
+                .HasDatabaseName("IX_PersonalAccessTokens_TokenHash");
+
+            entity.HasIndex(t => t.UserId)
+                .HasDatabaseName("IX_PersonalAccessTokens_UserId");
+        });
+
+        builder.Entity<PackageChangeset>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.UserDisplayName).IsRequired().HasMaxLength(200);
+            entity.Property(c => c.TokenName).HasMaxLength(100);
+            entity.Property(c => c.RequestHash).IsRequired().HasMaxLength(64);
+            entity.Property(c => c.Summary).HasMaxLength(500);
+            entity.Property(c => c.VersionBefore).IsRequired().HasMaxLength(64);
+            entity.Property(c => c.VersionAfter).IsRequired().HasMaxLength(64);
+            entity.Property(c => c.OperationsJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(c => c.ChangesJson).IsRequired().HasColumnType("jsonb");
+            entity.Property(c => c.WarningsJson).HasColumnType("jsonb");
+
+            entity.HasOne(c => c.Package)
+                .WithMany()
+                .HasForeignKey(c => c.PackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(c => c.Token)
+                .WithMany()
+                .HasForeignKey(c => c.TokenId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // History of a package, newest first
+            entity.HasIndex(c => new { c.PackageId, c.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("IX_PackageChangesets_PackageId_CreatedAt");
+
+            // Idempotency: one changeset per (token, request id)
+            entity.HasIndex(c => new { c.TokenId, c.RequestId })
+                .IsUnique()
+                .HasDatabaseName(PackageChangesetRequestIndex);
         });
 
         builder.Entity<PackageImportJob>(entity =>

@@ -776,6 +776,31 @@ public class AuthorServiceTests : IDisposable
         (await AuthorIsDeleted(author.Id)).Should().BeFalse();
     }
 
+    /// <summary>
+    /// A package-level editor (shared editors) has no question/tour/block link; deleting them would
+    /// silently cascade them off the package.
+    /// </summary>
+    [Fact]
+    public async Task TryDeleteAuthorIfOrphaned_EditsAPackage_KeepsAuthor()
+    {
+        var author = await CreateAuthor("Павло", "Пакетний");
+        using (var context = _dbFactory.CreateDbContext())
+        {
+            context.Packages.Add(new Package
+            {
+                Title = "Package",
+                SharedEditors = true,
+                PackageEditors = [(await context.Authors.FindAsync(author.Id))!]
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var deleted = await _service.TryDeleteAuthorIfOrphaned(author.Id);
+
+        deleted.Should().BeFalse();
+        (await AuthorIsDeleted(author.Id)).Should().BeFalse();
+    }
+
     [Fact]
     public async Task TryDeleteAuthorIfOrphaned_LinkedToUser_KeepsAuthor()
     {

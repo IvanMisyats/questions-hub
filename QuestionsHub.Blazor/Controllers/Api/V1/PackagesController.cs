@@ -8,6 +8,7 @@ using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure;
 using QuestionsHub.Blazor.Infrastructure.Api;
+using QuestionsHub.Blazor.Infrastructure.RateLimiting;
 
 namespace QuestionsHub.Blazor.Controllers.Api.V1;
 
@@ -15,7 +16,8 @@ namespace QuestionsHub.Blazor.Controllers.Api.V1;
 [Route("api/v1/packages")]
 [Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.Scheme)]
 [EnableCors("PublicApi")]
-[EnableRateLimiting("api_general")]
+[EnableRateLimiting(RateLimitPolicies.IpPublicApi)]
+[ClientRateLimit(RateLimitBudgets.AppGeneral)]
 public class PackagesController : ControllerBase
 {
     private readonly PackageListService _packageListService;
@@ -74,7 +76,7 @@ public class PackagesController : ControllerBase
     /// Returns 404 for non-existent or non-public packages.
     /// </summary>
     [HttpGet("{id:int}")]
-    [EnableRateLimiting("api_detail")]
+    [ClientRateLimit(RateLimitBudgets.AppDetail)]
     public async Task<ActionResult<ApiPackageDetailDto>> Detail(int id)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using QuestionsHub.Blazor.Infrastructure;
 using QuestionsHub.Blazor.Infrastructure.Api;
+using QuestionsHub.Blazor.Infrastructure.RateLimiting;
 
 namespace QuestionsHub.Blazor.Controllers.Api.V1;
 
@@ -11,7 +12,8 @@ namespace QuestionsHub.Blazor.Controllers.Api.V1;
 [Route("api/v1")]
 [Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.Scheme)]
 [EnableCors("PublicApi")]
-[EnableRateLimiting("api_general")]
+[EnableRateLimiting(RateLimitPolicies.IpPublicApi)]
+[ClientRateLimit(RateLimitBudgets.AppGeneral)]
 public class MetadataController : ControllerBase
 {
     private readonly PackageListService _packageListService;

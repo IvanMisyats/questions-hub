@@ -38,7 +38,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
 
         var claims = new[]
         {
-            new Claim("api_client_id", client.Id.ToString(CultureInfo.InvariantCulture)),
+            new Claim(ApiKeyAuthenticationOptions.ClientIdClaim, client.Id.ToString(CultureInfo.InvariantCulture)),
             new Claim("api_client_name", client.Name)
         };
 

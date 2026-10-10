@@ -214,6 +214,32 @@ public class PackageResultsServiceTests : IDisposable
         (await db.TeamResults.CountAsync(t => t.ResultsSourceId == source.Id)).Should().Be(17);
     }
 
+    /// <summary>
+    /// Mapping stats onto the question layout must not interleave with an agent changeset changing it:
+    /// the slow fetch happens first, then the layout is read and written under the package write lock.
+    /// </summary>
+    [Fact]
+    public async Task LoadSource_FetchesOutsideTheLock_ButMapsAndWritesUnderIt()
+    {
+        var packageId = await SeedWwwPackage(
+            (TourType.Regular, "1", 12), (TourType.Regular, "2", 12), (TourType.Regular, "3", 12));
+        var handler = HandlerForRating13097();
+        var service = CreateService(handler);
+        var source = await service.AttachSource(packageId, "13097");
+
+        Task<ResultsSource> load;
+        using (await QuestionsHub.Blazor.Infrastructure.PackageWriteLocks.Acquire(packageId))
+        {
+            load = service.LoadSource(source.Id);
+            await Task.Delay(300);
+
+            handler.RequestedUrls.Should().NotBeEmpty("the platform fetch does not wait for the lock");
+            load.IsCompleted.Should().BeFalse("mapping and writing wait for the package write lock");
+        }
+
+        (await load).StatsMapped.Should().BeTrue();
+    }
+
     [Fact]
     public async Task LoadSource_QuestionCountMismatch_LoadsStandingsWithoutStats()
     {

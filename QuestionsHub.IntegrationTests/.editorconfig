@@ -1,0 +1,9 @@
+# EditorConfig for QuestionsHub.IntegrationTests
+root = false
+
+[*.cs]
+# Test methods use underscore naming: Subject_Scenario_Expected
+dotnet_diagnostic.CA1707.severity = none
+
+# xUnit collection definitions are conventionally named *Collection
+dotnet_diagnostic.CA1711.severity = none

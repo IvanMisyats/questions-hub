@@ -1,0 +1,130 @@
+@using System.Globalization
+@using QuestionsHub.Blazor.Domain
+@using QuestionsHub.Blazor.Infrastructure.AgentApi
+@inject PersonalAccessTokenService TokenService
+@inject ILogger<AgentTokensAdmin> Logger
+
+@* Admin overview of every user's agent tokens, with revoke. Embedded in /admin/api-keys. *@
+
+<div class="card mt-4">
+    <div class="card-header">
+        Токени агентів (@_tokens.Count(t => t.IsActive(DateTime.UtcNow)) активних)
+    </div>
+    <div class="card-body p-0">
+        @if (_message != null)
+        {
+            <div class="alert alert-info m-3">@_message</div>
+        }
+
+        @if (_tokens.Count == 0)
+        {
+            <p class="text-muted p-3 mb-0">Токенів ще немає. Редактори створюють їх у своєму профілі.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Користувач</th>
+                            <th>Назва</th>
+                            <th>Токен</th>
+                            <th>Доступ</th>
+                            <th>Пакети</th>
+                            <th>Створено</th>
+                            <th>Використано</th>
+                            <th>Діє до</th>
+                            <th style="width: 120px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var token in _tokens)
+                        {
+                            var active = token.IsActive(DateTime.UtcNow);
+                            <tr class="@(active ? "" : "table-secondary")">
+                                <td>@(token.User?.FullName ?? "—")</td>
+                                <td>@token.Name</td>
+                                <td><code>@(token.TokenPrefix)…</code></td>
+                                <td>@(token.Scope == TokenScope.ReadWrite ? "Читання і зміни" : "Лише читання")</td>
+                                <td>@(token.PackageIds == null ? "усі" : string.Join(", ", token.PackageIds))</td>
+                                <td>@FormatTime(token.CreatedAt)</td>
+                                <td>@(token.LastUsedAt is { } lastUsed ? FormatTime(lastUsed) : "—")</td>
+                                <td>@FormatTime(token.ExpiresAt)</td>
+                                <td>
+                                    @if (active)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => Revoke(token)" disabled="@_isProcessing">
+                                            <Icon Name="x-circle" Class="me-1" />Відкликати
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">@(token.RevokedAt != null ? "Відкликано" : "Прострочено")</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>The signed-in admin, recorded as the revoker.</summary>
+    [Parameter, EditorRequired] public string AdminUserId { get; set; } = "";
+
+    private List<PersonalAccessToken> _tokens = [];
+    private string? _message;
+    private bool _isProcessing;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        try
+        {
+            // The service re-checks that the caller is an admin right now: a page left open after
+            // demotion stops listing (and revoking) other users' tokens.
+            var tokens = await TokenService.GetAll(AdminUserId);
+            _tokens = tokens ?? [];
+            if (tokens == null)
+                _message = "Недостатньо прав.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading agent tokens for the admin overview failed");
+            _message = "Не вдалося завантажити токени. Оновіть сторінку.";
+        }
+    }
+
+    private async Task Revoke(PersonalAccessToken token)
+    {
+        if (_isProcessing)
+            return;
+
+        _isProcessing = true;
+        try
+        {
+            _message = await TokenService.Revoke(token.Id, AdminUserId)
+                ? $"Токен «{token.Name}» відкликано."
+                : "Токен не знайдено або недостатньо прав.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Revoking agent token {TokenId} failed", token.Id);
+            _message = "Не вдалося відкликати токен. Спробуйте ще раз.";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+
+        await Reload();
+    }
+
+    /// <summary>Same convention as the rest of the site: server local time.</summary>
+    private static string FormatTime(DateTime utc) =>
+        utc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
+}

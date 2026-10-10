@@ -78,10 +78,23 @@
             </div>
         </div>
     </div>
+
+    @if (_agentTokensUserId != null)
+    {
+        <div class="row justify-content-center mt-4 mb-5">
+            <div class="col-lg-10 col-xl-9">
+                <AgentTokens UserId="@_agentTokensUserId" IsAdmin="@_isAdmin" />
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private ProfileModel? _profileModel;
+
+    /// <summary>Set for editors and admins, who may create agent tokens.</summary>
+    private string? _agentTokensUserId;
+    private bool _isAdmin;
     private string? _successMessage;
     private string? _errorMessage;
 
@@ -103,6 +116,12 @@
                     Team = appUser.Team,
                     Email = appUser.Email ?? ""
                 };
+
+                _isAdmin = user.IsInRole("Admin");
+                if (_isAdmin || user.IsInRole("Editor"))
+                {
+                    _agentTokensUserId = appUser.Id;
+                }
             }
         }
     }

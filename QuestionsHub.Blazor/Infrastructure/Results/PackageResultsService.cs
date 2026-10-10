@@ -89,14 +89,7 @@ public class PackageResultsService(
             throw new ResultsLoadException("Це посилання не завантажується автоматично.");
         }
 
-        var package = await db.Packages
-            .AsNoTracking()
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Questions)
-            .FirstAsync(p => p.Id == source.PackageId, cancellationToken);
-
         PlatformResults platformResults;
-        QuestionStatsMappingResult mapping;
         try
         {
             var parsed = ResultsUrlParser.Parse(source.Platform, source.Url);
@@ -106,7 +99,6 @@ public class PackageResultsService(
                 ResultsPlatform.OpenQuiz => await openQuizClient.Load(parsed.ExternalId!, parsed.Token!, parsed.LinkKind, parsed.Title, cancellationToken),
                 _ => throw new ResultsLoadException("Це посилання не завантажується автоматично.")
             };
-            mapping = QuestionStatsMapper.Map(package, platformResults);
         }
         catch (ResultsLoadException ex)
         {
@@ -129,6 +121,18 @@ public class PackageResultsService(
             await db.SaveChangesAsync(cancellationToken);
             return source;
         }
+
+        // From reading the question layout to writing the stats mapped onto it, no agent changeset may
+        // restructure the package (and a changeset holding the lock sees these results once it's done).
+        // The slow platform fetch above stays outside the lock.
+        using var layoutLock = await PackageWriteLocks.Acquire(source.PackageId, cancellationToken);
+
+        var package = await db.Packages
+            .AsNoTracking()
+            .Include(p => p.Tours)
+                .ThenInclude(t => t.Questions)
+            .FirstAsync(p => p.Id == source.PackageId, cancellationToken);
+        var mapping = QuestionStatsMapper.Map(package, platformResults);
 
         var warnings = platformResults.Warnings.Concat(mapping.Warnings).ToList();
         var warningsJson = warnings.Count > 0 ? JsonSerializer.Serialize(warnings, JsonOptions) : null;

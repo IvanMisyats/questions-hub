@@ -694,6 +694,12 @@
                 }
             </div>
         </div>
+
+        @if (Id != null)
+        {
+            <!-- Changesets applied by agents through the API -->
+            <PackageChangesetHistory PackageId="@_package.Id" />
+        }
     }
 </div>
 

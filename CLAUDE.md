@@ -6,6 +6,7 @@ Online database of Ukrainian intellectual-game questions: "Що?Де?Коли?" 
 
 ```bash
 dotnet restore && dotnet build --no-restore && dotnet test --no-build
+# Integration tests (QuestionsHub.IntegrationTests) need Docker (Testcontainers PostgreSQL); they skip locally without it, never on CI
 # Local dev: .\start-dev-db.ps1 then run from IDE (https://localhost:5001)
 # Migrations: cd QuestionsHub.Blazor && dotnet ef migrations add <Name> --output-dir Data/Migrations
 ```
@@ -65,5 +66,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/SEARCH.md` | FTS implementation details |
 | `docs/ICONS.md` | Icon system and available icons |
 | `docs/BACKUPS.md` | Backup system overview, schedule, storage, IaC |
-| `docs/API.md` | Public API reference: endpoints, auth, rate limits |
+| `docs/API.md` | Public API reference (endpoints, auth, rate limits) and the **Agent API** (`/api/v1/manage`, changesets, MCP at `/mcp`) |
+| `docs/AGENT_API_PLAN.md` | Agent write access on behalf of users: personal access tokens, changeset engine, audit/history, rate limiting, MCP — decisions, phases, review notes |
+| `docs/BACKLOG.md` | Planned features and fixes with pointers to their design notes (public repo: no open security findings there) |
 | `docs/CLOUDFLARE.md` | Cloudflare proxy settings, Blazor gotchas, origin protection |

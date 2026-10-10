@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using QuestionsHub.Blazor.Controllers.Api.V1.Dto;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure.Api;
+using QuestionsHub.Blazor.Infrastructure.RateLimiting;
 using QuestionsHub.Blazor.Infrastructure.Search;
 
 namespace QuestionsHub.Blazor.Controllers.Api.V1;
@@ -13,7 +14,8 @@ namespace QuestionsHub.Blazor.Controllers.Api.V1;
 [Route("api/v1/search")]
 [Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.Scheme)]
 [EnableCors("PublicApi")]
-[EnableRateLimiting("api_search")]
+[EnableRateLimiting(RateLimitPolicies.IpPublicApi)]
+[ClientRateLimit(RateLimitBudgets.AppSearch)]
 public class SearchController : ControllerBase
 {
     private readonly SearchService _searchService;

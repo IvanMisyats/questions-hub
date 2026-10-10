@@ -65,11 +65,25 @@ External API clients (e.g., mobile apps) authenticate via **API keys** instead o
 - Each key has: name, contact email, created/last-used timestamps, active status
 
 ### Rate Limiting
-- **Per API key** (ASP.NET): 60 req/min general, 20 req/min search, 30 req/min package detail
-- **Per IP** (nginx): 30 req/min on `/api/v1/`, 5 req/min on `/api/Auth/`
+Two layers (details in `docs/AGENT_API_PLAN.md`, "Rate Limiting"; limits configurable under `RateLimits`):
+- **Before authentication, per client IP** (ASP.NET policies): 60 req/min public API, 150 req/min agent API, 5 req/min `/api/Auth/` (login/register)
+- **After authentication, per validated principal** (`ClientRateLimiter`): per API key 60 req/min general, 30 req/min package detail, 20 req/min search; per personal access token 120 reads/min, 20 changesets/min
+- **Per IP** (nginx): 30 req/min on `/api/v1/`, 150 req/min on `/api/v1/manage/` and `/mcp`, 5 req/min on `/api/Auth/`
 
 ### Endpoints
 All under `/api/v1/` — see `docs/API.md` for full reference.
+
+---
+
+## Personal Access Tokens (agent API)
+
+Agents (Claude Code, Codex, MCP clients) act **on behalf of a user** with a personal access token. Design and phases: `docs/AGENT_API_PLAN.md`.
+
+- Header: `Authorization: Bearer qh_pat_<32 hex>` (39 characters). SHA-256 hash stored; the raw token is shown once.
+- Only **Editor/Admin** users can create and use tokens. A token never grants more than its user: token row, expiry, lockout and roles are read from the database **on every request** (no cache), so revocation and demotion apply immediately (an admin demoted to editor keeps only own packages).
+- Scope `Read` or `ReadWrite`; mandatory expiry (1–365 days); optional **package allowlist** (narrows, never widens: an editor's allowlist can only contain own packages). Max 10 active tokens per user.
+- Agent endpoints (`/api/v1/manage/*`) authorize with the token scheme **only** — session cookies and `X-API-Key` are ignored there (no CSRF surface). Missing/invalid token → 401, insufficient scope → 403, package not editable or outside the allowlist → 404.
+- Code: `Infrastructure/AgentApi/` (`PersonalAccessTokenService`, `PersonalAccessTokenAuthenticationHandler`, `AgentAccess`, `AgentPolicies`), entity `Domain/PersonalAccessToken.cs`, `GET /api/v1/manage/me` in `Controllers/Api/Manage/`.
 
 ---
 

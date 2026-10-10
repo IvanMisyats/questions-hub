@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure.Email;
+using QuestionsHub.Blazor.Infrastructure.RateLimiting;
 
 namespace QuestionsHub.Blazor.Controllers;
 
@@ -13,7 +14,7 @@ namespace QuestionsHub.Blazor.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [ApiController]
-[EnableRateLimiting("auth_limit")]
+[EnableRateLimiting(RateLimitPolicies.IpAuth)]
 public class AuthController : ControllerBase
 {
     private readonly SignInManager<ApplicationUser> _signInManager;

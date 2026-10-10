@@ -27,7 +27,10 @@
     image: ghcr.io/ivanmisyats/questions-hub:latest
     container_name: questions-hub-web
     ports:
-      - "8080:8080"
+      # Loopback only: nginx on the host is the sole entry point. Docker-published ports bypass
+      # UFW, and forwarded headers are trusted from any source, so a public port would let
+      # clients spoof their IP (rate limiting is per IP).
+      - "127.0.0.1:8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true

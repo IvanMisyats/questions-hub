@@ -1,0 +1,212 @@
+@using System.Globalization
+@using QuestionsHub.Blazor.Infrastructure.AgentApi.Changesets
+@using System.Security.Claims
+@inject PackageChangesetService Changesets
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILogger<PackageChangesetHistory> Logger
+
+@* History of changesets applied by agents to a package, on the package manage page. Renders nothing
+   until an agent has changed the package. The list is a cheap summary query; a changeset's diff is
+   loaded only when its changes are opened. Full snapshots expand client-side (<details>). *@
+
+@if (_summaries.Count > 0)
+{
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Історія змін (агенти)</h5>
+            <span class="text-muted small">@(_hasMore ? $"останні {MaxShown}" : ChangeDisplay.Plural(_summaries.Count, "запис", "записи", "записів"))</span>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted">
+                Зміни, які ШІ-агенти внесли через API від імені користувачів. Відкрита сторінка редактора їх не бачить —
+                оновіть її після роботи агента, інакше збереження застарілих полів може перезаписати його зміни.
+            </p>
+
+            @if (_error != null)
+            {
+                <div class="alert alert-danger small">@_error</div>
+            }
+
+            @foreach (var info in _summaries)
+            {
+                var detail = _opened.GetValueOrDefault(info.Id);
+                <div class="border rounded px-3 py-2 mb-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <strong>@info.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)</strong>
+                        <span>— @info.UserDisplayName@(info.TokenName != null ? $" («{info.TokenName}»)" : "")</span>
+                        @if (!string.IsNullOrWhiteSpace(info.Summary))
+                        {
+                            <span>— @info.Summary</span>
+                        }
+                        <span class="text-muted small">(@ChangeDisplay.Plural(info.OperationCount, "операція", "операції", "операцій"))</span>
+                        <button type="button" class="btn btn-link btn-sm ms-auto p-0" @onclick="() => Toggle(info.Id)" disabled="@(_loading == info.Id)">
+                            @(detail != null ? "Сховати зміни" : "Показати зміни")
+                        </button>
+                    </div>
+
+                    @if (detail != null)
+                    {
+                        @if (detail.Warnings.Count > 0)
+                        {
+                            <div class="alert alert-warning small py-1 px-2 mt-2 mb-2">
+                                @foreach (var warning in detail.Warnings)
+                                {
+                                    <div>@ChangeDisplay.Warning(warning)</div>
+                                }
+                            </div>
+                        }
+
+                        <div class="table-responsive mt-2">
+                            <table class="table table-sm small align-top mb-1">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 18%">Де</th>
+                                        <th style="width: 14%">Що</th>
+                                        <th style="width: 34%">Було</th>
+                                        <th style="width: 34%">Стало</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var change in detail.Changes)
+                                    {
+                                        <tr class="@RowClass(change)">
+                                            <td>@change.Label</td>
+                                            <td>@ChangeDisplay.What(change)</td>
+                                            @if (change.Kind == "deleted")
+                                            {
+                                                <td class="text-break">@Snapshot(change)</td>
+                                                <td></td>
+                                            }
+                                            else if (change.Kind == "added")
+                                            {
+                                                <td></td>
+                                                <td class="text-break">@Snapshot(change)</td>
+                                            }
+                                            else
+                                            {
+                                                <td class="text-break" style="white-space: pre-wrap">@ChangeDisplay.Value(change.Field, change.Before)</td>
+                                                <td class="text-break" style="white-space: pre-wrap">@ChangeDisplay.Value(change.Field, change.After)</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private const int MaxShown = 20;
+
+    [Parameter, EditorRequired] public int PackageId { get; set; }
+
+    private List<ChangesetSummaryDto> _summaries = [];
+    private bool _hasMore;
+    private readonly Dictionary<int, ChangesetDetailDto> _opened = [];
+    private int? _loading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (!await CanView())
+            {
+                _summaries = [];
+                return;
+            }
+
+            var summaries = await Changesets.GetRecentSummaries(PackageId, MaxShown + 1);
+            _hasMore = summaries.Count > MaxShown;
+            _summaries = summaries.Take(MaxShown).ToList();
+        }
+        catch (Exception ex)
+        {
+            // The history is informative; never break the editor because of it.
+            Logger.LogError(ex, "Loading the changeset history of package {PackageId} failed", PackageId);
+            _summaries = [];
+        }
+    }
+
+    private async Task Toggle(int changesetId)
+    {
+        if (_opened.Remove(changesetId) || _loading != null)
+            return;
+
+        _loading = changesetId;
+        _error = null;
+        try
+        {
+            // Re-checked on every expansion: rights may have been lost since the page was opened.
+            if (!await CanView())
+            {
+                _error = "Недостатньо прав для перегляду історії цього пакета.";
+                return;
+            }
+
+            var detail = await Changesets.GetChangeset(PackageId, changesetId);
+            if (detail != null)
+                _opened[changesetId] = detail;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading changeset {ChangesetId} of package {PackageId} failed", changesetId, PackageId);
+            _error = "Не вдалося завантажити зміни. Спробуйте ще раз.";
+        }
+        finally
+        {
+            _loading = null;
+        }
+    }
+
+    /// <summary>The viewer's current rights (database roles), not the session's.</summary>
+    private async Task<bool> CanView()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        return await Changesets.UserCanEdit(state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, PackageId);
+    }
+
+    private static string RowClass(ChangeDto change) => change.Kind switch
+    {
+        "added" => "table-success",
+        "deleted" => "table-danger",
+        _ => change.OperationIndex == null ? "text-muted" : ""
+    };
+
+    /// <summary>One-line description plus the full content (client-side expandable).</summary>
+    private static RenderFragment Snapshot(ChangeDto change) => __builder =>
+    {
+        var questions = ChangeDisplay.TourQuestions(change.Snapshot);
+        <div style="white-space: pre-wrap">@ChangeDisplay.Summary(change.Snapshot)</div>
+        <details>
+            <summary class="text-muted">Повністю</summary>
+            @foreach (var (label, value) in ChangeDisplay.TourLines(change.Snapshot))
+            {
+                <div style="white-space: pre-wrap"><span class="text-muted">@label:</span> @value</div>
+            }
+            @if (change.Entity == "tour" || questions.Count > 0)
+            {
+                @foreach (var question in questions)
+                {
+                    <div class="border-top pt-1 mt-1">
+                        @foreach (var (label, value) in ChangeDisplay.QuestionLines(question))
+                        {
+                            <div style="white-space: pre-wrap"><span class="text-muted">@label:</span> @value</div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                @foreach (var (label, value) in ChangeDisplay.QuestionLines(change.Snapshot))
+                {
+                    <div style="white-space: pre-wrap"><span class="text-muted">@label:</span> @value</div>
+                }
+            }
+        </details>
+    };
+}
