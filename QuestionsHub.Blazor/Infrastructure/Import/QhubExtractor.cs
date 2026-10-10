@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text.Json;
 
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Infrastructure.Media;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -412,8 +413,13 @@ public class QhubExtractor
         List<string> warnings,
         CancellationToken ct)
     {
-        // Local file takes precedence
-        if (!string.IsNullOrWhiteSpace(localFileName))
+        // Local file takes precedence. The name comes from package.json: only a bare file name of
+        // an allowed media type (no paths, no SVG or other active content)
+        if (!string.IsNullOrWhiteSpace(localFileName) && !MediaSecurityOptions.IsAllowedMediaFileName(localFileName))
+        {
+            warnings.Add($"{questionLabel}: недопустима назва або тип файлу {assetType}: '{localFileName}'");
+        }
+        else if (!string.IsNullOrWhiteSpace(localFileName))
         {
             var localPath = Path.Combine(assetsOutputPath, localFileName);
             if (File.Exists(localPath))
@@ -471,6 +477,12 @@ public class QhubExtractor
 
             // Determine file name from URL
             var extension = GetExtensionFromUrl(url, response.Content.Headers.ContentType?.MediaType);
+            if (!MediaSecurityOptions.AllowedMediaExtensions.Contains(extension))
+            {
+                warnings.Add($"{questionLabel}: непідтримуваний тип файлу {assetType} ({extension}): {url}");
+                return null;
+            }
+
             var fileName = $"dl_{Guid.NewGuid():N}{extension}";
             var destPath = Path.Combine(assetsOutputPath, fileName);
 

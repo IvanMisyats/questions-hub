@@ -1,4 +1,5 @@
-﻿using Mailjet.Client;
+﻿using System.Net;
+using Mailjet.Client;
 using Mailjet.Client.TransactionalEmails;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
@@ -31,7 +32,7 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #0d6efd;">Вітаємо, {user.FirstName}!</h2>
+                    <h2 style="color: #0d6efd;">Вітаємо, {WebUtility.HtmlEncode(user.FirstName)}!</h2>
                     <p>Дякуємо за реєстрацію на сайті «База українських запитань».</p>
                     <p>Для підтвердження вашої електронної адреси натисніть на кнопку нижче:</p>
                     <p style="text-align: center; margin: 30px 0;">
@@ -70,7 +71,7 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #0d6efd;">Скидання пароля</h2>
-                    <p>Вітаємо, {user.FirstName}!</p>
+                    <p>Вітаємо, {WebUtility.HtmlEncode(user.FirstName)}!</p>
                     <p>Ви отримали цей лист, тому що запросили скидання пароля для вашого облікового запису.</p>
                     <p>Для встановлення нового пароля натисніть на кнопку нижче:</p>
                     <p style="text-align: center; margin: 30px 0;">
@@ -114,7 +115,7 @@ public class MailjetEmailSender : IEmailSender<ApplicationUser>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #0d6efd;">Код скидання пароля</h2>
-                    <p>Вітаємо, {user.FirstName}!</p>
+                    <p>Вітаємо, {WebUtility.HtmlEncode(user.FirstName)}!</p>
                     <p>Ваш код для скидання пароля:</p>
                     <p style="text-align: center; margin: 30px 0;">
                         <span style="background-color: #f8f9fa; padding: 15px 30px;

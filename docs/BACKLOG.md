@@ -45,6 +45,7 @@ Security findings are **not** listed here: this repository is public, so open vu
 - **One implementation of the save rules.** Move `ManagePackageDetail.razor` onto the changeset engine; today the engine re-implements the editor's rules.
 - **Displayed times.** Use one site-wide time zone instead of server-local `ToLocalTime()`.
 - **Import config.** Make `PackageImport:AllowedExtensions` explicit. `appsettings.json` lists only `.docx`, but the configuration binder appends it to the code default, so `.qhub` is in fact allowed.
+- **Shared media files.** Questions can share one media file (an asset referenced by several questions of an imported package). Removing or replacing it on one question in the editor deletes the file for all of them. Check references before deleting.
 - **Login dropdown.** The guest dropdown (Увійти / Реєстрація) has an extra gap on the left, and the selection background overflows to the right. Reported 2026-03, not re-checked.
 - **Stale docs.** `AUTHENTICATION.md` → "Future Enhancements" still lists access levels and email sending as planned; both are implemented.
 

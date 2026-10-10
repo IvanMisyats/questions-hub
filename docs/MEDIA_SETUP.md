@@ -175,9 +175,11 @@ location ^~ /media/ {
 
     # Only allow specific media file extensions
     location ~* \.(jpg|jpeg|png|gif|webp|svg|mp4|webm|ogg|mp3|wav|m4a)$ {
-        # Security headers
+        # Security headers. The sandbox stops script in a file opened directly (e.g. an SVG)
+        # from running on the site's origin
         add_header X-Content-Type-Options "nosniff" always;
         add_header Content-Disposition "inline" always;
+        add_header Content-Security-Policy "sandbox" always;
 
         # Immutable caching - safe because filenames change on update
         add_header Cache-Control "public, max-age=31536000, immutable" always;

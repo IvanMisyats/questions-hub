@@ -77,6 +77,17 @@ public static class MediaSecurityOptions
     }
 
     /// <summary>
+    /// Validates a file name taken from uploaded content (e.g. an asset name in a .qhub): a bare
+    /// name without directory parts, not "." or "..", with an allowed media extension.
+    /// </summary>
+    public static bool IsAllowedMediaFileName(string? name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && name.IndexOfAny(['/', '\\', '\0']) < 0
+        && name is not ("." or "..")
+        && Path.GetFileName(name) == name
+        && IsAllowedMediaFile(name);
+
+    /// <summary>
     /// Gets the MIME content type for a given file extension.
     /// </summary>
     /// <param name="extension">File extension (with or without leading dot).</param>

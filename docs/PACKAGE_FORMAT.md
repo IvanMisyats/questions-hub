@@ -152,10 +152,10 @@ When all media is available via external URLs, the `assets/` folder can be omitt
 **Ordering**: Questions are ordered by their position in the `questions` array.
 
 **Media fields**: A question may reference media in two ways:
-- **Local file** via `handoutAssetFileName` / `commentAssetFileName` — file must exist in `assets/`.
-- **External URL** via `handoutAssetUrl` / `commentAssetUrl` — a publicly accessible URL.
+- **Local file** via `handoutAssetFileName` / `commentAssetFileName` — a bare file name (no folders) that exists in `assets/`, with a supported media extension.
+- **External URL** via `handoutAssetUrl` / `commentAssetUrl` — a publicly accessible URL. The server downloads it during import; hosts that resolve to private or local addresses are refused, and the file must have a supported media type.
 
-If both local and URL variants are provided for the same slot, the local file takes precedence during import.
+If both local and URL variants are provided for the same slot, the local file takes precedence during import. Imported files are stored under new random names (one copy per asset, however many questions reference it), so the names in the archive never collide with existing media.
 
 ---
 

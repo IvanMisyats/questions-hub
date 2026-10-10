@@ -183,7 +183,7 @@
         }
         catch (Exception ex)
         {
-            _message = $"Помилка: {ex.Message}";
+            _message = $"Помилка: {WebUtility.HtmlEncode(ex.Message)}";
             _isSuccess = false;
         }
         finally
@@ -215,7 +215,7 @@
         }
         catch (Exception ex)
         {
-            _message = $"Помилка: {ex.Message}";
+            _message = $"Помилка: {WebUtility.HtmlEncode(ex.Message)}";
             _isSuccess = false;
         }
         finally

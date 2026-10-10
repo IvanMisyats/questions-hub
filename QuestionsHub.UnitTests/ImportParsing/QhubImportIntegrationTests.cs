@@ -411,11 +411,11 @@ public class QhubImportIntegrationTests : IDisposable
         // Assert: asset was extracted and question has handout URL
         using var db = _dbFactory.CreateDbContext();
         var q = db.Questions.First();
-        q.HandoutUrl.Should().Be("/media/handout1.png");
+        q.HandoutUrl.Should().MatchRegex("^/media/[0-9a-f]{64}[.]png$");
         q.Text.Should().Be("Що зображено?");
 
         // Asset file exists in handouts folder
-        File.Exists(Path.Combine(_tempDir, "handouts", "handout1.png")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempDir, "handouts", q.HandoutUrl!["/media/".Length..])).Should().BeTrue();
     }
 
     [Fact]
@@ -460,8 +460,7 @@ public class QhubImportIntegrationTests : IDisposable
         // Assert: question has handout URL pointing to downloaded file
         using var db = _dbFactory.CreateDbContext();
         var q = db.Questions.First();
-        q.HandoutUrl.Should().StartWith("/media/dl_");
-        q.HandoutUrl.Should().EndWith(".jpg");
+        q.HandoutUrl.Should().MatchRegex("^/media/[0-9a-f]{64}[.]jpg$");
     }
 
     [Fact]

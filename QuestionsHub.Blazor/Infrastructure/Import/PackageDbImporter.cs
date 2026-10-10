@@ -19,6 +19,9 @@ public partial class PackageDbImporter
     private readonly TagService _tagService;
     private readonly ILogger<PackageDbImporter> _logger;
 
+    /// <summary>Assets copied to the handouts folder by the current import attempt: source name → URL.</summary>
+    private readonly Dictionary<string, string> _storedAssets = new(StringComparer.Ordinal);
+
     public PackageDbImporter(
         QuestionsHubDbContext db,
         IOptions<MediaUploadOptions> mediaOptions,
@@ -54,6 +57,7 @@ public partial class PackageDbImporter
         return await strategy.ExecuteAsync<Package>(async cancellation =>
         {
             await using var transaction = await _db.Database.BeginTransactionAsync(cancellation);
+            _storedAssets.Clear();
 
             try
             {
@@ -180,6 +184,7 @@ public partial class PackageDbImporter
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancellation);
+                DeleteStoredAssets();
                 _logger.LogError(ex, "Failed to import package");
                 throw new DatabaseImportException("Не вдалося зберегти пакет в базу даних", ex);
             }
@@ -312,6 +317,17 @@ public partial class PackageDbImporter
     {
         if (string.IsNullOrEmpty(assetFileName)) return null;
 
+        // Asset names can come from an uploaded archive: accept only a bare media file name
+        if (!MediaSecurityOptions.IsAllowedMediaFileName(assetFileName))
+        {
+            _logger.LogWarning("Rejected asset name: {FileName}", assetFileName);
+            return null;
+        }
+
+        // One stored copy per source file, however many questions reference it
+        if (_storedAssets.TryGetValue(assetFileName, out var storedUrl))
+            return storedUrl;
+
         var sourcePath = Path.Combine(jobAssetsPath, assetFileName);
         if (!File.Exists(sourcePath))
         {
@@ -319,26 +335,53 @@ public partial class PackageDbImporter
             return null;
         }
 
-        // Move asset to handouts folder
+        // Copy to the handouts folder under a fresh random name, so an import never overwrites
+        // existing media (handouts are shared by all packages)
         var handoutsPath = Path.Combine(_mediaOptions.UploadsPath, _mediaOptions.HandoutsFolder);
         Directory.CreateDirectory(handoutsPath);
 
-        var destPath = Path.Combine(handoutsPath, assetFileName);
+        var storedName = MediaSecurityOptions.GenerateRandomFileName(Path.GetExtension(assetFileName).ToLowerInvariant());
+        var destPath = Path.Combine(handoutsPath, storedName);
 
+        var created = false;
         try
         {
             // Copy instead of move to allow retries
-            await using var source = File.OpenRead(sourcePath);
-            await using var dest = File.Create(destPath);
-            await source.CopyToAsync(dest, ct);
+            await using (var source = File.OpenRead(sourcePath))
+            await using (var dest = new FileStream(destPath, FileMode.CreateNew, FileAccess.Write))
+            {
+                created = true;
+                await source.CopyToAsync(dest, ct);
+            }
 
-            return $"/media/{assetFileName}";
+            return _storedAssets[assetFileName] = $"/media/{storedName}";
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to copy asset: {FileName}", assetFileName);
+            if (created)
+                File.Delete(destPath);
             return null;
         }
+    }
+
+    /// <summary>Removes the files a failed import attempt copied to the handouts folder.</summary>
+    private void DeleteStoredAssets()
+    {
+        var handoutsPath = Path.Combine(_mediaOptions.UploadsPath, _mediaOptions.HandoutsFolder);
+        foreach (var url in _storedAssets.Values)
+        {
+            try
+            {
+                File.Delete(Path.Combine(handoutsPath, url["/media/".Length..]));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete asset of a failed import: {Url}", url);
+            }
+        }
+
+        _storedAssets.Clear();
     }
 
     /// <summary>

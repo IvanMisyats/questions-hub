@@ -107,7 +107,9 @@
       POSTGRES_DB: questionshub
       POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
     ports:
-      - "5432:5432"
+      # Loopback only: local tools and the backup (docker exec) need no public port, and
+      # Docker-published ports bypass UFW
+      - "127.0.0.1:5432:5432"
     volumes:
       - ${POSTGRES_DATA_PATH:-./postgres_data}:/var/lib/postgresql/data
       - ./db/dictionaries/uk_UA.dic:/usr/local/share/postgresql/tsearch_data/uk_ua.dict:ro

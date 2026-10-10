@@ -831,9 +831,64 @@ public class QhubExtractorTests : IDisposable
         result.Tours[0].Questions[0].HandoutAssetFileName.Should().Be("handout.png");
     }
 
+    [Theory]
+    [InlineData("../handout.png")]
+    [InlineData("/etc/handout.png")]
+    [InlineData("sub\\handout.png")]
+    [InlineData("drawing.svg")]
+    [InlineData("page.html")]
+    public async Task Extract_UnsafeLocalAssetName_IsRejectedWithAWarning(string name)
+    {
+        var assets = new Dictionary<string, byte[]> { ["handout.png"] = [0x89, 0x50, 0x4E, 0x47] };
+        var pkg = new Dictionary<string, object?>
+        {
+            ["formatVersion"] = "1.0",
+            ["title"] = "Пакет",
+            ["tours"] = new List<object>
+            {
+                MakeTour("1", questions: new List<object> { MakeQuestion("1", handoutAssetFileName: name) })
+            }
+        };
+
+        var extractor = CreateExtractor();
+        using var zip = CreateQhubZip(pkg, assets);
+
+        var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        result.Tours[0].Questions[0].HandoutAssetFileName.Should().BeNull();
+        result.Warnings.Should().Contain(w => w.Contains("недопустима назва"));
+    }
+
     #endregion
 
     #region External URL Download
+
+    [Theory]
+    [InlineData("https://example.com/drawing.svg", "image/svg+xml")]
+    [InlineData("https://example.com/page", "text/html")]
+    public async Task Extract_ExternalUrlOfANonMediaType_IsNotDownloaded(string url, string contentType)
+    {
+        var handler = new FakeHttpHandler();
+        handler.AddResponse(url, "<svg onload=\"alert(1)\"/>"u8.ToArray(), contentType);
+        var pkg = new Dictionary<string, object?>
+        {
+            ["formatVersion"] = "1.0",
+            ["title"] = "Пакет",
+            ["tours"] = new List<object>
+            {
+                MakeTour("1", questions: new List<object> { MakeQuestion("1", handoutAssetUrl: url) })
+            }
+        };
+
+        var extractor = CreateExtractor(handler);
+        using var zip = CreateQhubZip(pkg);
+
+        var result = await extractor.Extract(zip, _assetsDir, CancellationToken.None);
+
+        result.Tours[0].Questions[0].HandoutAssetFileName.Should().BeNull();
+        result.Warnings.Should().Contain(w => w.Contains("непідтримуваний тип"));
+        Directory.GetFiles(_assetsDir).Should().BeEmpty();
+    }
 
     [Fact]
     public async Task Extract_ExternalUrl_DownloadsAsset()

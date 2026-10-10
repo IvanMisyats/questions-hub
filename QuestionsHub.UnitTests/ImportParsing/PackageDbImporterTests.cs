@@ -744,8 +744,88 @@ public class PackageDbImporterTests : IDisposable
 
         using var db = _dbFactory.CreateDbContext();
         var q = db.Questions.First();
-        q.HandoutUrl.Should().Be("/media/test_image.png");
-        File.Exists(Path.Combine(handoutsPath, assetFileName)).Should().BeTrue();
+        q.HandoutUrl.Should().MatchRegex("^/media/[0-9a-f]{64}[.]png$", "imported assets get a fresh random name");
+        File.Exists(Path.Combine(handoutsPath, q.HandoutUrl!["/media/".Length..])).Should().BeTrue();
+        File.Exists(Path.Combine(handoutsPath, assetFileName)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Import_AssetWithTheNameOfExistingMedia_DoesNotOverwriteIt()
+    {
+        var handoutsPath = Path.Combine(_tempDir, "handouts");
+        Directory.CreateDirectory(handoutsPath);
+        var existing = Path.Combine(handoutsPath, "victim.png");
+        await File.WriteAllBytesAsync(existing, [1, 2, 3]);
+        await File.WriteAllBytesAsync(Path.Combine(_tempDir, "victim.png"), [9, 9, 9, 9]);
+
+        var importer = CreateImporter();
+        var parseResult = new ParseResult
+        {
+            Title = "Пакет",
+            Tours =
+            [
+                new() { Number = "1", OrderIndex = 0, Questions = [new() { Number = "1", Text = "Q1", Answer = "A1", HandoutAssetFileName = "victim.png" }] }
+            ]
+        };
+
+        await importer.Import(parseResult, OwnerId, Guid.NewGuid(), _tempDir, CancellationToken.None);
+
+        (await File.ReadAllBytesAsync(existing)).Should().Equal(1, 2, 3);
+        using var db = _dbFactory.CreateDbContext();
+        db.Questions.First().HandoutUrl.Should().NotBe("/media/victim.png");
+    }
+
+    [Fact]
+    public async Task Import_AssetReferencedByManyQuestions_IsStoredOnce()
+    {
+        var handoutsPath = Path.Combine(_tempDir, "handouts");
+        await File.WriteAllBytesAsync(Path.Combine(_tempDir, "theme.png"), [1, 2, 3]);
+
+        var importer = CreateImporter();
+        var parseResult = new ParseResult
+        {
+            Title = "Пакет",
+            Tours =
+            [
+                new()
+                {
+                    Number = "1", OrderIndex = 0,
+                    Questions =
+                    [
+                        new() { Number = "1", Text = "Q1", Answer = "A1", HandoutAssetFileName = "theme.png" },
+                        new() { Number = "2", Text = "Q2", Answer = "A2", HandoutAssetFileName = "theme.png", CommentAssetFileName = "theme.png" }
+                    ]
+                }
+            ]
+        };
+
+        await importer.Import(parseResult, OwnerId, Guid.NewGuid(), _tempDir, CancellationToken.None);
+
+        using var db = _dbFactory.CreateDbContext();
+        var urls = db.Questions.AsEnumerable().SelectMany(q => new[] { q.HandoutUrl, q.CommentAttachmentUrl }).OfType<string>().Distinct().ToList();
+        urls.Should().ContainSingle();
+        Directory.GetFiles(handoutsPath).Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData("../outside.png")]
+    [InlineData("drawing.svg")]
+    public async Task Import_UnsafeAssetName_IsSkipped(string name)
+    {
+        var importer = CreateImporter();
+        var parseResult = new ParseResult
+        {
+            Title = "Пакет",
+            Tours =
+            [
+                new() { Number = "1", OrderIndex = 0, Questions = [new() { Number = "1", Text = "Q1", Answer = "A1", HandoutAssetFileName = name }] }
+            ]
+        };
+
+        await importer.Import(parseResult, OwnerId, Guid.NewGuid(), _tempDir, CancellationToken.None);
+
+        using var db = _dbFactory.CreateDbContext();
+        db.Questions.First().HandoutUrl.Should().BeNull();
     }
 
     #endregion

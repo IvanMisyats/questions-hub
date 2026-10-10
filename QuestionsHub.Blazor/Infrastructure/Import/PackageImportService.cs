@@ -46,6 +46,13 @@ public class PackageImportService
         long fileSize,
         PackageType type = PackageType.Www)
     {
+        // The name comes from the client: keep only the bare file name, never a path
+        fileName = Path.GetFileName(fileName.Replace('\\', '/'));
+        if (string.IsNullOrWhiteSpace(fileName) || fileName is "." or "..")
+        {
+            throw new ValidationException("Некоректна назва файлу");
+        }
+
         // Validate
         if (!_options.IsExtensionAllowed(fileName))
         {
@@ -74,7 +81,7 @@ public class PackageImportService
         var relativeInputPath = Path.Combine("jobs", jobId.ToString(), "input", fileName);
 
         // Save file
-        await using (var output = File.Create(inputFilePath))
+        await using (var output = new FileStream(inputFilePath, FileMode.CreateNew, FileAccess.Write))
         {
             await fileStream.CopyToAsync(output);
         }

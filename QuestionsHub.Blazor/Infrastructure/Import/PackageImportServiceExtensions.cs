@@ -30,12 +30,14 @@ public static class PackageImportServiceExtensions
         // Register export service
         services.AddScoped<QhubExporter>();
 
-        // HttpClient for downloading external assets in .qhub imports
+        // HttpClient for downloading external assets in .qhub imports; the URLs come from the
+        // uploaded file, so connections are limited to public internet addresses
         services.AddHttpClient("QhubAssetDownloader", client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(30);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("QuestionsHub/1.0");
-        });
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("QuestionsHub/1.0");
+            })
+            .ConfigurePrimaryHttpMessageHandler(PublicAddressFilter.CreateHandler);
 
 
         // Register background services

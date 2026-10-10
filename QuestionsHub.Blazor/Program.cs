@@ -351,6 +351,7 @@ internal static class ApplicationExtensions
                 }
 
                 ctx.Context.Response.Headers.XContentTypeOptions = "nosniff";
+                ctx.Context.Response.Headers.ContentSecurityPolicy = "sandbox";
                 ctx.Context.Response.Headers.Append("Content-Disposition", "inline");
                 ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000");
             }

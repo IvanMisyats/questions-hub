@@ -1555,6 +1555,15 @@
     {
         if (_package == null) return;
 
+        // Block ids come from the browser: each must be a block of the tour it is listed under
+        if (!BlocksBelongToTour(toTourId, toTourOrder.Select(item => item.BlockId))
+            || (fromTourId.HasValue && fromTourOrder != null && !BlocksBelongToTour(fromTourId.Value, fromTourOrder.Select(item => item.BlockId))))
+        {
+            _saveStatus = "Помилка: блок не належить туру";
+            StateHasChanged();
+            return;
+        }
+
         try
         {
             _saveStatus = "Оновлення порядку запитань...";
@@ -1584,6 +1593,13 @@
         }
 
         StateHasChanged();
+    }
+
+    /// <summary>True when every non-null block id is a block of this package's tour.</summary>
+    private bool BlocksBelongToTour(int tourId, IEnumerable<int?> blockIds)
+    {
+        var tour = _package?.Tours.FirstOrDefault(t => t.Id == tourId);
+        return tour != null && blockIds.All(id => id == null || tour.Blocks.Any(b => b.Id == id));
     }
 
     private async Task UpdateTourQuestionOrder(QuestionsHubDbContext context, int tourId, List<QuestionOrderItem> order)
@@ -1647,6 +1663,13 @@
             if (sourceTour == null || targetTour == null || question == null)
             {
                 _saveStatus = "Помилка: запитання або тур не знайдено";
+                StateHasChanged();
+                return;
+            }
+
+            if (!BlocksBelongToTour(fromTourId, [fromBlockId]) || !BlocksBelongToTour(toTourId, [toBlockId]))
+            {
+                _saveStatus = "Помилка: блок не належить туру";
                 StateHasChanged();
                 return;
             }
