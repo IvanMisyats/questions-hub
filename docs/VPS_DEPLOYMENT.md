@@ -282,13 +282,19 @@ Nginx handles HTTPS termination and serves static media files directly for optim
 ### Install Configuration
 
 ```bash
+# Compare with the live file first (host-specific edits must not be lost), and keep a backup
+diff /etc/nginx/conf.d/questions.com.ua.conf infra/nginx/questions.com.ua.conf
+sudo cp -p /etc/nginx/conf.d/questions.com.ua.conf /etc/nginx/questions.com.ua.conf.bak-$(date +%Y%m%d)
+
 # Copy nginx config from repo to server
 sudo cp infra/nginx/questions.com.ua.conf /etc/nginx/conf.d/questions.com.ua.conf
 
-# Test and reload
+# Test and reload (restore the backup if the test fails)
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+CD does not deploy this file — every change to it needs this manual step. Keep the backup outside `conf.d/` (everything matching `conf.d/*.conf` is loaded).
 
 ### Media Files
 

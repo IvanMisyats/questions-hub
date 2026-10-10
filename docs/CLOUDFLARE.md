@@ -44,8 +44,13 @@ Cloudflare publishes their IP ranges at https://www.cloudflare.com/ips/. If they
 |------|------|-------|------------|
 | `api_zone` | 30 req/min per IP | 10 | `/api/v1/` (public API) |
 | `auth_zone` | 5 req/min per IP | 3 | `/api/Auth/` (login/register) |
+| `manage_zone` | 150 req/min per IP | 50 | `/api/v1/manage/` and `/mcp` (agent API) |
 
 These are first-line defenses before requests reach ASP.NET, which has its own per-API-key rate limiting.
+
+## Browser Integrity Check
+
+Cloudflare answers `403` with **error code 1010** to Python's default `User-Agent` (`Python-urllib/…`) — on every path, including `/api/v1` and `/mcp`. Scripts must send another User-Agent. curl, Node (Claude Code), httpx (Python MCP SDK), reqwest (Codex) and an empty User-Agent pass (checked 2026-10-10).
 
 ## Do NOT enable
 

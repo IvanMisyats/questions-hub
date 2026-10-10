@@ -68,5 +68,6 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/BACKUPS.md` | Backup system overview, schedule, storage, IaC |
 | `docs/API.md` | Public API reference (endpoints, auth, rate limits) and the **Agent API** (`/api/v1/manage`, changesets, MCP at `/mcp`) |
 | `docs/AGENT_API_PLAN.md` | Agent write access on behalf of users: personal access tokens, changeset engine, audit/history, rate limiting, MCP — decisions, phases, review notes |
+| `docs/AGENT_EDITS.md` | Applying editors' corrections to production packages with the agent token: workflow, Ivan's conventions (pasted text only identifies; theme authors), Cloudflare/Python gotchas, acceptance-testing the MCP server with a fresh agent |
 | `docs/BACKLOG.md` | Planned features and fixes with pointers to their design notes (public repo: no open security findings there) |
 | `docs/CLOUDFLARE.md` | Cloudflare proxy settings, Blazor gotchas, origin protection |
