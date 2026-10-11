@@ -1,6 +1,8 @@
-﻿<nav class="tour-navigation">
+@using QuestionsHub.Blazor.Utils
+
+<nav class="tour-navigation">
     @{
-        var blockNumberInPackage = 0;
+        var blockNumbers = PackageLabels.BlockNumbers(Package.Tours);
     }
     @foreach (var tour in Package.Tours)
     {
@@ -30,12 +32,10 @@
                 @* Tour with blocks - show blocks with their questions *@
                 @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
                 {
-                    blockNumberInPackage++;
                     var blockElementId = $"block-{block.Id}";
-                    var currentBlockNumber = blockNumberInPackage;
                     <div class="block-group ms-2">
                         <a href="/package/@Package.Id#@blockElementId" class="nav-link block-link small text-muted" onclick="scrollToElement('@blockElementId'); return false;">
-                            @block.GetDisplayName(currentBlockNumber)
+                            @block.GetDisplayName(blockNumbers[block.Id])
                         </a>
                         <div class="question-links">
                             @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))

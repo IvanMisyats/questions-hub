@@ -1,0 +1,16 @@
+.fav-btn {
+    padding: 0.15rem 0.35rem;
+    color: var(--app-text-muted);
+    background: transparent;
+    border: none;
+    line-height: 1;
+}
+
+.fav-btn:hover,
+.fav-btn.is-fav {
+    color: var(--bs-danger, #dc3545);
+}
+
+.fav-btn ::deep .fav-icon {
+    vertical-align: middle;
+}

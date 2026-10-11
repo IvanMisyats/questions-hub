@@ -57,6 +57,8 @@ The following icons are available in the sprite file:
 | `i-arrow-left` | arrow-left, back | Left arrow for back navigation |
 | `i-exclamation-circle` | exclamation-circle | Circle with "!" for inline errors |
 | `i-bar-chart` | bar-chart, stats, statistics | Filled bar chart marking a package that has loaded tournament statistics |
+| `i-heart` | heart | Outline heart: not in favorites (heart buttons, «Обране» nav) |
+| `i-heart-fill` | heart-fill | Filled heart: in favorites |
 
 ## Usage
 

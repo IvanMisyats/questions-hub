@@ -7,6 +7,7 @@
 @using static QuestionsHub.Blazor.Infrastructure.SourceLinkifier
 @inject SearchService SearchService
 @inject AccessControlService AccessControl
+@inject FavoriteService Favorites
 
 <PageTitle>Пошук питань</PageTitle>
 
@@ -92,10 +93,13 @@
                                         <span class="text-muted">Запитання @result.QuestionNumber</span>
                                     }
                                 </div>
-                                <a href="/package/@result.PackageId#question-@result.QuestionId"
-                                   class="btn btn-sm btn-outline-primary">
-                                    Перейти до пакету
-                                </a>
+                                <div class="d-flex align-items-center gap-1">
+                                    <FavoriteButton Kind="FavoriteKind.Question" Id="result.QuestionId" Lookup="_favorites" />
+                                    <a href="/package/@result.PackageId#question-@result.QuestionId"
+                                       class="btn btn-sm btn-outline-primary">
+                                        Перейти до пакету
+                                    </a>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="@(result.IsAdult ? "adult-blur-wrapper blurred" : "")" data-package-id="@result.PackageId">
@@ -223,6 +227,7 @@
     private string? _errorMessage;
     private string? _searchedQuery;
     private PackageType? _typeFilter;
+    private FavoriteLookup? _favorites;
 
     protected override async Task OnInitializedAsync()
     {
@@ -255,6 +260,7 @@
             var accessContext = await AccessControl.GetPackageAccessContext();
             _results = await SearchService.Search(_searchedQuery.Trim(), accessContext, typeFilter: _typeFilter);
             _hasSearched = true;
+            _favorites = await LoadFavorites(accessContext, _results);
         }
         catch (Exception)
         {
@@ -264,6 +270,19 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    /// <summary>Hearts for the results; the results still render (without hearts) if this fails.</summary>
+    private async Task<FavoriteLookup?> LoadFavorites(PackageAccessContext accessContext, List<SearchResult> results)
+    {
+        try
+        {
+            return await Favorites.GetLookupForQuestions(accessContext, results.Select(r => r.QuestionId));
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 

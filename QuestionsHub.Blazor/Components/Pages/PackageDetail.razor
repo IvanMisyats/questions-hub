@@ -8,6 +8,7 @@
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
 @inject PackageResultsService PackageResults
+@inject FavoriteService Favorites
 
 <PageTitle>@(_package?.Title ?? "Пакет не знайдено") - База українських запитань</PageTitle>
 
@@ -43,6 +44,7 @@ else
                         <div>
                             <h1 class="mb-0 d-inline align-middle">@_package.Title</h1>
                             <PackageTypeBadge Type="_package.Type" Class="ms-2 align-middle" />
+                            <FavoriteButton Kind="FavoriteKind.Package" Id="_package.Id" Lookup="_favorites" Class="ms-1 align-middle" />
                         </div>
                         @if (_canEdit)
                         {
@@ -147,35 +149,19 @@ else
                 <hr class="my-4" />
 
                 @{
-                    var blockNumberInPackage = 0;
+                    var blockNumbers = PackageLabels.BlockNumbers(_package.Tours);
                 }
                 @foreach (var tour in _package.Tours)
                 {
                     <div id="tour-@tour.Id" class="tour-section">
                         <div class="tour-heading">
-                            <h2 class="mb-0">
-                                @if (_package.Type == PackageType.Shvager)
-                                {
-                                    @tour.ThemeDisplayName
-                                }
-                                else if (tour.IsWarmup)
-                                {
-                                    <text>Розминка</text>
-                                }
-                                else if (tour.IsShootout)
-                                {
-                                    <text>Перестрілка</text>
-                                }
-                                else
-                                {
-                                    <text>Тур @tour.Number</text>
-                                }
-                            </h2>
+                            <h2 class="mb-0">@PackageLabels.TourName(tour, _package.Type)</h2>
                             <button class="btn btn-sm copy-link-btn"
                                     onclick="copyTourLink(this, @_package.Id, @tour.Id)"
                                     title="@(_package.Type == PackageType.Shvager ? "Скопіювати посилання на тему" : "Скопіювати посилання на тур")">
                                 <Icon Name="link" Class="copy-icon" />
                             </button>
+                            <FavoriteButton Kind="FavoriteKind.Tour" Id="tour.Id" Lookup="_favorites" />
                         </div>
 
                         @if (tour.HasBlocks)
@@ -183,11 +169,13 @@ else
                             @* Tour with blocks - display each block with its questions *@
                             @foreach (var block in tour.Blocks.OrderBy(b => b.OrderIndex))
                             {
-                                blockNumberInPackage++;
                                 <div id="block-@block.Id" class="block-section">
-                                    <h4 class="block-header">
-                                        @block.GetDisplayName(blockNumberInPackage)
-                                    </h4>
+                                    <div class="block-heading">
+                                        <h4 class="block-header mb-0">
+                                            @block.GetDisplayName(blockNumbers[block.Id])
+                                        </h4>
+                                        <FavoriteButton Kind="FavoriteKind.Block" Id="block.Id" Lookup="_favorites" />
+                                    </div>
 
                                     @if (block.Editors.Any())
                                     {
@@ -213,7 +201,7 @@ else
                                     @foreach (var question in tour.Questions.Where(q => q.BlockId == block.Id).OrderBy(q => q.OrderIndex))
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" Favorites="_favorites" />
                                         </div>
                                     }
                                 </div>
@@ -227,7 +215,7 @@ else
                                     @foreach (var question in orphanQuestions)
                                     {
                                         <div id="question-@question.Id">
-                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" />
+                                            <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" Favorites="_favorites" />
                                         </div>
                                     }
                                 </div>
@@ -265,7 +253,7 @@ else
                             @foreach (var question in tour.Questions.OrderBy(q => q.OrderIndex))
                             {
                                 <div id="question-@question.Id">
-                                    <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" />
+                                    <QuestionCard Question="@question" IsBlurred="_isAdult" Type="_package.Type" Stat="@_questionStats.GetValueOrDefault(question.Id)" Favorites="_favorites" />
                                 </div>
                             }
                         }
@@ -286,6 +274,7 @@ else
     private bool _isAdult;
     private List<ResultsSourceInfo> _resultsSources = [];
     private Dictionary<int, QuestionStat> _questionStats = new();
+    private FavoriteLookup? _favorites;
 
     protected override async Task OnInitializedAsync()
     {
@@ -324,6 +313,9 @@ else
         // Check if the package has 18+ content tag
         _isAdult = TagService.IsAdultContent(_package.Tags);
 
+        // Hearts: one indexed query for a signed-in user, none for a visitor
+        _favorites = await Favorites.GetLookupForPackage(accessContext, _package.Id);
+
         // Tournament results: attached sources (header links) + precomputed per-question stats
         if (_package.Type == PackageType.Www)
         {
@@ -340,9 +332,7 @@ else
 
         // Sort tours by Number (ЩДК: warmup "0" first, shootout "П" last) or by OrderIndex (Своя гра),
         // blocks by OrderIndex, and questions by OrderIndex
-        _package.Tours = _package.Type == PackageType.Shvager
-            ? _package.Tours.OrderBy(t => t.OrderIndex).ToList()
-            : TourOrdering.OrderWww(_package.Tours);
+        _package.Tours = TourOrdering.ForDisplay(_package.Tours, _package.Type);
 
         foreach (var tour in _package.Tours)
         {

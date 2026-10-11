@@ -27,6 +27,14 @@
                 <Icon Name="group" Class="nav-icon" /> <span class="nav-text">Автори</span>
             </NavLink>
         </div>
+        @if (_isAuthenticated)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="favorites">
+                    <Icon Name="heart" Class="nav-icon" /> <span class="nav-text">Обране</span>
+                </NavLink>
+            </div>
+        }
         @if (_isEditor || _isAdmin)
         {
             <div class="nav-separator"></div>
@@ -66,6 +74,7 @@
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
+    private bool _isAuthenticated;
     private bool _isEditor;
     private bool _isAdmin;
 
@@ -74,6 +83,7 @@
         var user = HttpContext?.User;
         if (user?.Identity?.IsAuthenticated == true)
         {
+            _isAuthenticated = true;
             _isAdmin = user.IsInRole("Admin");
             _isEditor = user.IsInRole("Editor");
         }

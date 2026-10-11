@@ -67,6 +67,18 @@ public static partial class TestBrowser
         response.Headers.Location!.OriginalString.Should().Be("/", "the login must succeed");
     }
 
+    /// <summary>
+    /// The antiforgery token a signed-in page carries (the logout form in the layout), as browser JS
+    /// reads it for the <c>RequestVerificationToken</c> header.
+    /// </summary>
+    public static async Task<string> GetAntiforgeryToken(HttpClient browser, string url = "/")
+    {
+        var page = await browser.GetStringAsync(url);
+        var token = AntiforgeryField().Match(page).Groups[1].Value;
+        token.Should().NotBeEmpty($"{url} must carry an antiforgery token for the heart buttons");
+        return WebUtility.HtmlDecode(token);
+    }
+
     /// <summary>Server-rendered HTML of <paramref name="url"/> with HTML entities decoded (Blazor encodes dynamic Cyrillic text).</summary>
     public static async Task<string> GetDecodedHtml(HttpClient browser, string url) =>
         WebUtility.HtmlDecode(await browser.GetStringAsync(url));

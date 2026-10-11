@@ -406,6 +406,59 @@ namespace QuestionsHub.Blazor.Data.Migrations
                     b.ToTable("Blocks");
                 });
 
+            modelBuilder.Entity("QuestionsHub.Blazor.Domain.Favorite", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BlockId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PackageId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TourId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "BlockId", "UserId" }, "IX_Favorites_BlockId_UserId")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "PackageId", "UserId" }, "IX_Favorites_PackageId_UserId");
+
+                    b.HasIndex(new[] { "PackageId", "UserId" }, "IX_Favorites_PackageId_UserId_PackageOnly")
+                        .IsUnique()
+                        .HasFilter("\"QuestionId\" IS NULL AND \"TourId\" IS NULL AND \"BlockId\" IS NULL");
+
+                    b.HasIndex(new[] { "QuestionId", "UserId" }, "IX_Favorites_QuestionId_UserId")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "TourId", "UserId" }, "IX_Favorites_TourId_UserId")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "UserId", "CreatedAt" }, "IX_Favorites_UserId_CreatedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("Favorites", t =>
+                        {
+                            t.HasCheckConstraint("CK_Favorites_SingleTarget", "num_nonnulls(\"QuestionId\", \"TourId\", \"BlockId\") <= 1");
+                        });
+                });
+
             modelBuilder.Entity("QuestionsHub.Blazor.Domain.Package", b =>
                 {
                     b.Property<int>("Id")
@@ -1127,6 +1180,46 @@ namespace QuestionsHub.Blazor.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Tour");
+                });
+
+            modelBuilder.Entity("QuestionsHub.Blazor.Domain.Favorite", b =>
+                {
+                    b.HasOne("QuestionsHub.Blazor.Domain.Block", "Block")
+                        .WithMany()
+                        .HasForeignKey("BlockId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("QuestionsHub.Blazor.Domain.Package", "Package")
+                        .WithMany()
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("QuestionsHub.Blazor.Domain.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("QuestionsHub.Blazor.Domain.Tour", "Tour")
+                        .WithMany()
+                        .HasForeignKey("TourId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("QuestionsHub.Blazor.Domain.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Block");
+
+                    b.Navigation("Package");
+
+                    b.Navigation("Question");
+
+                    b.Navigation("Tour");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("QuestionsHub.Blazor.Domain.Package", b =>

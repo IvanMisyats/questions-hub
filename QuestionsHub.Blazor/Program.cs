@@ -12,6 +12,7 @@ using QuestionsHub.Blazor.Infrastructure.AgentApi;
 using QuestionsHub.Blazor.Infrastructure.Api;
 using QuestionsHub.Blazor.Infrastructure.Auth;
 using QuestionsHub.Blazor.Infrastructure.Email;
+using QuestionsHub.Blazor.Infrastructure.Favorites;
 using QuestionsHub.Blazor.Infrastructure.Import;
 using QuestionsHub.Blazor.Infrastructure.Media;
 using QuestionsHub.Blazor.Infrastructure.RateLimiting;
@@ -107,6 +108,7 @@ internal static class ServiceCollectionExtensions
         services.AddScoped<PackageManagementService>();
         services.AddScoped<AccessControlService>();
         services.AddScoped<PackageListService>();
+        services.AddScoped<FavoriteService>();
 
         return services;
     }
@@ -172,6 +174,13 @@ internal static class ServiceCollectionExtensions
             options.AccessDeniedPath = "/Account/AccessDenied";
             options.LogoutPath = "/Account/Logout";
         });
+
+        // Browser-only endpoints (heart buttons): the site cookie, never agent tokens or API keys
+        services.AddAuthorizationBuilder()
+            .AddPolicy(FavoritePolicies.SignedInBrowser, policy => policy
+                .AddAuthenticationSchemes(IdentityConstants.ApplicationScheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(CustomUserClaimsPrincipalFactory.EmailConfirmedClaim, bool.TrueString));
 
         return services;
     }

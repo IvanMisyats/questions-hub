@@ -67,9 +67,15 @@
     margin-bottom: 2rem;
 }
 
+.block-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
 .block-header {
     color: var(--app-text-secondary);
-    margin-bottom: 0.5rem;
 }
 
 /* Smooth scrolling */

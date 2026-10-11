@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Infrastructure.Auth;
 
 namespace QuestionsHub.Blazor.Controllers;
 
@@ -25,7 +26,7 @@ public static class ClaimsPrincipalExtensions
         /// </summary>
         public PackageAccessContext ToAccessContext()
         {
-            var emailConfirmedClaim = user.FindFirst("EmailConfirmed")?.Value;
+            var emailConfirmedClaim = user.FindFirst(CustomUserClaimsPrincipalFactory.EmailConfirmedClaim)?.Value;
             var hasVerifiedEmail = bool.TryParse(emailConfirmedClaim, out var confirmed) && confirmed;
 
             return new PackageAccessContext(

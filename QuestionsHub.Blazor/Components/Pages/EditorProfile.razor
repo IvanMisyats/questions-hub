@@ -7,6 +7,7 @@
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
 @inject AuthorService AuthorService
 @inject AccessControlService AccessControl
+@inject FavoriteService Favorites
 
 <PageTitle>@(_author?.FullName ?? "Редактора не знайдено")</PageTitle>
 
@@ -265,7 +266,7 @@
                 {
                     @foreach (var question in _questionsList)
                     {
-                        <QuestionCard Question="@question" ShowFullHeader="true" IsBlurred="TagService.IsAdultContent(question.Tour.Package.Tags)" />
+                        <QuestionCard Question="@question" ShowFullHeader="true" IsBlurred="TagService.IsAdultContent(question.Tour.Package.Tags)" Favorites="_favorites" />
                     }
                     @if (_hasMoreQuestions)
                     {
@@ -313,6 +314,7 @@
     private bool _showPackagesList = true;
     private bool _showQuestionsList = false;
     private List<Question> _questionsList = [];
+    private FavoriteLookup? _favorites;
     private const int QuestionsPerPage = 20;
     private int _displayedQuestionsCount = 0;
     private bool _isLoadingQuestions = false;
@@ -445,6 +447,13 @@
         {
             await LoadMoreQuestions();
         }
+        else
+        {
+            // Hearts toggled in the browser since the list was rendered: re-read their state,
+            // or the re-created cards would show the old one
+            _favorites = await Favorites.GetLookupForQuestions(
+                await AccessControl.GetPackageAccessContext(), _questionsList.Select(q => q.Id));
+        }
     }
 
     private async Task LoadMoreQuestions()
@@ -492,6 +501,7 @@
             _hasMoreQuestions = questions.Count == take;
 
             _questionsList.AddRange(questions);
+            _favorites = await Favorites.GetLookupForQuestions(accessContext, _questionsList.Select(q => q.Id));
             _displayedQuestionsCount += questions.Count;
         }
         finally

@@ -1,0 +1,239 @@
+@page "/favorites"
+@page "/favorites/{Page:int}"
+@attribute [StreamRendering]
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using QuestionsHub.Blazor.Utils
+@inject FavoriteService FavoritesService
+@inject AccessControlService AccessControl
+
+<PageTitle>Обране - База українських запитань</PageTitle>
+
+<div class="container-fluid mt-4">
+    <h1 class="h3 mb-3 d-flex align-items-center gap-2">
+        <Icon Name="heart-fill" Class="text-danger" Size="22" /> Обране
+    </h1>
+
+    @if (_notVerified)
+    {
+        <div class="alert alert-info">Обране доступне після підтвердження електронної пошти.</div>
+    }
+    else if (_page == null)
+    {
+        <p><em>Завантаження...</em></p>
+    }
+    else
+    {
+        <ul class="nav nav-tabs mb-3">
+            @foreach (var (kind, label) in Tabs)
+            {
+                <li class="nav-item">
+                    <a class="nav-link @(kind == _kind ? "active" : "")"
+                       aria-current="@(kind == _kind ? "page" : null)"
+                       href="@Url(kind, _type, _year)">
+                        @label <span class="badge rounded-pill text-bg-secondary ms-1">@_page.CountOf(kind)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+            <span class="small text-muted">Тип гри:</span>
+            <a class="btn btn-sm rounded-pill @(_type == null ? "btn-secondary" : "btn-outline-secondary")"
+               href="@Url(_kind, null, _year)">Усі</a>
+            <a class="btn btn-sm rounded-pill @(_type == PackageType.Www ? "btn-primary" : "btn-outline-primary")"
+               href="@Url(_kind, PackageType.Www, _year)">@PackageType.Www.DisplayName()</a>
+            <a class="btn btn-sm rounded-pill @(_type == PackageType.Shvager ? "btn-success" : "btn-outline-success")"
+               href="@Url(_kind, PackageType.Shvager, _year)">@PackageType.Shvager.DisplayName()</a>
+
+            @if (YearOptions.Count > 0)
+            {
+                <form method="get" action="/favorites" class="d-flex align-items-center gap-2 ms-sm-3">
+                    @if (_kind != FavoriteKind.Question)
+                    {
+                        <input type="hidden" name="tab" value="@TabSegment(_kind)" />
+                    }
+                    @if (_type != null)
+                    {
+                        <input type="hidden" name="type" value="@TypeSegment(_type.Value)" />
+                    }
+                    <label class="small text-muted" for="favorites-year">Рік:</label>
+                    <select id="favorites-year" name="year" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+                        <option value="">Усі роки</option>
+                        @foreach (var year in YearOptions)
+                        {
+                            <option value="@year" selected="@(year == _year)">@year</option>
+                        }
+                    </select>
+                    <noscript><button type="submit" class="btn btn-sm btn-outline-secondary">Показати</button></noscript>
+                </form>
+            }
+        </div>
+
+        @if (_page.Items.Count == 0)
+        {
+            <div class="alert alert-light border">
+                @if (_page.CountOf(_kind) > 0)
+                {
+                    <text>Цієї сторінки немає.</text> <a href="@Url(_kind, _type, _year)">На першу сторінку</a>
+                }
+                else if (_type != null || _year != null)
+                {
+                    <text>За цими фільтрами нічого немає.</text>
+                }
+                else
+                {
+                    <text>Тут з'являться запитання, тури, блоки й пакети, які ви позначите сердечком.</text>
+                }
+            </div>
+        }
+        else if (_kind == FavoriteKind.Question)
+        {
+            @foreach (var favorite in _page.Items)
+            {
+                var question = favorite.Question!;
+                <QuestionCard Question="question" ShowFullHeader="true" Favorites="_lookup"
+                              IsBlurred="TagService.IsAdultContent(question.Tour.Package.Tags)" />
+            }
+        }
+        else
+        {
+            <div class="list-group mb-3">
+                @foreach (var favorite in _page.Items)
+                {
+                    var (id, title, href, context) = Describe(favorite);
+                    <div class="list-group-item d-flex align-items-center gap-2">
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <a href="@href" class="fw-semibold text-decoration-none">@title</a>
+                            <div class="small text-muted d-flex flex-wrap align-items-center gap-1">
+                                <PackageTypeBadge Type="favorite.Package.Type" />
+                                @if (context != null)
+                                {
+                                    <a href="/package/@favorite.PackageId" class="text-reset">@context</a>
+                                }
+                                @{ var played = PlayedPeriodFormatter.Format(favorite.Package.PlayedFrom, favorite.Package.PlayedTo); }
+                                @if (!string.IsNullOrEmpty(played))
+                                {
+                                    <span>· @played</span>
+                                }
+                            </div>
+                        </div>
+                        <FavoriteButton Kind="_kind" Id="id" Lookup="_lookup" />
+                    </div>
+                }
+            </div>
+        }
+
+        <Pagination CurrentPage="CurrentPage" TotalPages="TotalPages" BaseUrl="@Url(_kind, _type, _year)" />
+    }
+</div>
+
+@code {
+    private static readonly (FavoriteKind Kind, string Label)[] Tabs =
+    [
+        (FavoriteKind.Question, "Запитання"),
+        (FavoriteKind.Tour, "Тури й теми"),
+        (FavoriteKind.Block, "Блоки"),
+        (FavoriteKind.Package, "Пакети")
+    ];
+
+    [Parameter]
+    public int Page { get; set; } = 1;
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeParam { get; set; }
+
+    /// <summary>A string, so a hand-edited value (<c>?year=abc</c>) is ignored instead of failing the page.</summary>
+    [SupplyParameterFromQuery(Name = "year")]
+    public string? YearParam { get; set; }
+
+    private FavoriteKind _kind;
+    private PackageType? _type;
+    private int? _year;
+    private FavoritePage? _page;
+    private FavoriteLookup _lookup = new();
+    private bool _notVerified;
+
+    private int CurrentPage => Math.Max(Page, 1);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)(_page?.CountOf(_kind) ?? 0) / FavoriteService.PageSize));
+
+    /// <summary>The years of the favorites, plus the selected one even when it no longer matches anything.</summary>
+    private IReadOnlyList<int> YearOptions => _year is { } year && _page != null && !_page.Years.Contains(year)
+        ? _page.Years.Append(year).OrderDescending().ToList()
+        : _page?.Years ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _kind = Tabs.FirstOrDefault(t => TabSegment(t.Kind) == TabParam).Kind;
+        _type = Enum.TryParse<PackageType>(TypeParam, ignoreCase: true, out var type) && Enum.IsDefined(type) ? type : null;
+        _year = int.TryParse(YearParam, out var year) && year is >= 1900 and <= 2100 ? year : null;
+
+        var access = await AccessControl.GetPackageAccessContext();
+        if (!access.HasVerifiedEmail)
+        {
+            _notVerified = true;
+            return;
+        }
+
+        _page = await FavoritesService.GetPage(access, _kind, new FavoriteFilter(_type, _year), CurrentPage);
+
+        // Everything listed is a favorite: hearts start filled and can be cleared in place
+        foreach (var favorite in _page.Items)
+            _lookup.Add(_kind, IdOf(favorite));
+    }
+
+    private int IdOf(Favorite favorite) => _kind switch
+    {
+        FavoriteKind.Question => favorite.QuestionId!.Value,
+        FavoriteKind.Tour => favorite.TourId!.Value,
+        FavoriteKind.Block => favorite.BlockId!.Value,
+        _ => favorite.PackageId
+    };
+
+    /// <summary>A tour, block or package row: its id, name, link and (for tours and blocks) the package it is in.</summary>
+    private (int Id, string Title, string Href, string? Context) Describe(Favorite favorite)
+    {
+        var package = favorite.Package;
+        switch (_kind)
+        {
+            case FavoriteKind.Tour:
+                var tour = favorite.Tour!;
+                return (tour.Id, PackageLabels.TourName(tour, package.Type), $"/package/{package.Id}#tour-{tour.Id}", package.Title);
+
+            case FavoriteKind.Block:
+                var block = favorite.Block!;
+                var name = block.GetDisplayName(_page!.BlockNumbers.GetValueOrDefault(block.Id));
+                return (block.Id, name, $"/package/{package.Id}#block-{block.Id}",
+                    $"{package.Title} · {PackageLabels.TourName(block.Tour, package.Type)}");
+
+            default:
+                return (package.Id, package.Title, $"/package/{package.Id}", null);
+        }
+    }
+
+    private static string Url(FavoriteKind kind, PackageType? type, int? year)
+    {
+        var query = new List<string>();
+        if (kind != FavoriteKind.Question)
+            query.Add($"tab={TabSegment(kind)}");
+        if (type != null)
+            query.Add($"type={TypeSegment(type.Value)}");
+        if (year != null)
+            query.Add($"year={year}");
+
+        return query.Count == 0 ? "/favorites" : "/favorites?" + string.Join("&", query);
+    }
+
+    private static string TabSegment(FavoriteKind kind) => kind switch
+    {
+        FavoriteKind.Tour => "tours",
+        FavoriteKind.Block => "blocks",
+        FavoriteKind.Package => "packages",
+        _ => "questions"
+    };
+
+    private static string TypeSegment(PackageType type) => type.ToString().ToLowerInvariant();
+}

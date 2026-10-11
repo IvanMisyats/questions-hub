@@ -238,7 +238,7 @@ API-key authenticated, CORS-restricted, rate-limited. See [API.md](API.md).
 | GET | `/api/v1/editors` | Authors list |
 | GET | `/api/v1/tags/popular` | Popular tags |
 
-Internal (cookie-auth) endpoints: `/api/packages/search` (home filters, incl. `type`), `/api/packages/{id}/export`, `/api/media/*`, `/api/Auth/*`.
+Internal (cookie-auth) endpoints: `/api/packages/search` (home filters, incl. `type`), `/api/packages/{id}/export`, `/api/media/*`, `/api/Auth/*`, `/api/favorites/*` (heart buttons).
 
 ### 16. Notifications
 
@@ -266,6 +266,24 @@ See [RESULTS.md](RESULTS.md) for the full design; plan in [Stats_plan.md](Stats_
 - Package header: primary «Результати» link (internal, preferred) + secondary external
   platform links.
 
+### 19. Favorites (Обране)
+
+See [FAVORITES_PLAN.md](FAVORITES_PLAN.md) for the design, indexes and performance notes.
+
+- **Heart button** on every question card (package page, question permalink, search results, author
+  profile), every tour/theme heading, every block header and the package title. Signed-in users with a
+  verified email toggle it instantly (outline ↔ filled red); it reverts with a short message if the server
+  refuses. Visitors see an outline heart that leads to login and back. Favorites are **private**.
+- **`/favorites`** («Обране» in the sidebar for signed-in users): tabs Запитання / Тури й теми / Блоки /
+  Пакети with counts; filters by game type and **played year** (the package's played period, else its
+  publication year); newest first, 20 per page. Questions are full-breadcrumb question cards with the answer
+  hidden; the other tabs are rows linking to the item's anchor on the package page.
+- Favoriting a tour/theme or a block does not add its questions. At most 5,000 favorites per user.
+- Deleting an item deletes its favorites; favorites of packages the user can no longer see are kept but
+  hidden. 18+ questions stay blurred.
+- Endpoints: `PUT`/`DELETE /api/favorites/{question|tour|block|package}/{id}` — site cookie + antiforgery
+  header only (agent tokens and API keys are rejected), per-user rate limit.
+
 ---
 
 ## UI/UX Features
@@ -285,11 +303,12 @@ See [RESULTS.md](RESULTS.md) for the full design; plan in [Stats_plan.md](Stats_
 ├── Components/
 │   ├── Account/           # Authentication pages
 │   ├── Layout/            # MainLayout, NavMenu, TopSearchBar, ThemeToggle
-│   ├── Pages/             # Home, PackageDetail, QuestionDetail, Search, Authors,
+│   ├── Pages/             # Home, PackageDetail, QuestionDetail, Search, Authors, Favorites,
 │   │   │                  # EditorProfile, Disclaimer, ManagePackages, ManagePackageDetail
 │   │   └── Admin/         # Editors, Users, ApiKeys
 │   ├── PackageTypeBadge.razor  # Game-type badge (ЩДК / Своя гра)
 │   ├── QuestionCard.razor / QuestionContent.razor
+│   ├── FavoriteButton.razor    # Heart toggle (wwwroot/favorites.js)
 │   ├── TourNavigation.razor    # Sidebar navigation (tours or themes)
 │   ├── PackageImportSection.razor / ImportWarnings.razor
 │   └── AuthorSelector.razor, TagSelector.razor, Icon.razor, MediaDisplay.razor
@@ -327,6 +346,7 @@ See [RESULTS.md](RESULTS.md) for the full design; plan in [Stats_plan.md](Stats_
 | Authentication, roles, media, tags, admin | ✅ shared | ✅ shared |
 | Tournament results & question stats | ✅ (Rating, OpenQuiz, links) | ❌ (postponed) |
 | Interactive play mode | ❌ | ❌ |
+| Favorites (hearts, `/favorites`) | ✅ | ✅ |
 | Comments/ratings | ❌ | ❌ |
 
 ---
@@ -335,6 +355,7 @@ See [RESULTS.md](RESULTS.md) for the full design; plan in [Stats_plan.md](Stats_
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Oct 11, 2026 | 2.2 | **Favorites**: private hearts on questions, tours/themes, blocks and packages; `/favorites` page with tabs, game-type and played-year filters |
 | Jul 6, 2026 | 2.1 | **Tournament results & question statistics** (ЩДК): results sources per package (Рейтинг МАК API, OpenQuiz, external links), per-question «Взяли: X/Y» stats, `/package/{id}/results` page with aggregated standings + difficulty SVG chart, management card with sync load/reload |
 | Jul 2, 2026 | 2.0 | **Dual game types**: Своя гра (Shvager) packages alongside Що?Де?Коли? — PackageType discriminator, themes (Tour.Title), question values, Форма field, typed home tabs, search type filter, split author stats, second importer, .qhub gameType, generic branding. Spec also caught up with shipped features: question permalinks, tags/18+, import pipeline, .qhub export, public API, admin API keys, dark theme |
 | Jan 18, 2026 | 1.9 | «Create next» inherits block; orphan questions visible and draggable to blocks |

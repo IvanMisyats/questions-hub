@@ -38,6 +38,10 @@ Security findings are **not** listed here: this repository is public, so open vu
    - Thumbnails.
    - A cleanup tool for orphaned media.
    - CDN.
+8. **Favorites follow-ups** (`FAVORITES_PLAN.md`)
+   - Read access through the agent API / MCP («list my favorites from 2026»).
+   - Export the filtered list (e.g. for a «best of the year» vote).
+   - Named collections, private notes per favorite.
 
 ## Fixes and technical debt
 

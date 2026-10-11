@@ -20,6 +20,7 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
     public DbSet<QuestionStat> QuestionStats => Set<QuestionStat>();
     public DbSet<PersonalAccessToken> PersonalAccessTokens => Set<PersonalAccessToken>();
     public DbSet<PackageChangeset> PackageChangesets => Set<PackageChangeset>();
+    public DbSet<Favorite> Favorites => Set<Favorite>();
 
     /// <summary>Unique index that makes changeset requests idempotent (violations mean "already applied").</summary>
     public const string PackageChangesetRequestIndex = "IX_PackageChangesets_TokenId_RequestId";
@@ -316,6 +317,43 @@ public class QuestionsHubDbContext(DbContextOptions<QuestionsHubDbContext> optio
                 .WithOne()
                 .HasForeignKey<QuestionStat>(s => s.QuestionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Favorite>(entity =>
+        {
+            entity.HasKey(f => f.Id);
+            entity.Property(f => f.UserId).IsRequired();
+
+            // Package and tour deletes rely on database cascades (the graph is not loaded), so every
+            // target is a real FK that cascades.
+            entity.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.Package).WithMany().HasForeignKey(f => f.PackageId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.Question).WithMany().HasForeignKey(f => f.QuestionId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.Tour).WithMany().HasForeignKey(f => f.TourId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.Block).WithMany().HasForeignKey(f => f.BlockId).OnDelete(DeleteBehavior.Cascade);
+
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_Favorites_SingleTarget",
+                "num_nonnulls(\"QuestionId\", \"TourId\", \"BlockId\") <= 1"));
+
+            // Each FK column leads an index: Postgres does not index FKs, and deleting a package with
+            // many questions would otherwise scan Favorites once per deleted row.
+            // NULLs are distinct in unique indexes, so the item indexes need no filter.
+            entity.HasIndex(f => new { f.QuestionId, f.UserId }, "IX_Favorites_QuestionId_UserId").IsUnique();
+            entity.HasIndex(f => new { f.TourId, f.UserId }, "IX_Favorites_TourId_UserId").IsUnique();
+            entity.HasIndex(f => new { f.BlockId, f.UserId }, "IX_Favorites_BlockId_UserId").IsUnique();
+
+            // Every heart on a package page in one lookup; also serves the package cascade
+            entity.HasIndex(f => new { f.PackageId, f.UserId }, "IX_Favorites_PackageId_UserId");
+
+            // One favorite per package itself
+            entity.HasIndex(f => new { f.PackageId, f.UserId }, "IX_Favorites_PackageId_UserId_PackageOnly")
+                .IsUnique()
+                .HasFilter("\"QuestionId\" IS NULL AND \"TourId\" IS NULL AND \"BlockId\" IS NULL");
+
+            // The favorites page, newest first; also serves the user cascade
+            entity.HasIndex(f => new { f.UserId, f.CreatedAt }, "IX_Favorites_UserId_CreatedAt")
+                .IsDescending(false, true);
         });
     }
 }

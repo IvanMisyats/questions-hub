@@ -17,4 +17,8 @@ public static class TourOrdering
             .ThenBy(t => t.Number, StringComparer.Ordinal)
             .ToList();
     }
+
+    /// <summary>Display order for either game type: Своя гра themes by position, ЩДК tours by <see cref="OrderWww"/>.</summary>
+    public static List<Tour> ForDisplay(IEnumerable<Tour> tours, PackageType type) =>
+        type == PackageType.Shvager ? tours.OrderBy(t => t.OrderIndex).ToList() : OrderWww(tours);
 }

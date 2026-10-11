@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 namespace QuestionsHub.Blazor.Infrastructure.RateLimiting;
 
 /// <summary>
@@ -20,12 +22,19 @@ public static class RateLimitBudgets
     public const string AppSearch = "app.search";
     public const string AgentRead = "agent.read";
     public const string AgentWrite = "agent.write";
+    public const string UserFavorites = "user.favorites";
 
     /// <summary>Claim carrying the API client id (set by <c>ApiKeyAuthenticationHandler</c>).</summary>
     public const string ApiClientIdClaim = Api.ApiKeyAuthenticationOptions.ClientIdClaim;
 
     /// <summary>Claim carrying the personal access token id.</summary>
     public const string TokenIdClaim = AgentApi.AgentClaims.TokenId;
+
+    /// <summary>
+    /// Claim carrying the user id. PAT principals carry it too, so a budget keyed on it belongs only on
+    /// cookie-only endpoints (otherwise agent and browser traffic of one user would share a partition).
+    /// </summary>
+    public const string UserIdClaim = ClaimTypes.NameIdentifier;
 
     /// <summary>All budgets with the claim that identifies the principal and the configured limit.</summary>
     public static IReadOnlyList<(string Name, string ClaimType, Func<RateLimitSettings, int> Limit)> All { get; } =
@@ -35,6 +44,7 @@ public static class RateLimitBudgets
         (AppSearch, ApiClientIdClaim, s => s.AppSearchPerMinute),
         (AgentRead, TokenIdClaim, s => s.AgentReadPerMinute),
         (AgentWrite, TokenIdClaim, s => s.AgentWritePerMinute),
+        (UserFavorites, UserIdClaim, s => s.UserFavoritesPerMinute),
     ];
 
     /// <summary>The claim type identifying the principal for <paramref name="budget"/>.</summary>

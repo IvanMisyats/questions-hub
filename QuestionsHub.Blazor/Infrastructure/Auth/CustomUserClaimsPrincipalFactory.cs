@@ -12,6 +12,9 @@ namespace QuestionsHub.Blazor.Infrastructure.Auth;
 /// </summary>
 public class CustomUserClaimsPrincipalFactory : UserClaimsPrincipalFactory<ApplicationUser, IdentityRole>
 {
+    /// <summary>Claim with the user's email-confirmed flag: <c>"True"</c> or <c>"False"</c> (<see cref="bool.ToString()"/>).</summary>
+    public const string EmailConfirmedClaim = "EmailConfirmed";
+
     public CustomUserClaimsPrincipalFactory(
         UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole> roleManager,
@@ -29,7 +32,7 @@ public class CustomUserClaimsPrincipalFactory : UserClaimsPrincipalFactory<Appli
         identity.AddClaim(new Claim("LastName", user.LastName ?? ""));
 
         // Add email confirmed claim for access control decisions without DB roundtrip
-        identity.AddClaim(new Claim("EmailConfirmed", user.EmailConfirmed.ToString()));
+        identity.AddClaim(new Claim(EmailConfirmedClaim, user.EmailConfirmed.ToString()));
 
         return identity;
     }

@@ -6,6 +6,7 @@
 @using QuestionsHub.Blazor.Infrastructure
 @inject QuestionsHubDbContext DbContext
 @inject AccessControlService AccessControl
+@inject FavoriteService Favorites
 
 <PageTitle>@PageTitleText - База українських запитань</PageTitle>
 
@@ -51,10 +52,13 @@ else
                                 <span class="text-muted">Запитання @_question.Number</span>
                             }
                         </div>
-                        <a href="/package/@_question.Tour.PackageId#question-@_question.Id"
-                           class="btn btn-sm btn-outline-primary">
-                            Перейти на пакет
-                        </a>
+                        <div class="d-flex align-items-center gap-1">
+                            <FavoriteButton Kind="FavoriteKind.Question" Id="_question.Id" Lookup="_favorites" />
+                            <a href="/package/@_question.Tour.PackageId#question-@_question.Id"
+                               class="btn btn-sm btn-outline-primary">
+                                Перейти на пакет
+                            </a>
+                        </div>
                     </div>
                     <div class="card-body">
                         @if (_isAdult)
@@ -85,6 +89,7 @@ else
     private bool _notFound;
     private bool _isAdult;
     private QuestionStat? _stat;
+    private FavoriteLookup? _favorites;
 
     private string PageTitleText => _question == null
         ? "Запитання"
@@ -119,6 +124,8 @@ else
 
         // Check if the package has 18+ content tag
         _isAdult = TagService.IsAdultContent(_question.Tour.Package.Tags);
+
+        _favorites = await Favorites.GetLookupForQuestions(accessContext, [_question.Id]);
 
         // Precomputed tournament statistics for the question (if any)
         _stat = await DbContext.QuestionStats

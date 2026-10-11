@@ -1,0 +1,44 @@
+@*
+    Heart button: adds/removes a favorite through wwwroot/favorites.js (no server roundtrip for the UI).
+    Renders nothing without a lookup, so a page opts in by passing one.
+*@
+
+@if (Lookup != null)
+{
+    var isFavorite = !Lookup.IsAnonymous && Lookup.Has(Kind, Id);
+    var title = Lookup.IsAnonymous
+        ? "Увійдіть, щоб додати до обраного"
+        : isFavorite ? "Прибрати з обраного" : "Додати до обраного";
+    var cssClass = string.Join(" ", new[] { "btn btn-sm fav-btn", isFavorite ? "is-fav" : null, Class }.Where(c => !string.IsNullOrEmpty(c)));
+
+    <button type="button"
+            class="@cssClass"
+            data-fav-kind="@Kind.ToSegment()"
+            data-fav-id="@Id"
+            data-fav-anon="@(Lookup.IsAnonymous ? "true" : null)"
+            aria-pressed="@(isFavorite ? "true" : "false")"
+            aria-label="@title"
+            title="@title"
+            onclick="toggleFavorite(this)">
+        <Icon Name="@(isFavorite ? "heart-fill" : "heart")" Class="fav-icon" />
+    </button>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public FavoriteKind Kind { get; set; }
+
+    [Parameter, EditorRequired]
+    public int Id { get; set; }
+
+    /// <summary>
+    /// The viewer's favorites on this page. Null renders nothing (e.g. a user without a verified email);
+    /// <see cref="FavoriteLookup.Anonymous"/> renders a heart that leads to the login page.
+    /// </summary>
+    [Parameter]
+    public FavoriteLookup? Lookup { get; set; }
+
+    /// <summary>Extra CSS classes for the button.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+}

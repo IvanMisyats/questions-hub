@@ -36,6 +36,29 @@ public record PackageAccessContext(
             (p.AccessLevel == PackageAccessLevel.RegisteredOnly && hasVerifiedEmail) ||
             (p.AccessLevel == PackageAccessLevel.EditorsOnly && isEditor);
     }
+
+    /// <summary>
+    /// SQL-translatable version of <see cref="CanViewPackage"/>: access level plus status
+    /// (drafts are visible to their owner only).
+    /// </summary>
+    public Expression<Func<Package, bool>> GetViewFilter()
+    {
+        if (IsAdmin)
+            return p => true;
+
+        // Same owner rule as CanViewPackage: an empty id owns nothing
+        var userId = string.IsNullOrEmpty(UserId) ? null : UserId;
+        var hasVerifiedEmail = HasVerifiedEmail;
+        var isEditor = IsEditor;
+
+        return p =>
+            (userId != null && p.OwnerId == userId) ||
+            (p.Status != PackageStatus.Draft &&
+             (p.AccessLevel == PackageAccessLevel.All ||
+              (p.AccessLevel == PackageAccessLevel.RegisteredOnly && hasVerifiedEmail) ||
+              (p.AccessLevel == PackageAccessLevel.EditorsOnly && isEditor)));
+    }
+
     /// <summary>
     /// Checks if the user can access the given package based on its access level.
     /// Does not consider package status - use CanViewPackage for full visibility check.
