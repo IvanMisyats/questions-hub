@@ -8,7 +8,7 @@ Online database of Ukrainian intellectual-game questions: "Що?Де?Коли?" 
 dotnet restore && dotnet build --no-restore && dotnet test --no-build
 # Integration tests (QuestionsHub.IntegrationTests) need Docker (Testcontainers PostgreSQL); they skip locally without it, never on CI
 # Local dev: .\start-dev-db.ps1 then run from IDE (https://localhost:5001)
-# Migrations: cd QuestionsHub.Blazor && dotnet ef migrations add <Name> --output-dir Data/Migrations
+# Migrations: cd QuestionsHub.Blazor && dotnet ef migrations add <Name> --output-dir Data/Migrations  (then strip the BOM EF writes into the two new migration files)
 ```
 
 ## Tech Stack
@@ -38,6 +38,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 - Nullable reference types for optional fields
 - **Prefer client-side JS over Blazor server roundtrips** for UI-only interactions
 - Icons: `<Icon Name="check" Class="text-success" />` (SVG sprite in `wwwroot/icons.svg`)
+- **Browser JS calling a cookie-auth JSON endpoint:** follow the favorites pattern (`docs/FAVORITES_PLAN.md` → "Authentication & CSRF": cookie-only policy, `[ValidateAntiForgeryToken]`, token from the layout's logout form sent as the `RequestVerificationToken` header)
 - **Never hard-code the developer's real OS username in files** (paths, examples, comments) — use `/tmp`, an env var, or a placeholder like `<user>`
 
 ## Git Workflow

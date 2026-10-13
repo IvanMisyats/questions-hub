@@ -111,6 +111,67 @@ Useful when hand-seeding: many-to-many join tables use EF conventional names/col
   file — `grep '<strong>2</strong>'` misses `<strong b-xe4fulzb96>2</strong>`; use
   `<strong[^>]*>` patterns.
 
+## Signing in from curl (dev)
+
+Captured 2026-10-11 (favorites end-to-end check).
+
+- **The dev admin's password does not match** `AdminCredentials` in `appsettings.Development.json`:
+  the admin row was seeded earlier with other credentials, so the login returns `error=invalid`.
+  Don't fall back to the `.env` admin credentials, which may be real ones. **Register a throwaway user
+  instead:** in Development with no `Email:ApiKey`, `POST /api/Auth/register` auto-confirms the user
+  and signs them in.
+  ```bash
+  tok() { grep -o 'name="__RequestVerificationToken" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"$//'; }
+  RT=$(curl -s -c jar -b jar http://localhost:5018/Account/Register | tok)   # HTML-unescape it if it contains &amp;
+  curl -s -o /dev/null -c jar -b jar -w '%{http_code} %{redirect_url}\n' \
+    --data-urlencode firstName=Тест --data-urlencode lastName=Тест --data-urlencode "email=$EMAIL" \
+    --data-urlencode "password=$PASS" --data-urlencode "confirmPassword=$PASS" \
+    --data-urlencode "__RequestVerificationToken=$RT" http://localhost:5018/api/Auth/register   # 302 → / = signed in
+  ```
+  Delete the user afterwards (its rows cascade):
+  `DELETE FROM "AspNetUsers" WHERE "Email" LIKE '<prefix>%';`
+- **The auth cookie is `Secure`**, so over `http://localhost:5018` curl stores it in the jar but never
+  sends it back. Build the header yourself:
+  `C=$(awk '!/^#/ || /^#HttpOnly_/ {sub(/^#HttpOnly_/,""); if (NF>=7) printf "%s=%s; ", $6, $7}' jar)`,
+  then `curl -H "Cookie: $C" …`.
+- **JSON endpoints called by page JS** (e.g. `/api/favorites`) need the antiforgery token as the
+  `RequestVerificationToken` header. Scrape it from any page you load while signed in; the logout form
+  in the layout carries one.
+- Claude-in-Chrome cannot open `localhost` on this machine ("blocked by your organization's policy"),
+  so curl is the way to check the UI headlessly.
+
+## Integration tests
+
+- They **skip silently** (they don't fail) when Docker isn't running. Docker Desktop is often stopped on
+  this PC: start it, and wait until `docker info` answers before trusting a green run. The dev DB
+  container `questions-hub-db` comes up with it.
+- **Services that call `AccessControlService`'s parameterless methods** (e.g.
+  `PackageService.DeletePackage` → `CanDeletePackage`) throw outside a Razor component ("Do not call
+  GetAuthenticationStateAsync outside of the DI scope for a Razor component"). In a test, reproduce
+  their EF operation directly (e.g. load tours + questions tracked, `Remove`, `SaveChanges`), or call
+  services that take a `PackageAccessContext` / `ClaimsPrincipal`.
+- Cookie-auth HTTP tests: `TestBrowser.Login` + `TestBrowser.GetAntiforgeryToken(browser, url)`.
+
+## Realistic query plans on the dev DB
+
+To check that a query or cascade stays index-driven at volume, bulk-insert rows inside a transaction
+that is rolled back. The dev DB is left unchanged:
+
+```bash
+docker exec -i questions-hub-db psql -U questionshub -d questionshub <<'EOF'
+BEGIN;
+INSERT INTO "Favorites" ("UserId","PackageId","QuestionId","CreatedAt")
+SELECT u."Id", t."PackageId", q."Id", now()
+FROM "AspNetUsers" u CROSS JOIN "Questions" q JOIN "Tours" t ON t."Id" = q."TourId";
+ANALYZE "Favorites";
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY ON) DELETE FROM "Packages" WHERE "Id" = 48;  -- shows per-FK cascade trigger times
+ROLLBACK;
+EOF
+```
+
+With only a handful of rows Postgres picks sequential scans whatever the indexes, so tiny tables prove
+nothing about indexes.
+
 ## Import job artifacts
 
 Uploaded packages leave replayable artifacts under `uploads/jobs/{jobId}/` at the **repo
