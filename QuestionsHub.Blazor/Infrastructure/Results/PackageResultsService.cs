@@ -35,6 +35,11 @@ public class PackageResultsService(
     {
         var parsed = ResultsUrlParser.Detect(url);
         var platform = parsed.Platform;
+        // Column limits (Url 2000, ExternalId 50): reject here rather than fail on save
+        if (parsed.Url.Length > 2000 || parsed.ExternalId?.Length > 50)
+        {
+            throw new ResultsLoadException("Посилання задовге.");
+        }
 
         await using var db = await contextFactory.CreateDbContextAsync();
         var package = await db.Packages.AsNoTracking().FirstOrDefaultAsync(p => p.Id == packageId)
@@ -107,7 +112,7 @@ public class PackageResultsService(
             source.LoadError = Truncate(ex.Message, 1000);
             source.LoadErrorDetail = Truncate(ex.InnerException?.ToString(), 8000);
             source.ResultsAvailableAfter = ex.EmbargoedUntil;
-            await db.SaveChangesAsync(cancellationToken);
+            await SaveLoadFailure(db, cancellationToken);
             return source;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -118,7 +123,7 @@ public class PackageResultsService(
             source.LoadError = "Несподівана помилка під час завантаження результатів.";
             source.LoadErrorDetail = Truncate(ex.ToString(), 8000);
             source.ResultsAvailableAfter = null;
-            await db.SaveChangesAsync(cancellationToken);
+            await SaveLoadFailure(db, cancellationToken);
             return source;
         }
 
@@ -126,6 +131,13 @@ public class PackageResultsService(
         // restructure the package (and a changeset holding the lock sees these results once it's done).
         // The slow platform fetch above stays outside the lock.
         using var layoutLock = await PackageWriteLocks.Acquire(source.PackageId, cancellationToken);
+
+        // Deletes take the same lock, so a source deleted during the fetch is gone for good: report it
+        // instead of failing on the missing row below.
+        if (!await db.ResultsSources.AnyAsync(s => s.Id == sourceId, cancellationToken))
+        {
+            throw new ResultsLoadException("Джерело результатів не знайдено.");
+        }
 
         var package = await db.Packages
             .AsNoTracking()
@@ -227,6 +239,10 @@ public class PackageResultsService(
             return;
         }
 
+        // Serialized with the locked part of LoadSource, which writes this source's teams and
+        // re-aggregates the same package stats.
+        using var layoutLock = await PackageWriteLocks.Acquire(packageId.Value);
+
         // Wrapped in an execution strategy because EnableRetryOnFailure forbids a bare
         // user-initiated transaction; retry-safe via a clean change tracker per attempt.
         var strategy = db.Database.CreateExecutionStrategy();
@@ -303,6 +319,22 @@ public class PackageResultsService(
                 CorrectCount = aggregate.Correct,
                 TotalTeams = aggregate.Total
             });
+        }
+    }
+
+    /// <summary>
+    /// Saves a failed load's error on the source. The fetch ran outside the package lock, so the source may
+    /// have been deleted meanwhile: report that instead of letting the 0-row update escape.
+    /// </summary>
+    private static async Task SaveLoadFailure(QuestionsHubDbContext db, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ResultsLoadException("Джерело результатів не знайдено.");
         }
     }
 

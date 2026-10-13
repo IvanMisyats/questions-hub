@@ -61,9 +61,49 @@ public sealed class AgentMcpTests(PostgresFixture database)
 
         tools.Select(t => t.Name).Should().BeEquivalentTo(
             "whoami", "list_packages", "get_package", "search_authors", "search_tags",
-            "apply_changeset", "list_changesets", "get_changeset", "get_api_reference");
+            "apply_changeset", "list_changesets", "get_changeset", "get_api_reference",
+            "list_results_sources", "attach_results_source", "reload_results_source", "delete_results_source");
         tools.Single(t => t.Name == "apply_changeset").ProtocolTool.Annotations!.DestructiveHint.Should().BeTrue();
         tools.Single(t => t.Name == "get_package").ProtocolTool.Annotations!.ReadOnlyHint.Should().BeTrue();
+    }
+
+    [SkippableFact]
+    public async Task ResultsTools_AttachListReloadDelete_AndRejectReadOnlyWrites()
+    {
+        await using var factory = CreateFactory();
+        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        var package = await TestData.CreatePackage(factory, editor.Id);
+        await using var client = await Connect(factory, await TestData.CreateToken(factory, editor.Id));
+        var attached = await Call(client, "attach_results_source", new()
+        {
+            ["packageId"] = package.Id, ["url"] = "https://example.com/results"
+        });
+        attached.IsError.Should().BeFalse(attached.Text);
+        attached.Json!["platform"]!.GetValue<string>().Should().Be("other");
+        var sourceId = attached.Json["id"]!.GetValue<int>();
+        var list = await Call(client, "list_results_sources", new() { ["packageId"] = package.Id });
+        list.Json!["sources"]!.AsArray().Should().ContainSingle();
+        var reload = await Call(client, "reload_results_source", new() { ["packageId"] = package.Id, ["sourceId"] = sourceId });
+        reload.IsError.Should().BeTrue();
+        reload.Text.Should().Contain("не завантажується автоматично");
+
+        await using var readOnly = await Connect(factory, await TestData.CreateToken(factory, editor.Id, TokenScope.Read));
+        foreach (var tool in new[] { "attach_results_source", "reload_results_source", "delete_results_source" })
+        {
+            var denied = await Call(readOnly, tool, new()
+            {
+                ["packageId"] = package.Id, ["sourceId"] = sourceId, ["url"] = "https://example.com/other"
+            });
+            denied.IsError.Should().BeTrue();
+            denied.Text.Should().Contain("read-only token");
+        }
+        var deleted = await client.CallToolAsync("delete_results_source", new Dictionary<string, object?>
+        {
+            ["packageId"] = package.Id, ["sourceId"] = sourceId
+        });
+        deleted.IsError.Should().NotBe(true);
+        list = await Call(client, "list_results_sources", new() { ["packageId"] = package.Id });
+        list.Json!["sources"]!.AsArray().Should().BeEmpty();
     }
 
     [SkippableFact]

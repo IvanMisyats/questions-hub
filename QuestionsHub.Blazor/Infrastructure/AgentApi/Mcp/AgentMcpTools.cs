@@ -23,10 +23,53 @@ namespace QuestionsHub.Blazor.Infrastructure.AgentApi.Mcp;
 public sealed class AgentMcpTools(
     IHttpContextAccessor httpContextAccessor,
     AgentPackageReader reader,
-    PackageChangesetService changesets)
+    PackageChangesetService changesets,
+    AgentResultsService results)
 {
     private ClaimsPrincipal Agent =>
         httpContextAccessor.HttpContext?.User ?? throw new McpException("No request context.");
+
+    private const string ResultsDescription = "Links may be rating.chgk.info tournaments (https://rating.chgk.info/tournament/{id}) or OpenQuiz results/audience links. Loading is synchronous. Per-question statistics map positionally; differing question counts degrade to standings-only with a warning. Attaching results sets hasResults and blocks structural changesets. Failed loads remain attached with loadError (and resultsAvailableAfter for an embargo).";
+
+    [McpServerTool(Name = "list_results_sources", ReadOnly = true, Idempotent = true, UseStructuredContent = true)]
+    [Description("Lists the package's tournament results sources, oldest first. " + ResultsDescription)]
+    public Task<ManageResultsSourcesResponse> ListResultsSources(int packageId, CancellationToken ct = default) =>
+        ResultsCall(() => results.List(Agent, packageId, ct));
+
+    [McpServerTool(Name = "attach_results_source", Destructive = false, Idempotent = false, UseStructuredContent = true)]
+    [Description("Attaches a results URL and immediately loads Rating/OpenQuiz results. Requires readWrite scope. " + ResultsDescription)]
+    public Task<ManageResultsSourceDto> AttachResultsSource(int packageId, string url, CancellationToken ct = default) =>
+        ResultsCall(() => results.Attach(Agent, packageId, url, ct), write: true);
+
+    [McpServerTool(Name = "reload_results_source", Destructive = true, Idempotent = false, UseStructuredContent = true)]
+    [Description("Refetches and replaces a source's results synchronously; Other links cannot be loaded. Requires readWrite scope. " + ResultsDescription)]
+    public Task<ManageResultsSourceDto> ReloadResultsSource(int packageId, int sourceId, CancellationToken ct = default) =>
+        ResultsCall(() => results.Reload(Agent, packageId, sourceId, ct), write: true);
+
+    [McpServerTool(Name = "delete_results_source", Destructive = true, Idempotent = true)]
+    [Description("Deletes a results source and recomputes package statistics. Requires readWrite scope. Removing all sources unblocks structural changesets.")]
+    public Task<string> DeleteResultsSource(int packageId, int sourceId, CancellationToken ct = default) =>
+        ResultsCall(async () =>
+        {
+            await results.Delete(Agent, packageId, sourceId, ct);
+            return "Results source deleted.";
+        }, write: true);
+
+    private async Task<T> ResultsCall<T>(Func<Task<T>> action, bool write = false)
+    {
+        if (write && Agent.FindFirst(AgentClaims.Scope)?.Value != nameof(TokenScope.ReadWrite))
+            throw new McpException("The token's scope does not allow changes (read-only token).");
+        try
+        {
+            return await action();
+        }
+        catch (AgentResultsException ex)
+        {
+            if (ex.StatusCode == StatusCodes.Status429TooManyRequests && httpContextAccessor.HttpContext?.Response is { HasStarted: false } response)
+                response.Headers.RetryAfter = "60";
+            throw new McpException(ex.Message);
+        }
+    }
 
     /// <summary>Every operation with its properties; a test keeps it in step with the parser's operation list.</summary>
     internal const string ApplyChangesetDescription = """

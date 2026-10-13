@@ -44,6 +44,10 @@ duplicates and non-WWW packages. `LoadSource` (synchronous, triggered from the m
    (`LoadedAt`, `TeamsCount`, `StatsMapped`, `WarningsJson`, `RawPayload`, `DisplayUrl`),
    re-aggregates `QuestionStats`.
 
+`DeleteSource` takes the same per-package lock (`PackageWriteLocks`) as the mapping/write part of
+`LoadSource`, and `LoadSource` re-checks that its source still exists once it holds the lock: a source
+deleted during the platform fetch ends in «Джерело результатів не знайдено», not in a crash.
+
 Any failure before the commit leaves previously loaded data intact; the error lands in
 `ResultsSource.LoadError` (embargo date in `ResultsAvailableAfter`). The raw platform JSON is
 persisted (`RawPayload`, jsonb) so results can be re-parsed after code changes without
@@ -96,6 +100,8 @@ Positional, in two independent groups:
   though the totals match (guards against silently shifted numbering).
 
 ## UI surfaces
+
+- **Agent API** (`/api/v1/manage/packages/{id}/results` and MCP): the same attach, synchronous load/reload, list and delete operations through `PackageResultsService`; see [API.md](API.md#tournament-results).
 
 - **Home page** (`Home.razor` + `home-filters.js`): each package card shows a stats bar-chart icon
   (`Icon Name="bar-chart"`, tooltip «Є статистика») when the package has at least one loaded source

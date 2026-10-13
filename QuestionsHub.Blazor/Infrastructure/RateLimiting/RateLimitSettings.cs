@@ -30,7 +30,7 @@ public class RateLimitSettings
     /// <summary>Agent reads (every manage/MCP request), per personal access token.</summary>
     public int AgentReadPerMinute { get; set; } = 120;
 
-    /// <summary>Agent changesets (apply and dry-run), per personal access token.</summary>
+    /// <summary>Agent changesets (apply and dry-run) and results writes, per personal access token.</summary>
     public int AgentWritePerMinute { get; set; } = 20;
 
     /// <summary>Adding/removing favorites (<c>/api/favorites</c>), per signed-in user.</summary>

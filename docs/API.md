@@ -342,7 +342,7 @@ Authorization: Bearer qh_pat_00112233445566778899aabbccddeeff
 | Nginx | Per IP | 150 req/min on `/api/v1/manage/` and `/mcp` (burst 50) |
 | ASP.NET, before authentication | Per IP | 150 req/min |
 | ASP.NET, after authentication | Per token | 120 requests/min (all manage requests) |
-| Changeset service | Per token | 20 changesets/min (applies **and** dry runs) |
+| Shared write budget | Per token | 20 calls/min across changesets (applies **and** dry runs) and results attach/reload/delete, REST and MCP combined |
 
 `429` responses carry `Retry-After` (seconds); all errors, including the proxy's own 429/413, are JSON.
 
@@ -358,6 +358,10 @@ Authorization: Bearer qh_pat_00112233445566778899aabbccddeeff
 | `POST /api/v1/manage/packages/{id}/changesets` | readWrite | Apply or preview a changeset |
 | `GET /api/v1/manage/packages/{id}/changesets?page=&pageSize=` | read | Applied changesets, newest first (see [History](#history)) |
 | `GET /api/v1/manage/packages/{id}/changesets/{changesetId}` | read | One changeset: operations, diff, warnings |
+| `GET /api/v1/manage/packages/{id}/results` | read | Results sources, oldest first |
+| `POST /api/v1/manage/packages/{id}/results` | readWrite | Attach a source and synchronously load supported platforms |
+| `POST /api/v1/manage/packages/{id}/results/{sourceId}/reload` | readWrite | Synchronously reload a source |
+| `DELETE /api/v1/manage/packages/{id}/results/{sourceId}` | readWrite | Delete a source and recompute statistics |
 
 Enum values are camelCase strings (`www`/`shvager`, `draft`, `global`/`perTour`/`manual`, `regular`/`warmup`/`shootout`, `read`/`readWrite`).
 
@@ -375,6 +379,40 @@ Like the public detail, plus everything needed to address changes: ids, `orderIn
 - **Text.** Content is Ukrainian; keep the wording exactly as given (the API normalizes apostrophes, dashes and whitespace itself). Stress marks (a combining acute accent, U+0301, as in «о́піки») are part of the text: kept exactly as sent, never added or removed by the API.
 - **Editing a field.** `set` replaces a field's whole value. To add to a field — another accepted answer, a sentence in a comment — send the current value with the addition. `acceptedAnswers` (Залік) and `rejectedAnswers` (Незалік) are free text: variants separated by `; `, ending with a period. «точна відповідь.» in Залік means that only the exact answer is accepted, so it no longer applies once another variant is accepted.
 - **Своя гра and `numberingMode`.** The returned `numberingMode` does not control Своя гра numbering and `setNumberingMode` is rejected: a theme's values follow the positions of its questions, except non-numeric values (such as `10-30`), which stay as they are.
+
+### Tournament results
+
+The Agent API exposes the same results operations as the package editor's «Результати» card (ЩДК packages only).
+Attach with `POST /api/v1/manage/packages/{id}/results` and body
+`{"url":"https://rating.chgk.info/tournament/13097"}`. Rating tournament links and OpenQuiz
+results/audience links load **synchronously** before the response. Other HTTP(S) links attach as display-only sources.
+Attach returns **201**, reload returns **200**, both with a source DTO:
+
+```json
+{
+  "id": 42, "platform": "rating",
+  "url": "https://rating.chgk.info/tournament/13097", "displayUrl": "https://rating.chgk.info/tournament/13097",
+  "title": "Назва турніру на платформі", "loadedAt": "2026-10-13T18:40:12Z", "teamsCount": 57, "statsMapped": true,
+  "warnings": [], "loadError": null, "resultsAvailableAfter": null
+}
+```
+
+`platform` is `rating`, `openQuiz`, or `other`; dates are UTC. `GET` returns **200** with
+`{"sources":[…]}` in attachment order (oldest first); `warnings` is always a string array.
+Delete returns **204**. Raw platform payloads and technical exception details are never returned.
+For an OpenQuiz audience link the listen token in `url` is masked (`token=***`): it is a credential for open-quiz.com. Once loaded, `displayUrl` holds the public results link.
+
+A failed load is **not an HTTP error**: the source remains attached, `loadError` explains the failure,
+and `resultsAvailableAfter` carries an embargo date when applicable. Reload failures preserve previously loaded data.
+Invalid/unsupported URLs, duplicate sources, non-ЩДК packages and reloading `other` return **422**
+`{"error":"…"}` with the results service's message. Missing packages, packages outside the user's rights
+or token allowlist, and sources outside the addressed package return **404** `{"error":"…"}`.
+Read-only writes return **403**; exhausted write budgets return **429** with `Retry-After: 60`.
+
+Per-question statistics map **positionally** in regular and shoot-out groups. When question counts
+differ, the affected group degrades to standings-only with a warning. Review `warnings` and `statsMapped`.
+Any attached source (including a failed load or display-only link) makes `hasResults` true and blocks
+structural changesets; field edits remain allowed. Deleting all sources removes that restriction.
 
 ### Changesets
 
@@ -528,6 +566,10 @@ claude mcp add --transport http questions-hub https://questions.com.ua/mcp \
 | `search_authors` (`search`), `search_tags` (`search`) | `GET /authors`, `GET /tags` |
 | `apply_changeset` (`packageId`, `operations`, `dryRun` = **true** by default, `requestId`?, `expectedVersion`?, `summary`?) | `POST /packages/{id}/changesets` |
 | `list_changesets` (`packageId`, `page`?, `pageSize`?), `get_changeset` (`packageId`, `changesetId`) | history endpoints |
+| `list_results_sources` (`packageId`) | `GET /packages/{id}/results` |
+| `attach_results_source` (`packageId`, `url`) | `POST /packages/{id}/results` (readWrite) |
+| `reload_results_source` (`packageId`, `sourceId`) | `POST /packages/{id}/results/{sourceId}/reload` (readWrite) |
+| `delete_results_source` (`packageId`, `sourceId`) | `DELETE /packages/{id}/results/{sourceId}` (readWrite) |
 | `get_api_reference` | this section of the documentation |
 
 Unlike REST, `apply_changeset` previews unless `dryRun: false` is passed. Results are returned both as JSON text and as structured content. Failures are tool errors carrying the REST error message (operation errors contain `Operation N: …`); `apply_changeset` with a read-only token is a tool error. Bodies are capped at 512 KB like the REST changeset endpoint.

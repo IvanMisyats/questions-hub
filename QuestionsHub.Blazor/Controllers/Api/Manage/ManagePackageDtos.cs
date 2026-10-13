@@ -87,3 +87,25 @@ public record ManageQuestionDto(
     string? CommentAttachmentUrl,
     string? Source,
     IReadOnlyList<ManageAuthorDto> Authors);
+
+/// <summary>
+/// A tournament-results source of a package (<c>/api/v1/manage/packages/{id}/results</c>). A failed load
+/// is reported in <see cref="LoadError"/> (and <see cref="ResultsAvailableAfter"/> for an embargo), not as an
+/// HTTP error. Raw platform payloads and technical error details are never exposed.
+/// </summary>
+/// <param name="Platform"><c>rating</c>, <c>openQuiz</c> or <c>other</c> (display-only link).</param>
+/// <param name="StatsMapped">Per-question statistics were mapped; false means standings only (see <see cref="Warnings"/>).</param>
+public record ManageResultsSourceDto(
+    int Id,
+    string Platform,
+    string Url,
+    string? DisplayUrl,
+    string? Title,
+    DateTime? LoadedAt,
+    int? TeamsCount,
+    bool StatsMapped,
+    IReadOnlyList<string> Warnings,
+    string? LoadError,
+    DateTime? ResultsAvailableAfter);
+
+public record ManageResultsSourcesResponse(IReadOnlyList<ManageResultsSourceDto> Sources);
