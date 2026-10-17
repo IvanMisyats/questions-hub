@@ -37,4 +37,6 @@ To check that `/mcp` still describes itself well enough, run a **fresh agent tha
   - `PackageIds` = `{id}`
   - `ExpiresAt` = tomorrow
 - **The task.** Give the agent only the endpoint, the token (the **real** value — a placeholder wastes the run), the rule "no repo, no docs, no internet", and an editor-style correction list in Ukrainian. Ask for its call path and a critical assessment of the self-description.
+- **Approval first.** In auto mode the permission classifier denies a subagent's use of a token that the parent agent handed it ("credential exploration": it is not the user's approval). Have Ivan approve the run, token included, in his own message before launching, or the run ends blocked (2026-10-16).
+- **Uploads from the agent's shell** (`POST /imports`): use Windows' `/c/Windows/System32/curl.exe` — Git Bash's curl cannot open a file whose path has Cyrillic letters (exit 26). The Cyrillic file name reaches the site intact.
 - **Cleanup.** Save the package (`GET`) before the run, restore it afterwards through a changeset, delete authors the run created, and revoke the token.

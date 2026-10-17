@@ -146,6 +146,42 @@ Things that cost time when doing this:
   output. Push them through the result object instead (e.g. `ctx.Result.Warnings.Add($"...")`)
   and strip them afterwards.
 
+## Extractor changes: replay real DOCX files, old build against new
+
+The corpus replay above starts from `extracted.json`, so it never exercises `DocxExtractor`. For a
+change to extraction (archive limits, image handling, numbering), compare the whole DOCX → parse path
+of two builds over a folder of real packages (Ivan's OneDrive `www` folder holds ~280 DOCX). Used in
+2026-10 for the import hardening: 0 differences confirmed the limits reject no real package, and a later
+run caught warnings whose asset names a new label cap had cut.
+
+1. **Old build:** `git worktree add --detach <dir> main` (or the commit before the change).
+2. **Two console projects**, identical but for the `ProjectReference` (old worktree / current repo):
+   `Microsoft.NET.Sdk`, `net10.0`, `<FrameworkReference Include="Microsoft.AspNetCore.App" />`,
+   `<ProjectReference Include="<repo>/QuestionsHub.Blazor/QuestionsHub.Blazor.csproj" />`. Build with
+   `-c Release` if the app is running.
+3. **The program** — one normalized JSON line per file. Asset file names are random, so replace each by a
+   hash of its content (otherwise every image is a "difference"):
+   ```csharp
+   var files = Directory.EnumerateFiles(root, "*.docx", SearchOption.AllDirectories)
+       .Where(f => !Path.GetFileName(f).StartsWith("~$")).Order(StringComparer.Ordinal);
+   foreach (var file in files)
+   {
+       var assets = Path.Combine(work, Guid.NewGuid().ToString("N"));
+       var x = await new DocxExtractor(NullLogger<DocxExtractor>.Instance).Extract(file, assets, default);
+       var hashes = Directory.Exists(assets)
+           ? Directory.GetFiles(assets).ToDictionary(f => Path.GetFileName(f), f => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(f)))[..16])
+           : new Dictionary<string, string>();
+       var www = new PackageParser(NullLogger<PackageParser>.Instance).Parse(x.Blocks, x.Assets);
+       var shvager = new ShvagerParser(NullLogger<ShvagerParser>.Instance).Parse(x.Blocks, x.Assets);
+       var line = JsonSerializer.Serialize(new { file, blocks = x.Blocks.Select(b => b.Text), www, shvager, x.Warnings });
+       foreach (var (name, hash) in hashes) line = line.Replace(name!, hash);
+       writer.WriteLine(line);   // catch exceptions per file and write {file, error} instead
+   }
+   ```
+4. **Compare** the two files line by line in Python, **dropping null-valued keys first**: a DTO that gained a
+   property (e.g. `TourDto.Comment`) makes every object unequal while no value changed, and a leaf-by-leaf
+   diff that treats a missing key as `None` then reports no difference at all.
+
 ## Parser structure
 
 `PackageParser` is a **`partial class`** under `QuestionsHub.Blazor/Infrastructure/Import/`,

@@ -619,7 +619,7 @@ Unlike REST, `apply_changeset` previews unless `dryRun: false` is passed. Result
 
 ### Agent API implementation
 
-Design, decisions and review notes: `docs/AGENT_API_PLAN.md`; imports and exports: `docs/QHUB_TRANSFER_PLAN.md`.
+Design, decisions and review notes: `docs/AGENT_API_PLAN.md`.
 
 | Component | Location |
 |-----------|----------|

@@ -151,6 +151,13 @@ Captured 2026-10-11 (favorites end-to-end check).
   their EF operation directly (e.g. load tours + questions tracked, `Remove`, `SaveChanges`), or call
   services that take a `PackageAccessContext` / `ClaimsPrincipal`.
 - Cookie-auth HTTP tests: `TestBrowser.Login` + `TestBrowser.GetAntiforgeryToken(browser, url)`.
+- **All tests of the collection share one database**, including the seeded admin (`TestData.AdminId`).
+  Assert about the rows your test created ("the list does not contain this job"), never that a user's
+  list is empty — it passes alone and fails in the full run when another test owns rows too.
+- To **simulate "PostgreSQL committed, then the client got an error"** (a lost commit acknowledgement),
+  add a `DbTransactionInterceptor` whose `TransactionCommittedAsync` throws once, via the factory's
+  `configureServices: services => services.AddDbContext<QuestionsHubDbContext>(o => o.AddInterceptors(…))`
+  (`ImportCommitOutcomeTests`).
 
 ## Realistic query plans on the dev DB
 

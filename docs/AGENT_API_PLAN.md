@@ -344,42 +344,8 @@ Goal: an agent that knows only `/mcp` and a token can edit a package without the
 - Per-entity REST endpoints if a UI client ever needs them.
 - Package export and import through the agent API — see the next section.
 
-## Next feature: package export and import through the agent API (separate branch)
+## Follow-up: package import and export through the agent API
 
-Recorded 2026-10-10, not started; build it with the `/feature` flow on its own branch.
-
-**Goals.**
-1. **Export for backups.** Download every package as a `.qhub`, so a scheduled job on Ivan's machine can keep a local, format-level archive of the whole site. This complements the server backups (`docs/BACKUPS.md`: restic database dumps and uploads); it does not replace them.
-2. **Import through MCP.** A user connects their agent (Claude Code, Codex) to `/mcp`. The agent reads the `.qhub` specification, converts a local DOCX into a `.qhub` on the user's machine (the way `docs/QHUB_CONVERSION.md` does offline) and imports it into the site as a Draft owned by the user.
-
-**What exists today.**
-- Agents can only edit existing packages, through changesets.
-- `get_package` returns the full JSON tree, without media and not as a `.qhub`.
-- `.qhub` export exists only at `GET /api/packages/{id}/export`, which needs a browser cookie (Editor/Admin) and uses `QhubExporter`.
-- Import exists only in the UI: `PackageImportService.Enqueue` creates a background job, which `QhubExtractor`/`DocxExtractor` and then `PackageDbImporter` process.
-
-**Design sketch.**
-- **Export.**
-  - REST endpoint `GET /api/v1/manage/packages/{id}/export` that streams the `.qhub`, with AgentRead, the token's rights and allowlist, and `QhubExporter` reused.
-  - The backup job uses an admin `read` token (all packages, up to 365 days): it calls `GET /api/v1/manage/packages` (paged) and then exports each package.
-  - Incremental runs need a package-level "last modified" timestamp. `Package` has none today: add it, and have editor saves, changesets and results loading bump it. The list would then expose it, plus an `updatedSince` filter.
-  - Exports read media from disk, so they get their own per-token budget, `agent.export` (for example 30/min).
-  - No binary MCP tool: the backup job is a script (curl/PowerShell) and talks REST.
-- **Spec for agents.**
-  - Serve `docs/PACKAGE_FORMAT.md`, a JSON Schema of `package.json` and the conversion conventions from `docs/QHUB_CONVERSION.md`, both as MCP resources and as a `get_qhub_spec` tool (some clients do not surface resources).
-- **Validation.**
-  - A `validate_package` tool takes the `package.json` text (≤ 512 KB) and runs the same parsing and validation as `QhubExtractor`.
-  - It returns errors, warnings and a summary (themes/tours, question count, authors) and never creates anything, so the agent can iterate until the conversion is clean.
-- **Upload.**
-  - `POST /api/v1/manage/imports` takes a multipart `.qhub` (≤ 50 MB; nginx needs `client_max_body_size` for that location). It enqueues the existing import job and returns its `jobId`.
-  - `GET /api/v1/manage/imports/{jobId}` returns the status, warnings and the resulting `packageId`.
-  - MCP tool `import_package` handles text-only packages (`package.json` inline, no assets): JSON-RPC bodies are capped at 512 KB. Packages with images go through the REST upload; an agent with a shell can use curl.
-  - Decide whether this endpoint also accepts DOCX and uses the server's parser, or only `.qhub` (agent-side conversion copes better with unusual layouts).
-- **Rights.**
-  - Creating packages becomes a new token permission (`canImport`); the package allowlist cannot name packages that do not exist yet. Import is for Editors/Admins only, as in the UI.
-  - The imported package is a Draft owned by the token's user. Decide whether a package-restricted token gets the new package added to its allowlist, so the agent can fix it up with changesets.
-- **Limits and audit.**
-  - Per-token budget `agent.import` (for example 10/hour), the same 50 MB cap, and the job queue's existing concurrency.
-  - The job records `TokenId`. The import appears in the user's import list in the UI.
-- **Security prerequisite.** Before exposing the import pipeline to tokens, re-run a security review of it (asset handling, file names, archive limits). Open findings are tracked privately until they are fixed.
-- **Out of scope.** Updating an existing package from a `.qhub` (round-trip); media upload for existing packages (already deferred above).
+Built 2026-10-16: `POST /api/v1/manage/imports` (upload a DOCX/`.qhub`, job status), `GET /api/v1/manage/packages/{id}/export`
+(`.qhub` with ETag/304), MCP tools `list_imports`, `get_import`, `get_qhub_format`. Contract: `docs/API.md` ("Import",
+"Export (`.qhub`)"); import limits: `docs/PACKAGE_IMPORT.md` ("Limits").

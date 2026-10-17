@@ -52,7 +52,10 @@ Key rules:
 
 ### Limits
 
-All limits are configurable under `PackageImport` (`PackageImportOptions`). Defaults:
+All limits are configurable under `PackageImport` (`PackageImportOptions`). The defaults were calibrated on 280 real
+DOCX packages (2026-10): largest `document.xml` 1.2 MB / 37k elements, XML depth 20, 72 entries, 47 MB expanded,
+largest image 8 MB, highest legitimate XML compression ratio 82× (hence 500× for XML, not 100×); `MaxAssetBytes` is
+50 MiB because the site itself accepts 50 MB videos and an export must re-import. Defaults:
 
 | Setting | Default | Enforcement |
 |---------|---------|-------------|
