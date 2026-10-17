@@ -1,4 +1,6 @@
-﻿using System.Globalization;
+using System.Globalization;
+using System.Xml;
+using Microsoft.Extensions.Options;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using QuestionsHub.Blazor.Infrastructure.Media;
@@ -13,9 +15,12 @@ public class DocxExtractor
 {
     private readonly ILogger<DocxExtractor> _logger;
 
-    public DocxExtractor(ILogger<DocxExtractor> logger)
+    private readonly PackageImportOptions _options;
+
+    public DocxExtractor(ILogger<DocxExtractor> logger, IOptions<PackageImportOptions>? options = null)
     {
         _logger = logger;
+        _options = options?.Value ?? new PackageImportOptions();
     }
 
     /// <summary>
@@ -32,7 +37,7 @@ public class DocxExtractor
     {
         var blocks = new List<DocBlock>();
         var assets = new List<AssetReference>();
-        var warnings = new List<string>();
+        var warnings = new ImportWarnings();
 
         _logger.LogInformation("Extracting DOCX: {Path}", docxPath);
 
@@ -41,7 +46,17 @@ public class DocxExtractor
             // Ensure assets directory exists
             Directory.CreateDirectory(assetsOutputPath);
 
-            using var doc = WordprocessingDocument.Open(docxPath, false);
+            ct.ThrowIfCancellationRequested();
+            await using var input = File.OpenRead(docxPath);
+            var precheck = await DocxArchiveValidator.Validate(input, _options, ct);
+            input.Position = 0;
+            using var doc = WordprocessingDocument.Open(input, false,
+                new OpenSettings { MaxCharactersInPart = _options.MaxDocxMainXmlBytes });
+            DocxArchiveValidator.ValidateLoadedParts(doc, precheck, _options, ct);
+            var extractedFiles = new HashSet<string>(StringComparer.Ordinal);
+            var imageCache = new Dictionary<Uri, AssetReference>();
+            var assetBudget = new ExtractionBudget(_options.MaxTotalAssetBytes, "усі медіафайли");
+            var listCounts = new Dictionary<(int NumId, int Level), int>();
 
             if (doc.MainDocumentPart?.Document?.Body == null)
             {
@@ -57,7 +72,7 @@ public class DocxExtractor
 
                 if (element is Paragraph para)
                 {
-                    var block = ExtractParagraph(para, blockIndex, doc.MainDocumentPart);
+                    var block = ExtractParagraph(para, blockIndex, doc.MainDocumentPart, listCounts);
 
                     // Extract images from this paragraph
                     foreach (var drawing in para.Descendants<Drawing>())
@@ -66,12 +81,12 @@ public class DocxExtractor
                             drawing,
                             doc.MainDocumentPart,
                             assetsOutputPath,
-                            ct);
+                            imageCache, assetBudget, ct);
 
                         if (asset != null)
                         {
                             block.Assets.Add(asset);
-                            assets.Add(asset);
+                            if (extractedFiles.Add(asset.FileName)) assets.Add(asset);
                         }
                     }
 
@@ -97,6 +112,10 @@ public class DocxExtractor
 
             return new ExtractionResult(blocks, assets, warnings);
         }
+        catch (XmlException ex)
+        {
+            throw new ExtractionException("XML документа пошкоджений або містить заборонений DTD", ex);
+        }
         catch (OpenXmlPackageException ex)
         {
             _logger.LogError(ex, "Failed to open DOCX file");
@@ -114,12 +133,13 @@ public class DocxExtractor
         }
     }
 
-    private static DocBlock ExtractParagraph(Paragraph para, int index, MainDocumentPart mainPart)
+    private DocBlock ExtractParagraph(Paragraph para, int index, MainDocumentPart mainPart,
+        Dictionary<(int NumId, int Level), int> listCounts)
     {
         var text = GetParagraphText(para);
 
         // Check for list numbering and prepend it to text
-        var listPrefix = GetListNumberingPrefix(para, mainPart);
+        var listPrefix = GetListNumberingPrefix(para, mainPart, listCounts);
         if (!string.IsNullOrEmpty(listPrefix))
         {
             text = listPrefix + text;
@@ -146,7 +166,8 @@ public class DocxExtractor
     /// <summary>
     /// Gets the list numbering prefix for a paragraph if it's part of a numbered list.
     /// </summary>
-    private static string? GetListNumberingPrefix(Paragraph para, MainDocumentPart mainPart)
+    private static string? GetListNumberingPrefix(Paragraph para, MainDocumentPart mainPart,
+        Dictionary<(int NumId, int Level), int> listCounts)
     {
         var numProps = para.ParagraphProperties?.NumberingProperties;
         if (numProps == null) return null;
@@ -155,6 +176,10 @@ public class DocxExtractor
         var ilvl = numProps.NumberingLevelReference?.Val?.Value ?? 0;
 
         if (numId == null || numId == 0) return null;
+
+        var key = (numId.Value, ilvl);
+        var number = listCounts.GetValueOrDefault(key) + 1;
+        listCounts[key] = number;
 
         var numberingPart = mainPart.NumberingDefinitionsPart;
         if (numberingPart?.Numbering == null) return null;
@@ -179,47 +204,16 @@ public class DocxExtractor
 
         // Get the numbering format
         var numFmt = level.NumberingFormat?.Val?.Value ?? NumberFormatValues.Decimal;
-        var lvlText = level.LevelText?.Val?.Value ?? "%1.";
-
-        // Calculate the actual number (simplified - assumes sequential from 1)
-        // For accurate numbering we'd need to track paragraph positions, but this is good enough
-        // since we just need to preserve that there IS a number prefix
-        var number = GetListItemNumber(para, numId.Value, ilvl, mainPart);
+        var lvlText = ImportDiagnostics.Truncate(level.LevelText?.Val?.Value ?? "%1.", 32);
 
         // Format the number based on the format type
         var formattedNumber = FormatListNumber(number, numFmt);
 
         // Apply the level text pattern (e.g., "%1)" or "%1.")
-        var prefix = lvlText.Replace($"%{ilvl + 1}", formattedNumber);
+        var prefix = ImportDiagnostics.Truncate(lvlText.Replace($"%{ilvl + 1}", formattedNumber), 32);
 
         // Add appropriate spacing
         return prefix + "\t";
-    }
-
-    private static int GetListItemNumber(Paragraph para, int numId, int ilvl, MainDocumentPart mainPart)
-    {
-        // Count paragraphs with the same numId and ilvl before this one
-        var body = mainPart.Document?.Body;
-        if (body == null) return 1;
-
-        var count = 0;
-        foreach (var p in body.Elements<Paragraph>())
-        {
-            if (p == para) break;
-
-            var pNumProps = p.ParagraphProperties?.NumberingProperties;
-            if (pNumProps == null) continue;
-
-            var pNumId = pNumProps.NumberingId?.Val?.Value;
-            var pIlvl = pNumProps.NumberingLevelReference?.Val?.Value ?? 0;
-
-            if (pNumId == numId && pIlvl == ilvl)
-            {
-                count++;
-            }
-        }
-
-        return count + 1;
     }
 
     private static string FormatListNumber(int number, NumberFormatValues? format)
@@ -354,7 +348,7 @@ public class DocxExtractor
     /// Gets the font size in half-points from the paragraph.
     /// Checks run properties first, then style definitions.
     /// </summary>
-    private static int? GetFontSizeHalfPoints(Paragraph para, MainDocumentPart mainPart)
+    private int? GetFontSizeHalfPoints(Paragraph para, MainDocumentPart mainPart)
     {
         // First, check run properties (most specific)
         var runs = para.Elements<Run>().ToList();
@@ -386,27 +380,19 @@ public class DocxExtractor
     /// <summary>
     /// Gets the font size from a style definition.
     /// </summary>
-    private static int? GetStyleFontSize(string styleId, MainDocumentPart mainPart)
+    private int? GetStyleFontSize(string styleId, MainDocumentPart mainPart)
     {
-        var stylesPart = mainPart.StyleDefinitionsPart;
-        if (stylesPart?.Styles == null) return null;
-
-        var style = stylesPart.Styles.Elements<Style>()
-            .FirstOrDefault(s => s.StyleId?.Value == styleId);
-
-        if (style?.StyleRunProperties?.FontSize?.Val?.Value != null)
+        var styles = mainPart.StyleDefinitionsPart?.Styles;
+        if (styles == null) return null;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        for (var depth = 0; depth < _options.MaxStyleInheritanceDepth && visited.Add(styleId); depth++)
         {
-            if (int.TryParse(style.StyleRunProperties.FontSize.Val.Value, CultureInfo.InvariantCulture, out var size))
+            var style = styles.Elements<Style>().FirstOrDefault(s => s.StyleId?.Value == styleId);
+            if (int.TryParse(style?.StyleRunProperties?.FontSize?.Val?.Value, CultureInfo.InvariantCulture, out var size))
                 return size;
+            if (string.IsNullOrEmpty(style?.BasedOn?.Val?.Value)) break;
+            styleId = style.BasedOn.Val.Value;
         }
-
-        // Check if this style is based on another style
-        var basedOnStyleId = style?.BasedOn?.Val?.Value;
-        if (!string.IsNullOrEmpty(basedOnStyleId))
-        {
-            return GetStyleFontSize(basedOnStyleId, mainPart);
-        }
-
         return null;
     }
 
@@ -423,38 +409,51 @@ public class DocxExtractor
         Drawing drawing,
         MainDocumentPart mainPart,
         string outputPath,
+        Dictionary<Uri, AssetReference> imageCache, ExtractionBudget assetBudget,
         CancellationToken ct)
     {
         try
         {
+            ct.ThrowIfCancellationRequested();
             var blip = drawing.Descendants<A.Blip>().FirstOrDefault();
             if (blip?.Embed?.Value == null) return null;
 
             var part = mainPart.GetPartById(blip.Embed.Value);
             if (part is not ImagePart imagePart) return null;
 
+            // Each occurrence has its own identity for parser association, but shares the file.
+            if (imageCache.TryGetValue(imagePart.Uri, out var cached)) return cached with { };
+
             var extension = MediaSecurityOptions.GetExtensionFromContentType(imagePart.ContentType);
             var fileName = MediaSecurityOptions.GenerateRandomFileName(extension);
             var filePath = Path.Combine(outputPath, fileName);
 
-            await using var stream = imagePart.GetStream();
-            await using var fileStream = File.Create(filePath);
-            await stream.CopyToAsync(fileStream, ct);
+            await using var source = imagePart.GetStream();
+            var perAsset = new ExtractionBudget(_options.MaxAssetBytes, "один медіафайл");
+            if (source.CanSeek)
+            {
+                perAsset.Check(source.Length);
+                assetBudget.Check(source.Length);
+            }
+            await using var stream = new LimitedExtractionStream(source, ct, perAsset, assetBudget);
+            await ExtractionLimits.CopyToFile(stream, filePath, ct);
 
             var fileInfo = new FileInfo(filePath);
 
             _logger.LogDebug("Extracted image: {FileName} ({Size} bytes)",
                 fileName, fileInfo.Length);
 
-            return new AssetReference
+            var asset = new AssetReference
             {
                 FileName = fileName,
                 RelativeUrl = $"/media/{fileName}",
                 ContentType = imagePart.ContentType,
                 SizeBytes = fileInfo.Length
             };
+            imageCache.Add(imagePart.Uri, asset);
+            return asset;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not ExtractionException)
         {
             _logger.LogWarning(ex, "Failed to extract image");
             return null;

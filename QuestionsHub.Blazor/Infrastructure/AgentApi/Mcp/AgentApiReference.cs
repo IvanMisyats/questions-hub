@@ -38,6 +38,9 @@ public static class AgentApiReference
         'set' replaces a field's whole value: to add to Залік or a comment, send the current text plus the addition. Stress marks (о́) are kept exactly as sent.
         In ЩДК the warmup restarts its numbering at 1, so identify a question by its tour and number together.
         Adding, deleting or moving questions and tours is refused when the package has tournament results (hasResults). Ask the user to close the package's editor tab while you work.
+
+        Files (a DOCX or .qhub to import, a .qhub to download) cannot go through these tools: use the REST API with the same token (curl), as get_api_reference shows.
+        Importing: list_packages with 'search' first (is it already on the site?); upload with POST /api/v1/manage/imports (file + gameType www/shvager; not idempotent — after a lost response check list_imports before uploading again); poll get_import until succeeded or failed. The result is a Draft owned by the user: compare get_package with the source, report the job's warnings, fix with changesets. Changesets cannot add images or blocks — for those, convert to .qhub (get_qhub_format), upload that, and ask the user to delete the broken draft. Fix the structure before attaching results.
         Every operation, field, rule, limit, the response and the errors: call get_api_reference (also the resource questions-hub://docs/agent-api).
         """;
 

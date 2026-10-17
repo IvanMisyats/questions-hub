@@ -16,6 +16,19 @@ public static class ApiErrorResponses
     public static bool IsJsonApi(HttpContext context) =>
         context.Request.Path.StartsWithSegments("/api/v1") || IsMcp(context);
 
+    // FormFeature may wrap Kestrel's 413 in InvalidDataException. MultipartReader's own
+    // per-part limit has no typed exception; match only its specific size-limit diagnostic.
+    internal static bool IsPayloadTooLarge(Exception exception)
+    {
+        for (Exception? ex = exception; ex != null; ex = ex.InnerException)
+        {
+            if (ex is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge }
+                || ex is InvalidDataException && ex.Message.StartsWith("Multipart body length limit ", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
     private static bool IsMcp(HttpContext context) => context.Request.Path.StartsWithSegments("/mcp");
 
     /// <summary>Model-binding failures on /api/v1 become <c>{ error, details }</c>; elsewhere the default.</summary>
@@ -59,8 +72,7 @@ public static class ApiErrorResponses
             {
                 await next(context);
             }
-            catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge
-                                                     && IsJsonApi(context) && !context.Response.HasStarted)
+            catch (Exception ex) when (IsPayloadTooLarge(ex) && IsJsonApi(context) && !context.Response.HasStarted)
             {
                 context.Response.Clear();
                 context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;

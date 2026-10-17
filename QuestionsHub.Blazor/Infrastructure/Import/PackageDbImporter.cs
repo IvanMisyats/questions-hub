@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
+using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,7 @@ public partial class PackageDbImporter
     private readonly AuthorService _authorService;
     private readonly TagService _tagService;
     private readonly ILogger<PackageDbImporter> _logger;
+    private readonly IDbContextFactory<QuestionsHubDbContext>? _verifyContextFactory;
 
     /// <summary>Assets copied to the handouts folder by the current import attempt: source name → URL.</summary>
     private readonly Dictionary<string, string> _storedAssets = new(StringComparer.Ordinal);
@@ -27,13 +29,15 @@ public partial class PackageDbImporter
         IOptions<MediaUploadOptions> mediaOptions,
         AuthorService authorService,
         TagService tagService,
-        ILogger<PackageDbImporter> logger)
+        ILogger<PackageDbImporter> logger,
+        IDbContextFactory<QuestionsHubDbContext>? verifyContextFactory = null)
     {
         _db = db;
         _mediaOptions = mediaOptions.Value;
         _authorService = authorService;
         _tagService = tagService;
         _logger = logger;
+        _verifyContextFactory = verifyContextFactory;
     }
 
     /// <summary>
@@ -58,6 +62,11 @@ public partial class PackageDbImporter
         {
             await using var transaction = await _db.Database.BeginTransactionAsync(cancellation);
             _storedAssets.Clear();
+            var committed = false;
+            var commitAttempted = false;
+            var keepStoredAssets = false;
+            Package? created = null;
+            PackageImportJob? importJob = null;
 
             try
             {
@@ -87,7 +96,7 @@ public partial class PackageDbImporter
                 // Create package-level editors (when SharedEditors is true)
                 if (parseResult.SharedEditors && parseResult.PackageEditors.Count > 0)
                 {
-                    package.PackageEditors = await ResolveAuthors(parseResult.PackageEditors, cancellation);
+                    package.PackageEditors = await ResolveAuthors(parseResult.PackageEditors, parseResult.Warnings, cancellation);
                     await _db.SaveChangesAsync(cancellation);
                 }
 
@@ -115,13 +124,14 @@ public partial class PackageDbImporter
                 {
                     var tour = new Tour
                     {
-                        Number = TruncateWithWarning(tourDto.Number, 50, $"Номер туру {tourDto.Number}", parseResult.Warnings) ?? tourDto.Number,
-                        Title = TruncateWithWarning(NullIfEmpty(tourDto.Title), 200, $"Назва теми {tourDto.Number}", parseResult.Warnings),
+                        Number = TruncateWithWarning(tourDto.Number, 50, $"Номер туру {ImportDiagnostics.Label(tourDto.Number)}", parseResult.Warnings) ?? tourDto.Number,
+                        Title = TruncateWithWarning(NullIfEmpty(tourDto.Title), 200, $"Назва теми {ImportDiagnostics.Label(tourDto.Number)}", parseResult.Warnings),
                         OrderIndex = tourDto.OrderIndex,
                         Type = tourDto.Type,
                         Preamble = tourDto.Preamble,
+                        Comment = TruncateWithWarning(NullIfEmpty(tourDto.Comment), 2000, $"Коментар туру {ImportDiagnostics.Label(tourDto.Number)}", parseResult.Warnings),
                         PackageId = package.Id,
-                        Editors = await ResolveAuthors(tourDto.Editors, cancellation)
+                        Editors = await ResolveAuthors(tourDto.Editors, parseResult.Warnings, cancellation)
                     };
 
                     _db.Tours.Add(tour);
@@ -137,11 +147,11 @@ public partial class PackageDbImporter
                         {
                             var block = new Block
                             {
-                                Name = TruncateWithWarning(blockDto.Name, 200, $"Назва блоку {blockDto.Name}", parseResult.Warnings),
+                                Name = TruncateWithWarning(blockDto.Name, 200, $"Назва блоку {ImportDiagnostics.Label(blockDto.Name)}", parseResult.Warnings),
                                 OrderIndex = blockDto.OrderIndex,
                                 Preamble = blockDto.Preamble,
                                 TourId = tour.Id,
-                                Editors = await ResolveAuthors(blockDto.Editors, cancellation)
+                                Editors = await ResolveAuthors(blockDto.Editors, parseResult.Warnings, cancellation)
                             };
 
                             _db.Blocks.Add(block);
@@ -173,7 +183,22 @@ public partial class PackageDbImporter
                     }
                 }
 
-                await transaction.CommitAsync(cancellation);
+                cancellation.ThrowIfCancellationRequested();
+                // Link the job in the same transaction: even a process exit immediately after commit
+                // leaves a succeeded, linked job. Once this boundary is crossed, do not cancel it.
+                importJob = await _db.PackageImportJobs.FindAsync([jobId], CancellationToken.None);
+                if (importJob != null)
+                {
+                    importJob.PackageId = package.Id;
+                    importJob.WarningsJson = parseResult.Warnings.Count > 0
+                        ? JsonSerializer.Serialize(parseResult.Warnings) : null;
+                    ImportJobLifecycle.Succeed(importJob);
+                    await _db.SaveChangesAsync(CancellationToken.None);
+                }
+                created = package;
+                commitAttempted = true;
+                await transaction.CommitAsync(CancellationToken.None);
+                committed = true;
 
                 _logger.LogInformation(
                     "Package imported: ID={PackageId}, Tours={TourCount}, Questions={QuestionCount}",
@@ -181,14 +206,67 @@ public partial class PackageDbImporter
 
                 return package;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!committed)
             {
-                await transaction.RollbackAsync(cancellation);
-                DeleteStoredAssets();
+                // The commit itself failed: the server may have committed before the connection dropped.
+                // Look with a fresh connection before treating the package as gone; when that cannot be
+                // told, keep the copied media (orphaned files are better than a package without its media).
+                if (commitAttempted)
+                {
+                    var outcome = await VerifyCommitted(created!.Id);
+                    if (outcome == true)
+                    {
+                        committed = true;
+                        _logger.LogWarning(ex, "The commit of package {PackageId} reported an error but did commit", created.Id);
+                        return created;
+                    }
+                    keepStoredAssets = outcome == null;
+                }
+
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                try
+                {
+                    await transaction.RollbackAsync(cleanup.Token);
+                }
+                catch (Exception rollbackError)
+                {
+                    _logger.LogWarning(rollbackError, "Failed to roll back package import");
+                }
+                if (importJob != null)
+                {
+                    importJob.PackageId = null;
+                    importJob.Package = null;
+                    importJob.Status = ImportJobStatus.Running;
+                    importJob.FinishedAt = null;
+                }
                 _logger.LogError(ex, "Failed to import package");
+                if (ex is OperationCanceledException) throw;
                 throw new DatabaseImportException("Не вдалося зберегти пакет в базу даних", ex);
             }
+            finally
+            {
+                // Rollback may itself fail or time out. File compensation must still run.
+                if (!committed && !keepStoredAssets) DeleteStoredAssets();
+            }
         }, ct);
+    }
+
+    /// <summary>Whether package <paramref name="packageId"/> exists, seen through a fresh connection; null when that cannot be told.</summary>
+    private async Task<bool?> VerifyCommitted(int packageId)
+    {
+        if (_verifyContextFactory == null)
+            return null;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await using var verify = await _verifyContextFactory.CreateDbContextAsync(timeout.Token);
+            return await verify.Packages.AnyAsync(p => p.Id == packageId, timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not verify whether package {PackageId} was committed", packageId);
+            return null;
+        }
     }
 
     private async Task<Question> CreateQuestion(
@@ -197,7 +275,7 @@ public partial class PackageDbImporter
         int tourId,
         int? blockId,
         string jobAssetsPath,
-        List<string> warnings,
+        ImportWarnings warnings,
         CancellationToken ct)
     {
         // Resolve handout: prefer local file, fall back to external URL stored on DTO
@@ -211,25 +289,25 @@ public partial class PackageDbImporter
         return new Question
         {
             OrderIndex = orderIndex,
-            Number = TruncateWithWarning(questionDto.Number, 20, $"Номер запитання {questionDto.Number}", warnings) ?? questionDto.Number,
-            HostInstructions = TruncateWithWarning(questionDto.HostInstructions, 1000, $"Вказівка ведучому (запитання {questionDto.Number})", warnings),
+            Number = TruncateWithWarning(questionDto.Number, 20, $"Номер запитання {ImportDiagnostics.Label(questionDto.Number)}", warnings) ?? questionDto.Number,
+            HostInstructions = TruncateWithWarning(questionDto.HostInstructions, 1000, $"Вказівка ведучому (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings),
             Text = questionDto.Text,
             HandoutText = questionDto.HandoutText,
-            HandoutUrl = TruncateWithWarning(handoutUrl, 500, $"URL роздатки (запитання {questionDto.Number})", warnings),
-            Answer = TruncateWithWarning(questionDto.Answer, 1000, $"Відповідь (запитання {questionDto.Number})", warnings) ?? "",
-            AcceptedAnswers = TruncateWithWarning(questionDto.AcceptedAnswers, 1000, $"Залік (запитання {questionDto.Number})", warnings),
-            RejectedAnswers = TruncateWithWarning(questionDto.RejectedAnswers, 1000, $"Незалік (запитання {questionDto.Number})", warnings),
-            AnswerForm = TruncateWithWarning(questionDto.Form, 1000, $"Форма (запитання {questionDto.Number})", warnings),
+            HandoutUrl = TruncateWithWarning(handoutUrl, 500, $"URL роздатки (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings),
+            Answer = TruncateWithWarning(questionDto.Answer, 1000, $"Відповідь (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings) ?? "",
+            AcceptedAnswers = TruncateWithWarning(questionDto.AcceptedAnswers, 1000, $"Залік (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings),
+            RejectedAnswers = TruncateWithWarning(questionDto.RejectedAnswers, 1000, $"Незалік (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings),
+            AnswerForm = TruncateWithWarning(questionDto.Form, 1000, $"Форма (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings),
             Comment = questionDto.Comment,
-            CommentAttachmentUrl = TruncateWithWarning(commentUrl, 500, $"URL коментаря (запитання {questionDto.Number})", warnings),
+            CommentAttachmentUrl = TruncateWithWarning(commentUrl, 500, $"URL коментаря (запитання {ImportDiagnostics.Label(questionDto.Number)})", warnings),
             Source = questionDto.Source,
             TourId = tourId,
             BlockId = blockId,
-            Authors = await ResolveAuthors(questionDto.Authors, ct)
+            Authors = await ResolveAuthors(questionDto.Authors, warnings, ct)
         };
     }
 
-    private async Task<List<Author>> ResolveAuthors(List<string> authorNames, CancellationToken ct)
+    private async Task<List<Author>> ResolveAuthors(List<string> authorNames, ImportWarnings warnings, CancellationToken ct)
     {
         var authors = new List<Author>();
 
@@ -241,6 +319,7 @@ public partial class PackageDbImporter
             if (firstName == null || lastName == null)
             {
                 _logger.LogWarning("Invalid author name format, skipping: {Name}", name);
+                warnings.Add($"Не вдалося розпізнати ім'я та прізвище «{ImportDiagnostics.Label(name)}» — пропущено");
                 continue;
             }
 
@@ -263,6 +342,14 @@ public partial class PackageDbImporter
     /// <returns>Tuple of (FirstName, LastName) or (null, null) if invalid.</returns>
     internal static (string? FirstName, string? LastName) ParseAuthorName(string fullName)
     {
+        // An exact pair from a .qhub person object (see QhubPeople): taken as is.
+        if (QhubPeople.Decode(fullName) is { } exact)
+        {
+            return string.IsNullOrWhiteSpace(exact.FirstName) || string.IsNullOrWhiteSpace(exact.LastName)
+                ? (null, null)
+                : (exact.FirstName, exact.LastName);
+        }
+
         // Remove city in parentheses: "Ім'я Прізвище (Київ)" -> "Ім'я Прізвище"
         fullName = CityInParenthesesRegex().Replace(fullName, "").Trim();
 
@@ -361,6 +448,7 @@ public partial class PackageDbImporter
             _logger.LogWarning(ex, "Failed to copy asset: {FileName}", assetFileName);
             if (created)
                 File.Delete(destPath);
+            if (ex is OperationCanceledException) throw;
             return null;
         }
     }
@@ -387,7 +475,7 @@ public partial class PackageDbImporter
     /// <summary>
     /// Truncates a value to the given maximum length and adds a warning if truncated.
     /// </summary>
-    private static string? TruncateWithWarning(string? text, int maxLength, string fieldName, List<string> warnings)
+    private static string? TruncateWithWarning(string? text, int maxLength, string fieldName, ImportWarnings warnings)
     {
         if (string.IsNullOrEmpty(text)) return text;
         if (text.Length <= maxLength) return text;

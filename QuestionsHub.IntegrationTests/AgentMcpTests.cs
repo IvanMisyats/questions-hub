@@ -62,9 +62,67 @@ public sealed class AgentMcpTests(PostgresFixture database)
         tools.Select(t => t.Name).Should().BeEquivalentTo(
             "whoami", "list_packages", "get_package", "search_authors", "search_tags",
             "apply_changeset", "list_changesets", "get_changeset", "get_api_reference",
-            "list_results_sources", "attach_results_source", "reload_results_source", "delete_results_source");
+            "list_results_sources", "attach_results_source", "reload_results_source", "delete_results_source",
+            "get_qhub_format", "list_imports", "get_import");
         tools.Single(t => t.Name == "apply_changeset").ProtocolTool.Annotations!.DestructiveHint.Should().BeTrue();
         tools.Single(t => t.Name == "get_package").ProtocolTool.Annotations!.ReadOnlyHint.Should().BeTrue();
+    }
+
+    [SkippableFact]
+    public async Task ImportTools_ShowOwnJobsOnly_AndNeedAnUnrestrictedToken()
+    {
+        await using var factory = CreateFactory();
+        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        var other = await TestBrowser.CreateUser(factory, "Editor");
+        var own = new PackageImportJob
+        {
+            Id = Guid.NewGuid(), OwnerId = editor.Id, InputFileName = "Кубок.docx", InputFilePath = "jobs/x/input/Кубок.docx",
+            Status = ImportJobStatus.Succeeded, PackageId = null, CreatedAt = DateTime.UtcNow, WarningsJson = "[\"Попередження\"]"
+        };
+        var foreign = new PackageImportJob
+        {
+            Id = Guid.NewGuid(), OwnerId = other.Id, InputFileName = "Чужий.docx", InputFilePath = "jobs/y/input/Чужий.docx",
+            Status = ImportJobStatus.Queued, CreatedAt = DateTime.UtcNow
+        };
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+            db.PackageImportJobs.AddRange(own, foreign);
+            await db.SaveChangesAsync();
+        }
+        await using var client = await Connect(factory, await TestData.CreateToken(factory, editor.Id, TokenScope.Read));
+
+        var list = await Call(client, "list_imports", new());
+        list.IsError.Should().BeFalse(list.Text);
+        list.Json!["imports"]!.AsArray().Select(j => j!["jobId"]!.GetValue<Guid>()).Should().Equal(own.Id);
+        var job = await Call(client, "get_import", new() { ["jobId"] = own.Id.ToString() });
+        job.Json!["status"]!.GetValue<string>().Should().Be("succeeded");
+        job.Json["warnings"]!.AsArray().Select(w => w!.GetValue<string>()).Should().Equal("Попередження");
+        (await Call(client, "get_import", new() { ["jobId"] = foreign.Id.ToString() })).Text.Should().Contain("Import not found");
+        (await Call(client, "get_import", new() { ["jobId"] = "not-a-guid" })).Text.Should().Contain("UUID");
+
+        var package = await TestData.CreatePackage(factory, editor.Id);
+        await using var restricted = await Connect(factory, await TestData.CreateToken(factory, editor.Id, packageIds: [package.Id]));
+        var denied = await Call(restricted, "list_imports", new());
+        denied.IsError.Should().BeTrue();
+        denied.Text.Should().Contain("not limited to specific packages");
+    }
+
+    [SkippableFact]
+    public async Task ListPackages_SearchesTitles_AndTheFormatIsServed()
+    {
+        await using var factory = CreateFactory();
+        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        var cup = await TestData.CreatePackage(factory, editor.Id, title: "Кубок Лося 2026");
+        await TestData.CreatePackage(factory, editor.Id, title: "Інший пакет");
+        await using var client = await Connect(factory, await TestData.CreateToken(factory, editor.Id, TokenScope.Read));
+
+        var found = await Call(client, "list_packages", new() { ["search"] = "лося" });
+        found.Json!["packages"]!.AsArray().Select(p => p!["id"]!.GetValue<int>()).Should().Equal(cup.Id);
+
+        var format = await client.CallToolAsync("get_qhub_format", new Dictionary<string, object?>());
+        string.Concat(format.Content.OfType<TextContentBlock>().Select(t => t.Text))
+            .Should().Contain("formatVersion").And.Contain("JSON Schema");
     }
 
     [SkippableFact]

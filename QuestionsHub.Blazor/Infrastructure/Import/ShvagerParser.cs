@@ -836,7 +836,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             // A fresh theme opens at 10, so a repeat mid-theme («10, 20, 40, 40, 50») is a typo in
             // the value instead; it stays in the theme and only draws the out-of-order warning below.
             ctx.Result.Warnings.Add(
-                $"Тема «{ctx.CurrentTheme.Title}»: запитання за {value} йде після запитання за більшу вартість — розпочато нову тему без назви");
+                $"Тема «{ImportDiagnostics.Label(ctx.CurrentTheme.Title)}»: запитання за {value} йде після запитання за більшу вартість — розпочато нову тему без назви");
             StartTheme(ctx, "", []);
         }
 
@@ -847,7 +847,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         if (value != expectedValue)
         {
             ctx.Result.Warnings.Add(
-                $"Тема «{theme.Title}»: очікувалося запитання за {expectedValue}, знайдено за {value}");
+                $"Тема «{ImportDiagnostics.Label(theme.Title)}»: очікувалося запитання за {expectedValue}, знайдено за {value}");
         }
 
         var question = new QuestionDto
@@ -1300,7 +1300,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             var reference = match.Groups[1].Value.Trim();
             question.HandoutText = Append(question.HandoutText, reference);
             ctx.Result.Warnings.Add(
-                $"Запитання за {question.Number}: посилання «[{reference}]» перенесено до роздаткового матеріалу");
+                $"Запитання за {ImportDiagnostics.Label(question.Number)}: посилання «[{ImportDiagnostics.Label(reference)}]» перенесено до роздаткового матеріалу");
         }
 
         var cleaned = ParserPatterns.PictureBracket().Replace(text, "").Trim();
@@ -1322,7 +1322,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             var question = ctx.CurrentQuestion;
             if (question == null)
             {
-                ctx.Result.Warnings.Add($"Зображення {asset.FileName} поза запитанням — пропущено");
+                ctx.Result.Warnings.Add($"Зображення {ImportDiagnostics.Label(asset.FileName)} поза запитанням — пропущено");
                 continue;
             }
 
@@ -1334,7 +1334,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
                 if (question.CommentAssetFileName == null)
                     question.CommentAssetFileName = asset.FileName;
                 else
-                    ctx.Result.Warnings.Add($"Запитання за {question.Number}: додаткове зображення {asset.FileName} пропущено");
+                    ctx.Result.Warnings.Add($"Запитання за {ImportDiagnostics.Label(question.Number)}: додаткове зображення {ImportDiagnostics.Label(asset.FileName)} пропущено");
             }
             else
             {
@@ -1351,7 +1351,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
                     }
                 }
                 else
-                    ctx.Result.Warnings.Add($"Запитання за {question.Number}: додаткове зображення {asset.FileName} пропущено");
+                    ctx.Result.Warnings.Add($"Запитання за {ImportDiagnostics.Label(question.Number)}: додаткове зображення {ImportDiagnostics.Label(asset.FileName)} пропущено");
             }
         }
     }
@@ -1366,7 +1366,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
         if (!question.HasAnswer)
         {
             ctx.Result.Warnings.Add(
-                $"Тема «{ctx.CurrentTheme?.Title}», запитання за {question.Number}: не знайдено відповідь");
+                $"Тема «{ImportDiagnostics.Label(ctx.CurrentTheme?.Title)}», запитання за {ImportDiagnostics.Label(question.Number)}: не знайдено відповідь");
         }
 
         ctx.CurrentQuestion = null;
@@ -1383,7 +1383,7 @@ public class ShvagerParser(ILogger<ShvagerParser> logger)
             && !ShvagerValues.IsReserveTheme(theme.Questions.Select(q => q.Number)))
         {
             ctx.Result.Warnings.Add(
-                $"Тема «{theme.Title}»: {theme.Questions.Count} запитань замість {CanonicalThemeSize}");
+                $"Тема «{ImportDiagnostics.Label(theme.Title)}»: {theme.Questions.Count} запитань замість {CanonicalThemeSize}");
         }
 
         ctx.CurrentTheme = null;

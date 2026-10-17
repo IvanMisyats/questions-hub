@@ -1,10 +1,9 @@
-using System.Text.RegularExpressions;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using QuestionsHub.Blazor.Data;
+using QuestionsHub.Blazor.Infrastructure.AgentApi;
 using QuestionsHub.Blazor.Infrastructure.Export;
 
 namespace QuestionsHub.Blazor.Controllers;
@@ -15,7 +14,7 @@ namespace QuestionsHub.Blazor.Controllers;
 [Route("api/packages")]
 [ApiController]
 [Authorize(Roles = "Editor,Admin")]
-public partial class PackageExportController : ControllerBase
+public class PackageExportController : ControllerBase
 {
     private readonly IDbContextFactory<QuestionsHubDbContext> _dbContextFactory;
     private readonly QhubExporter _exporter;
@@ -39,23 +38,7 @@ public partial class PackageExportController : ControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-        var package = await db.Packages
-            .Include(p => p.PackageEditors)
-            .Include(p => p.Tags)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Editors)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Blocks)
-                    .ThenInclude(b => b.Editors)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Blocks)
-                    .ThenInclude(b => b.Questions)
-                        .ThenInclude(q => q.Authors)
-            .Include(p => p.Tours)
-                .ThenInclude(t => t.Questions)
-                    .ThenInclude(q => q.Authors)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id, ct);
+        var package = await PackageGraph.LoadSnapshot(db, db.Packages.AsNoTracking(), id, ct);
 
         if (package == null)
             return NotFound();
@@ -67,32 +50,7 @@ public partial class PackageExportController : ControllerBase
 
         var stream = await _exporter.Export(package, ct);
 
-        var fileName = SanitizeFileName(package.Title) + ".qhub";
+        var fileName = ExportFileName.FromTitle(package.Title) + ".qhub";
         return File(stream, "application/zip", fileName);
     }
-
-    /// <summary>
-    /// Sanitizes a string for use as a file name.
-    /// Removes invalid characters and limits length.
-    /// </summary>
-    private static string SanitizeFileName(string title)
-    {
-        // Remove characters that are invalid in file names
-        var sanitized = InvalidFileNameCharsRegex().Replace(title, "_");
-
-        // Collapse multiple underscores
-        sanitized = MultipleUnderscoresRegex().Replace(sanitized, "_").Trim('_');
-
-        // Limit length
-        if (sanitized.Length > 100)
-            sanitized = sanitized[..100].TrimEnd('_');
-
-        return string.IsNullOrWhiteSpace(sanitized) ? "package" : sanitized;
-    }
-
-    [GeneratedRegex(@"[<>:""/\\|?*\x00-\x1F]")]
-    private static partial Regex InvalidFileNameCharsRegex();
-
-    [GeneratedRegex(@"_+")]
-    private static partial Regex MultipleUnderscoresRegex();
 }

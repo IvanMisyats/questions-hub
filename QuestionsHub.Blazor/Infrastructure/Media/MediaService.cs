@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using QuestionsHub.Blazor.Data;
 
 namespace QuestionsHub.Blazor.Infrastructure.Media;
 
@@ -18,12 +20,17 @@ public record MediaUploadResult(
 public class MediaService
 {
     private readonly MediaUploadOptions _options;
+    private readonly IDbContextFactory<QuestionsHubDbContext> _dbContextFactory;
     private readonly ILogger<MediaService> _logger;
     private readonly string _handoutsPath;
 
-    public MediaService(IOptions<MediaUploadOptions> options, ILogger<MediaService> logger)
+    public MediaService(
+        IOptions<MediaUploadOptions> options,
+        IDbContextFactory<QuestionsHubDbContext> dbContextFactory,
+        ILogger<MediaService> logger)
     {
         _options = options.Value;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
         _handoutsPath = Path.Combine(_options.UploadsPath, _options.HandoutsFolder);
 
@@ -85,6 +92,26 @@ public class MediaService
             _logger.LogError(ex, "Failed to upload file: {FileName}", originalFileName);
             return new MediaUploadResult(false, null, null, "Помилка завантаження файлу");
         }
+    }
+
+    /// <summary>
+    /// Deletes a media file once no question references it any more; call it after the change is saved.
+    /// An import stores one copy of a file that several of its questions use (an image repeated in a DOCX,
+    /// a shared .qhub asset), so removing it from one question must not take it from the others.
+    /// </summary>
+    public async Task<bool> DeleteIfUnreferenced(string? relativeUrl, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(relativeUrl))
+            return false;
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        if (await db.Questions.AnyAsync(q => q.HandoutUrl == relativeUrl || q.CommentAttachmentUrl == relativeUrl, ct))
+        {
+            _logger.LogInformation("Kept media file still used by another question: {Url}", relativeUrl);
+            return false;
+        }
+
+        return Delete(relativeUrl);
     }
 
     public bool Delete(string? relativeUrl)

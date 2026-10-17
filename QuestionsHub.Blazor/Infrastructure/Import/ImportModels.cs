@@ -1,4 +1,4 @@
-﻿using QuestionsHub.Blazor.Domain;
+using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Infrastructure.Import;
 
@@ -51,7 +51,7 @@ public record AssetReference
 public record ExtractionResult(
     List<DocBlock> Blocks,
     List<AssetReference> Assets,
-    List<string> Warnings
+    ImportWarnings Warnings
 );
 
 /// <summary>
@@ -68,7 +68,7 @@ public class ParseResult
     public string? SourceUrl { get; set; }
     public List<string> Editors { get; set; } = [];
     public List<TourDto> Tours { get; set; } = [];
-    public List<string> Warnings { get; set; } = [];
+    public ImportWarnings Warnings { get; set; } = [];
 
     /// <summary>Start date when the package was played.</summary>
     public DateOnly? PlayedFrom { get; set; }
@@ -113,6 +113,10 @@ public class TourDto
 
     public List<string> Editors { get; set; } = [];
     public string? Preamble { get; set; }
+
+    /// <summary>Tour comment (shown after the tour); only .qhub files carry it.</summary>
+    public string? Comment { get; set; }
+
     public List<QuestionDto> Questions { get; set; } = [];
 
     /// <summary>Blocks within this tour (optional structure).</summary>

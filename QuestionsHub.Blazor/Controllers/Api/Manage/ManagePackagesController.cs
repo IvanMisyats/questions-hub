@@ -19,9 +19,11 @@ public class ManagePackagesController(AgentPackageReader reader) : ControllerBas
 {
     /// <summary>Packages the token can edit, newest first.</summary>
     /// <param name="status">Optional filter: draft, published or archived.</param>
+    /// <param name="search">Optional: part of the title (case-insensitive).</param>
     [HttpGet("packages")]
     public async Task<ActionResult<ManagePackageListResponse>> List(
         [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
@@ -29,7 +31,7 @@ public class ManagePackagesController(AgentPackageReader reader) : ControllerBas
         if (!AgentPackageReader.TryParseStatus(status, out var statusFilter))
             return BadRequest(new { error = AgentPackageReader.InvalidStatusError });
 
-        return Ok(await reader.ListPackages(User, statusFilter, page, pageSize, ct));
+        return Ok(await reader.ListPackages(User, statusFilter, search, page, pageSize, ct));
     }
 
     /// <summary>The full editable tree of a package, with its content <c>version</c>.</summary>

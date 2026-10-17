@@ -1,7 +1,7 @@
 namespace QuestionsHub.Blazor.Infrastructure.RateLimiting;
 
 /// <summary>
-/// Request budgets per minute, bound from the <c>RateLimits</c> configuration section.
+/// Request budgets, bound from the <c>RateLimits</c> configuration section.
 /// "Ip*" limits are pre-authentication admission per client IP; the others are per validated
 /// principal (API client, personal access token or signed-in user). See docs/AGENT_API_PLAN.md.
 /// </summary>
@@ -32,6 +32,12 @@ public class RateLimitSettings
 
     /// <summary>Agent changesets (apply and dry-run) and results writes, per personal access token.</summary>
     public int AgentWritePerMinute { get; set; } = 20;
+
+    /// <summary>Agent <c>.qhub</c> exports (304s included), per personal access token; replaces the read budget there.</summary>
+    public int AgentExportPerMinute { get; set; } = 60;
+
+    /// <summary>Agent uploads per hour, shared across every token belonging to one user.</summary>
+    public int AgentImportPerHour { get; set; } = 10;
 
     /// <summary>Adding/removing favorites (<c>/api/favorites</c>), per signed-in user.</summary>
     public int UserFavoritesPerMinute { get; set; } = 60;

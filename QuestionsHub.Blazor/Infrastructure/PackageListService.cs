@@ -325,7 +325,7 @@ public class PackageListService
     /// <summary>
     /// Applies title filter using ILike for PostgreSQL or Contains for InMemory provider.
     /// </summary>
-    private static IQueryable<Package> ApplyTitleFilter(
+    internal static IQueryable<Package> ApplyTitleFilter(
         IQueryable<Package> query,
         string titleSearch,
         QuestionsHubDbContext context)
@@ -340,8 +340,9 @@ public class PackageListService
             return query.Where(p => p.Title.ToLower().Contains(searchLower));
         }
 
-        // Use PostgreSQL ILike for case-insensitive pattern matching
-        return query.Where(p => EF.Functions.ILike(p.Title, escapedPattern));
+        // Use PostgreSQL ILike for case-insensitive pattern matching. The escape character must be
+        // named: without it Npgsql emits ESCAPE '' and the escaped wildcards would match anything.
+        return query.Where(p => EF.Functions.ILike(p.Title, escapedPattern, @"\"));
     }
 
     private static IQueryable<Package> ApplySorting(

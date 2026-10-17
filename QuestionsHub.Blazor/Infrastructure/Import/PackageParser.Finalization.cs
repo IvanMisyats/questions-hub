@@ -90,10 +90,10 @@ public partial class PackageParser
         }
 
         if (!question.HasText)
-            result.Warnings.Add($"Питання {question.Number}: текст питання не знайдено");
+            result.Warnings.Add($"Питання {ImportDiagnostics.Label(question.Number)}: текст питання не знайдено");
 
         if (!question.HasAnswer)
-            result.Warnings.Add($"Питання {question.Number}: відповідь не знайдено");
+            result.Warnings.Add($"Питання {ImportDiagnostics.Label(question.Number)}: відповідь не знайдено");
     }
 
     private static void CalculateConfidence(ParseResult result)

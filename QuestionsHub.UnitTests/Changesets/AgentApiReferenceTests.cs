@@ -91,6 +91,19 @@ public class AgentApiReferenceTests
     }
 
     [Fact]
+    public void QhubFormat_IsTheFormatDocWithItsSchema()
+    {
+        var text = QhubFormatReference.Text;
+
+        text.Should().StartWith("# Package Interchange Format (`.qhub`)");
+        text.Should().Contain("formatVersion").And.Contain("## JSON Schema of `package.json`");
+        var schemaStart = text.LastIndexOf("```json", StringComparison.Ordinal) + "```json".Length;
+        var schema = text[schemaStart..text.LastIndexOf("```", StringComparison.Ordinal)];
+        using var document = JsonDocument.Parse(schema);
+        document.RootElement.TryGetProperty("$schema", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public void Extract_RequiresTheMarkers()
     {
         AgentApiReference.Extract("a\n<!-- agent-reference:start x -->\n## Agent API\nbody\n<!-- agent-reference:end -->\nrest")

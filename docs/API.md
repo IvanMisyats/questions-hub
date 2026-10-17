@@ -319,7 +319,7 @@ All errors return JSON:
 
 Lets an agent (Claude Code, Codex, an MCP client, a script) edit packages **as a site user**: same rights as the user, narrowed by the token.
 
-**Over MCP** (`/mcp`) every endpoint below is a tool (see the table in [MCP](#mcp)) taking the same fields as arguments. HTTP errors become tool errors whose text is the `error` message described here — e.g. `Operation 2: …` for an invalid operation (`422`), a stale `expectedVersion` for a conflict (`409`).
+**Over MCP** (`/mcp`) the endpoints listed in the MCP table are tools (see the table in [MCP](#mcp)) taking the same fields as arguments. HTTP errors become tool errors whose text is the `error` message described here — e.g. `Operation 2: …` for an invalid operation (`422`), a stale `expectedVersion` for a conflict (`409`).
 
 ### Getting a token
 
@@ -341,8 +341,10 @@ Authorization: Bearer qh_pat_00112233445566778899aabbccddeeff
 |-------|-------|-------|
 | Nginx | Per IP | 150 req/min on `/api/v1/manage/` and `/mcp` (burst 50) |
 | ASP.NET, before authentication | Per IP | 150 req/min |
-| ASP.NET, after authentication | Per token | 120 requests/min (all manage requests) |
+| ASP.NET, after authentication | Per token | 120 requests/min (except exports) |
 | Shared write budget | Per token | 20 calls/min across changesets (applies **and** dry runs) and results attach/reload/delete, REST and MCP combined |
+| Import uploads | Per user (all tokens share it) | 10/hour, counted only for uploads that pass the checks (scope, package list, unfinished jobs); at most 3 unfinished jobs (queued, running, waiting for retry, or still uploading) |
+| Exports | Per token | 60/min on `GET /packages/{id}/export` (304s included), instead of the 120/min budget |
 
 `429` responses carry `Retry-After` (seconds); all errors, including the proxy's own 429/413, are JSON.
 
@@ -351,8 +353,12 @@ Authorization: Bearer qh_pat_00112233445566778899aabbccddeeff
 | Method & path | Scope | Purpose |
 |---|---|---|
 | `GET /api/v1/manage/me` | read | The user (id, name, roles) and the token (name, scope, expiry, package list) |
-| `GET /api/v1/manage/packages?status=&page=&pageSize=` | read | Packages the token can edit (drafts included), newest first; `status` = `draft`/`published`/`archived`; `pageSize` ≤ 50 |
+| `GET /api/v1/manage/packages?status=&search=&page=&pageSize=` | read | Packages the token can edit (drafts included), newest first; `status` = `draft`/`published`/`archived`; `search` = part of the title (case-insensitive); `pageSize` ≤ 50 |
 | `GET /api/v1/manage/packages/{id}` | read | The full editable tree and its `version` |
+| `GET /api/v1/manage/packages/{id}/export` | read | The package as a `.qhub` archive (see [Export](#export-qhub)) |
+| `POST /api/v1/manage/imports` | readWrite, unrestricted | Upload a DOCX or `.qhub` → 202 with the import job and `Location` |
+| `GET /api/v1/manage/imports/{jobId}` | read, unrestricted | The user's import job (admins too: owner only) |
+| `GET /api/v1/manage/imports` | read, unrestricted | Latest 20 of the user's jobs, newest first: `{ "imports": […] }` |
 | `GET /api/v1/manage/authors?search=` | read | Authors whose first or last name starts with `search` (≤ 20) |
 | `GET /api/v1/manage/tags?search=` | read | Matching tags (≤ 20) |
 | `POST /api/v1/manage/packages/{id}/changesets` | readWrite | Apply or preview a changeset |
@@ -379,6 +385,38 @@ Like the public detail, plus everything needed to address changes: ids, `orderIn
 - **Text.** Content is Ukrainian; keep the wording exactly as given (the API normalizes apostrophes, dashes and whitespace itself). Stress marks (a combining acute accent, U+0301, as in «о́піки») are part of the text: kept exactly as sent, never added or removed by the API.
 - **Editing a field.** `set` replaces a field's whole value. To add to a field — another accepted answer, a sentence in a comment — send the current value with the addition. `acceptedAnswers` (Залік) and `rejectedAnswers` (Незалік) are free text: variants separated by `; `, ending with a period. «точна відповідь.» in Залік means that only the exact answer is accepted, so it no longer applies once another variant is accepted.
 - **Своя гра and `numberingMode`.** The returned `numberingMode` does not control Своя гра numbering and `setNumberingMode` is rejected: a theme's values follow the positions of its questions, except non-numeric values (such as `10-30`), which stay as they are.
+
+### Export (`.qhub`)
+
+`GET /api/v1/manage/packages/{id}/export` returns the package as a `.qhub` archive (`application/zip`, `package.json` + `assets/`; the format is [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md)) — the same file as the export in the package editor. Any scope; packages the token can edit, drafts included. There is no MCP tool for it: download with `curl`.
+
+```bash
+curl -fsS -H "Authorization: Bearer $QH_TOKEN" -o package.qhub \
+  https://questions.com.ua/api/v1/manage/packages/512/export
+```
+
+- **Incremental downloads.** The response carries a weak `ETag`. Send it back as `If-None-Match` and an unchanged package answers **304** with no body (`curl -H 'If-None-Match: W/"…"'`). The tag covers the whole archive: `package.json` and the presence, size and modification time of every media file. `Cache-Control: private, no-cache`.
+- Media files missing on the server are left out of the archive; the `X-Qhub-Missing-Assets` header gives their number.
+- Not in the archive: the owner, status, access level and publication date, tournament results, and the content behind external media URLs. Importing the archive re-creates the content as a new draft; external media URLs are downloaded then (a dead link is dropped with a warning). With the default limits an archive over 50 MiB, or over 100 MiB unpacked, cannot be imported (`PackageImport` settings).
+- Errors: `404` outside the token's packages, `503` busy (`Retry-After: 5`), `429` with `Retry-After`.
+
+### Import
+
+Upload with a token **without a package allowlist**:
+
+```bash
+curl -fsS -H "Authorization: Bearer $QH_TOKEN" -F "file=@package.docx" -F gameType=www https://questions.com.ua/api/v1/manage/imports
+```
+
+Exactly one `file` (`.docx` or `.qhub`, ≤ 50 MiB) and one `gameType` (`www`/`shvager`, case-insensitive) are required. For `.qhub`, the file's own game type wins; a mismatch produces a warning. The whole request is limited to 55 MiB.
+
+The **202** response and polling `GET /imports/{jobId}` return `jobId`, `fileName`, `requestedGameType`, `status`, `currentStep`, `progress`, `createdAt`, `startedAt`, `finishedAt`, `nextRetryAt`, `packageId`, `errorMessage`, and `warnings` (always a string array). Dates are UTC. Poll the `Location` every few seconds until `succeeded` or `failed`; `queued`, `running` and `retrying` are unfinished. `retrying` means a failed attempt has a retry scheduled and attempts left. Warnings are the parser's Ukrainian messages; review them even on success.
+
+A successful import creates a **Draft owned by the user** (while it runs, the job also shows in the site's import list). Read it with `get_package` (`GET /packages/{packageId}`), compare it with the source, and fix it with changesets. Changesets cannot create media or blocks: re-upload a corrected `.qhub` instead and delete the broken draft in the UI. **Fix structure before attaching results.**
+
+The POST is **not idempotent**: after a lost response, check `GET /imports` before retrying.
+
+Errors are JSON `{ "error": "…" }`: **400** malformed/non-multipart form, missing/duplicate fields or invalid game type; **403** restricted token (all three routes) or read-only upload; **404** unknown/foreign job; **408** the upload took over 10 minutes; **413** request too large; **422** invalid extension, empty file or file over 50 MiB (Ukrainian validation message); **429** hourly budget or unfinished-job limit (`Retry-After`). Parser failures after acceptance appear in the job's `errorMessage`, not as HTTP errors.
 
 ### Tournament results
 
@@ -561,7 +599,7 @@ claude mcp add --transport http questions-hub https://questions.com.ua/mcp \
 | Tool | REST equivalent |
 |---|---|
 | `whoami` | `GET /me` |
-| `list_packages` (`status`?, `page`?, `pageSize`?) | `GET /packages` |
+| `list_packages` (`status`?, `search`?, `page`?, `pageSize`?) | `GET /packages` |
 | `get_package` (`packageId`) | `GET /packages/{id}` |
 | `search_authors` (`search`), `search_tags` (`search`) | `GET /authors`, `GET /tags` |
 | `apply_changeset` (`packageId`, `operations`, `dryRun` = **true** by default, `requestId`?, `expectedVersion`?, `summary`?) | `POST /packages/{id}/changesets` |
@@ -570,20 +608,25 @@ claude mcp add --transport http questions-hub https://questions.com.ua/mcp \
 | `attach_results_source` (`packageId`, `url`) | `POST /packages/{id}/results` (readWrite) |
 | `reload_results_source` (`packageId`, `sourceId`) | `POST /packages/{id}/results/{sourceId}/reload` (readWrite) |
 | `delete_results_source` (`packageId`, `sourceId`) | `DELETE /packages/{id}/results/{sourceId}` (readWrite) |
+| `list_imports`, `get_import` (`jobId`) | `GET /imports`, `GET /imports/{jobId}` |
 | `get_api_reference` | this section of the documentation |
+| `get_qhub_format` (also the resource `questions-hub://docs/qhub-format`) | the `.qhub` format and the JSON Schema of `package.json` |
+
+**Files do not go through MCP**: a tool call cannot carry a local file. Upload an import and download an export with REST and the same token (`curl`, see [Import](#import) and [Export](#export-qhub)); follow the import with `get_import`.
 
 Unlike REST, `apply_changeset` previews unless `dryRun: false` is passed. Results are returned both as JSON text and as structured content. Failures are tool errors carrying the REST error message (operation errors contain `Operation N: …`); `apply_changeset` with a read-only token is a tool error. Bodies are capped at 512 KB like the REST changeset endpoint.
 <!-- agent-reference:end -->
 
 ### Agent API implementation
 
-Design, decisions and review notes: `docs/AGENT_API_PLAN.md`.
+Design, decisions and review notes: `docs/AGENT_API_PLAN.md`; imports and exports: `docs/QHUB_TRANSFER_PLAN.md`.
 
 | Component | Location |
 |-----------|----------|
 | Tokens (service, auth handler, policies, access helpers) | `Infrastructure/AgentApi/` |
 | Changeset parser, engine, transactional service | `Infrastructure/AgentApi/Changesets/` |
 | Endpoints | `Controllers/Api/Manage/` (read side shared with MCP: `Infrastructure/AgentApi/AgentPackageReader.cs`) |
+| Imports, exports | `Infrastructure/AgentApi/AgentImportService.cs`, `AgentPackageExporter.cs`; `Infrastructure/Import/` (pipeline, `ImportJobLifecycle`, limits), `Infrastructure/Export/QhubExporter.cs` |
 | MCP tools | `Infrastructure/AgentApi/Mcp/AgentMcpTools.cs` (mapped by `MapAgentMcp`) |
 | Entities | `Domain/PersonalAccessToken.cs`, `Domain/PackageChangeset.cs` |
 | Token UI | `Components/Account/AgentTokens.razor`, `Components/Pages/Admin/AgentTokensAdmin.razor` |

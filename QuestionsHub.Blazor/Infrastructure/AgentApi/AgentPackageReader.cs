@@ -27,9 +27,19 @@ public class AgentPackageReader(
     public const int MaxLookupResults = 20;
 
     // A full package graph is the biggest thing an agent can make the server hold in memory; bound
-    // how many are materialized at once (single-instance app, 512 MB container).
+    // how many are materialized at once (single-instance app, 512 MB container). Exports share it.
     private static readonly SemaphoreSlim GraphReads = new(4, 4);
     private static readonly TimeSpan GraphReadWait = TimeSpan.FromSeconds(10);
+
+    /// <summary>Takes a slot of the full-graph read gate; release it with <see cref="ExitGraphRead"/>.</summary>
+    /// <exception cref="AgentApiBusyException">No slot became free within a few seconds.</exception>
+    internal static async Task EnterGraphRead(CancellationToken ct)
+    {
+        if (!await GraphReads.WaitAsync(GraphReadWait, ct))
+            throw new AgentApiBusyException();
+    }
+
+    internal static void ExitGraphRead() => GraphReads.Release();
 
     /// <summary>Error for an unknown status filter (see <see cref="TryParseStatus"/>).</summary>
     public const string InvalidStatusError = "Invalid 'status'. Allowed: draft, published, archived.";
@@ -46,11 +56,10 @@ public class AgentPackageReader(
         return true;
     }
 
-    /// <summary>Packages the agent can edit, newest first.</summary>
+    /// <summary>Packages the agent can edit, newest first; <paramref name="search"/> filters by title (contains, case-insensitive).</summary>
     public async Task<ManagePackageListResponse> ListPackages(
-        ClaimsPrincipal agent, PackageStatus? statusFilter, int page, int pageSize, CancellationToken ct = default)
+        ClaimsPrincipal agent, PackageStatus? statusFilter, string? search, int page, int pageSize, CancellationToken ct = default)
     {
-
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
@@ -58,6 +67,8 @@ public class AgentPackageReader(
         var query = EditablePackages(context, agent);
         if (statusFilter != null)
             query = query.Where(p => p.Status == statusFilter);
+        if (!string.IsNullOrWhiteSpace(search))
+            query = PackageListService.ApplyTitleFilter(query, search.Trim(), context);
 
         var totalCount = await query.CountAsync(ct);
 
@@ -111,15 +122,14 @@ public class AgentPackageReader(
     /// <exception cref="AgentApiBusyException">Too many package graphs are being read right now.</exception>
     public async Task<ManagePackageDto?> GetPackage(ClaimsPrincipal agent, int id, CancellationToken ct = default)
     {
-        if (!await GraphReads.WaitAsync(GraphReadWait, ct))
-            throw new AgentApiBusyException();
+        await EnterGraphRead(ct);
         try
         {
             return await LoadPackage(agent, id, ct);
         }
         finally
         {
-            GraphReads.Release();
+            ExitGraphRead();
         }
     }
 
@@ -172,7 +182,7 @@ public class AgentPackageReader(
     /// Packages the principal may edit as an agent — the SQL form of <c>CanEditAsAgent</c>:
     /// admin → all, editor → own; narrowed by the token's allowlist.
     /// </summary>
-    private static IQueryable<Package> EditablePackages(QuestionsHubDbContext context, ClaimsPrincipal agent)
+    internal static IQueryable<Package> EditablePackages(QuestionsHubDbContext context, ClaimsPrincipal agent)
     {
         var query = context.Packages.AsNoTracking();
 

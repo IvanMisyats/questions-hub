@@ -8,8 +8,8 @@
   "properties": {
     "formatVersion": {
       "type": "string",
-      "enum": ["1.0", "1.1"],
-      "description": "Format version (\"1.0\" or \"1.1\")."
+      "enum": ["1.0", "1.1", "1.2"],
+      "description": "Format version (\"1.0\", \"1.1\" or \"1.2\")."
     },
     "gameType": {
       "type": "string",
@@ -59,10 +59,7 @@
     },
     "editors": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
+      "items": { "$ref": "#/$defs/person" },
       "description": "Package-level editors (\"FirstName LastName\"). Meaningful when sharedEditors is true."
     },
     "tags": {
@@ -84,9 +81,26 @@
   "additionalProperties": false,
 
   "$defs": {
+    "person": {
+      "description": "A person: \"FirstName LastName\" (two words), or — since 1.2 — an object when a first or last name has several words.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "required": ["firstName", "lastName"],
+          "properties": {
+            "firstName": { "type": "string", "minLength": 1 },
+            "lastName": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "tour": {
       "type": "object",
       "required": ["number"],
+      "not": { "required": ["questions", "blocks"] },
+      "$comment": "A tour has either root questions or blocks, never both (the import rejects such a tour).",
       "properties": {
         "number": {
           "type": "string",
@@ -111,7 +125,7 @@
         },
         "editors": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": { "$ref": "#/$defs/person" },
           "description": "Tour editors (\"FirstName LastName\")."
         },
         "preamble": {
@@ -152,7 +166,7 @@
         },
         "editors": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": { "$ref": "#/$defs/person" },
           "description": "Block editors (\"FirstName LastName\")."
         },
         "preamble": {
@@ -244,7 +258,7 @@
         },
         "authors": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": { "$ref": "#/$defs/person" },
           "description": "Question authors (\"FirstName LastName\")."
         }
       },

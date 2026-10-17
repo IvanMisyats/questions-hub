@@ -58,10 +58,11 @@ public partial class PackageParser
         public bool InsideMultilineHandoutBracket { get; set; }
 
         /// <summary>
-        /// Tracks asset filenames that have already been associated in the current block.
+        /// Tracks image occurrences already associated in the current block. Distinct
+        /// occurrences may share a file (for example, both handout and comment images).
         /// Reset at the start of each block processing.
         /// </summary>
-        public HashSet<string> AssociatedAssetFileNames { get; } = [];
+        public HashSet<AssetReference> AssociatedAssets { get; } = new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
         /// Tracks the section before transitioning to answer-related sections within a block.
@@ -157,7 +158,7 @@ public partial class PackageParser
 
         ctx.QuestionCreatedInCurrentBlock = false;
         ctx.CurrentBlock = block;
-        ctx.AssociatedAssetFileNames.Clear();
+        ctx.AssociatedAssets.Clear();
         // Preserve handout marker flag when continuing a multiline bracket from the previous block
         ctx.HandoutMarkerDetectedInCurrentBlock = ctx.InsideMultilineHandoutBracket;
         ctx.PreviousQuestionInBlock = null;

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 
 using QuestionsHub.Blazor.Domain;
 using QuestionsHub.Blazor.Infrastructure.Media;
@@ -15,14 +16,13 @@ public class QhubExtractor
     private readonly HttpClient _httpClient;
     private readonly ILogger<QhubExtractor> _logger;
 
-    /// <summary>Maximum download size per external asset (20 MB).</summary>
-    private const long MaxAssetDownloadBytes = 20 * 1024 * 1024;
+    private readonly PackageImportOptions _options;
 
-    /// <summary>Maximum total decompressed size for all ZIP entries (500 MB).</summary>
-    private const long MaxTotalDecompressedBytes = 500 * 1024 * 1024;
-
-    /// <summary>Maximum compression ratio to detect decompression bombs.</summary>
-    private const long MaxCompressionRatio = 100;
+    private sealed class AssetContext(PackageImportOptions options)
+    {
+        public ExtractionBudget Budget { get; } = new(options.MaxTotalAssetBytes, "усі медіафайли");
+        public Dictionary<string, string?> Downloads { get; } = new(StringComparer.Ordinal);
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -31,10 +31,11 @@ public class QhubExtractor
         AllowTrailingCommas = true
     };
 
-    public QhubExtractor(IHttpClientFactory httpClientFactory, ILogger<QhubExtractor> logger)
+    public QhubExtractor(IHttpClientFactory httpClientFactory, ILogger<QhubExtractor> logger, IOptions<PackageImportOptions>? options = null)
     {
         _httpClient = httpClientFactory.CreateClient("QhubAssetDownloader");
         _logger = logger;
+        _options = options?.Value ?? new PackageImportOptions();
     }
 
     /// <summary>
@@ -45,121 +46,81 @@ public class QhubExtractor
     /// <param name="ct">Cancellation token.</param>
     public async Task<ParseResult> Extract(string qhubFilePath, string assetsOutputPath, CancellationToken ct)
     {
-        Directory.CreateDirectory(assetsOutputPath);
-
-        QhubPackage package;
-        using (var zip = ZipFile.OpenRead(qhubFilePath))
-        {
-            ValidateZipSafety(zip);
-
-            // Find package.json
-            var packageJsonEntry = zip.GetEntry("package.json")
-                ?? throw new ExtractionException("Файл package.json не знайдено в архіві .qhub");
-
-            // Deserialize
-            await using var stream = packageJsonEntry.Open();
-            package = await JsonSerializer.DeserializeAsync<QhubPackage>(stream, JsonOptions, ct)
-                ?? throw new ExtractionException("Не вдалося прочитати package.json");
-
-            // Extract local assets from assets/ folder
-            ExtractAssets(zip, assetsOutputPath);
-        }
-
-        return await MapToParseResult(package, assetsOutputPath, ct);
+        await using var input = File.OpenRead(qhubFilePath);
+        return await Extract(input, assetsOutputPath, ct);
     }
 
-    /// <summary>
-    /// Extracts from a stream (for testing or direct stream processing).
-    /// </summary>
+    /// <summary>Extracts from a stream without closing the caller's stream.</summary>
     public async Task<ParseResult> Extract(Stream qhubStream, string assetsOutputPath, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(assetsOutputPath);
-
-        QhubPackage package;
+        var assetContext = new AssetContext(_options);
+        QhubPackage? package = null;
+        ExtractionLimits.CheckCentralDirectory(qhubStream, _options);
         using (var zip = new ZipArchive(qhubStream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            ValidateZipSafety(zip);
-
-            var packageJsonEntry = zip.GetEntry("package.json")
+            ExtractionLimits.CheckArchive(zip, _options);
+            var packageEntry = zip.GetEntry("package.json")
                 ?? throw new ExtractionException("Файл package.json не знайдено в архіві .qhub");
-
-            await using var stream = packageJsonEntry.Open();
-            package = await JsonSerializer.DeserializeAsync<QhubPackage>(stream, JsonOptions, ct)
-                ?? throw new ExtractionException("Не вдалося прочитати package.json");
-
-            ExtractAssets(zip, assetsOutputPath);
-        }
-
-        return await MapToParseResult(package, assetsOutputPath, ct);
-    }
-
-    /// <summary>
-    /// Validates ZIP archive to prevent decompression bombs and path traversal.
-    /// </summary>
-    private static void ValidateZipSafety(ZipArchive zip)
-    {
-        long totalDecompressed = 0;
-
-        foreach (var entry in zip.Entries)
-        {
-            totalDecompressed += entry.Length;
-
-            if (totalDecompressed > MaxTotalDecompressedBytes)
+            var declaredAssets = new ExtractionBudget(_options.MaxTotalAssetBytes, "усі медіафайли");
+            foreach (var entry in zip.Entries)
             {
-                throw new ExtractionException(
-                    $"Архів занадто великий після розпакування (перевищено ліміт {MaxTotalDecompressedBytes / 1024 / 1024} МБ)");
+                var isAsset = IsAsset(entry);
+                ExtractionLimits.EntryBudget(entry, entry == packageEntry ? _options.MaxPackageJsonBytes
+                    : isAsset ? _options.MaxAssetBytes : _options.MaxExpandedBytes, _options.MaxQhubCompressionRatio);
+                if (isAsset) declaredAssets.Add(entry.Length);
             }
 
-            // Check compression ratio for non-empty entries
-            if (entry.CompressedLength > 0 && entry.Length / entry.CompressedLength > MaxCompressionRatio)
+            var expanded = new ExtractionBudget(_options.MaxExpandedBytes, "розпакований архів");
+            foreach (var entry in zip.Entries)
             {
-                throw new ExtractionException(
-                    $"Підозрілий ступінь стиснення для '{entry.FullName}' (можлива декомпресійна бомба)");
+                ct.ThrowIfCancellationRequested();
+                var isAsset = IsAsset(entry);
+                var entryBudget = ExtractionLimits.EntryBudget(entry, entry == packageEntry ? _options.MaxPackageJsonBytes
+                    : isAsset ? _options.MaxAssetBytes : _options.MaxExpandedBytes, _options.MaxQhubCompressionRatio);
+                await using var stream = new LimitedExtractionStream(entry.Open(), ct,
+                    isAsset ? [entryBudget, expanded, assetContext.Budget] : [entryBudget, expanded]);
+                if (entry == packageEntry)
+                {
+                    package = await JsonSerializer.DeserializeAsync<QhubPackage>(stream, JsonOptions, ct)
+                        ?? throw new ExtractionException("Не вдалося прочитати package.json");
+                    await stream.CopyToAsync(Stream.Null, ct);
+                }
+                else if (isAsset)
+                {
+                    var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(assetsOutputPath)) + Path.DirectorySeparatorChar;
+                    var destination = Path.GetFullPath(Path.Combine(assetsOutputPath, Path.GetFileName(entry.FullName)));
+                    if (!destination.StartsWith(target, StringComparison.Ordinal))
+                        throw new ExtractionException($"Виявлено спробу обходу шляху: '{ImportDiagnostics.Label(entry.FullName)}'");
+                    await ExtractionLimits.CopyToFile(stream, destination, ct);
+                }
+                else
+                {
+                    // Ignored entries still consume the expanded-byte budget.
+                    await stream.CopyToAsync(Stream.Null, ct);
+                }
             }
         }
+        return await MapToParseResult(package!, assetsOutputPath, assetContext, ct);
     }
 
-    /// <summary>
-    /// Extracts asset files from the assets/ folder in the ZIP, with path traversal protection.
-    /// </summary>
-    private static void ExtractAssets(ZipArchive zip, string assetsOutputPath)
+    private static bool IsAsset(ZipArchiveEntry entry) =>
+        entry.FullName.StartsWith("assets/", StringComparison.OrdinalIgnoreCase)
+        && !string.IsNullOrEmpty(Path.GetFileName(entry.FullName));
+
+    private async Task<ParseResult> MapToParseResult(QhubPackage package, string assetsOutputPath, AssetContext assetContext, CancellationToken ct)
     {
-        var targetFullPath = Path.GetFullPath(assetsOutputPath);
-
-        foreach (var entry in zip.Entries)
-        {
-            if (!entry.FullName.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var fileName = Path.GetFileName(entry.FullName);
-            if (string.IsNullOrEmpty(fileName))
-                continue; // skip directory entries
-
-            var destPath = Path.GetFullPath(Path.Combine(assetsOutputPath, fileName));
-
-            // Verify the resolved path is within the target directory
-            if (!destPath.StartsWith(targetFullPath + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                && destPath != targetFullPath)
-            {
-                throw new ExtractionException($"Виявлено спробу обходу шляху: '{entry.FullName}'");
-            }
-
-            entry.ExtractToFile(destPath, overwrite: true);
-        }
-    }
-
-    private async Task<ParseResult> MapToParseResult(QhubPackage package, string assetsOutputPath, CancellationToken ct)
-    {
-        var warnings = new List<string>();
+        var warnings = new ImportWarnings();
 
         // Validate format version
         if (string.IsNullOrWhiteSpace(package.FormatVersion))
         {
             warnings.Add("Відсутнє поле formatVersion");
         }
-        else if (package.FormatVersion is not ("1.0" or "1.1"))
+        else if (package.FormatVersion is not ("1.0" or "1.1" or "1.2"))
         {
-            warnings.Add($"Невідома версія формату: {package.FormatVersion}. Очікувалося 1.0 або 1.1");
+            warnings.Add($"Невідома версія формату: {ImportDiagnostics.Label(package.FormatVersion)}. Очікувалося 1.0, 1.1 або 1.2");
         }
 
         // Parse game type (added in format 1.1; absent means Що?Де?Коли?)
@@ -188,7 +149,7 @@ public class QhubExtractor
         for (var i = 0; i < package.Tours.Count; i++)
         {
             var qhubTour = package.Tours[i];
-            var tourDto = await MapTour(qhubTour, i, assetsOutputPath, warnings, ct);
+            var tourDto = await MapTour(qhubTour, i, assetsOutputPath, warnings, assetContext, ct);
             tours.Add(tourDto);
         }
 
@@ -202,7 +163,7 @@ public class QhubExtractor
 
             foreach (var tour in tours.Where(t => t.Type != TourType.Regular))
             {
-                warnings.Add($"Тема {tour.Number}: розминка/перестрілка не підтримуються у Своїй грі — тип скинуто");
+                warnings.Add($"Тема {ImportDiagnostics.Label(tour.Number)}: розминка/перестрілка не підтримуються у Своїй грі — тип скинуто");
                 tour.Type = TourType.Regular;
             }
         }
@@ -248,8 +209,9 @@ public class QhubExtractor
 
     private async Task<TourDto> MapTour(
         QhubTour qhubTour, int index, string assetsOutputPath,
-        List<string> warnings, CancellationToken ct)
+        ImportWarnings warnings, AssetContext assetContext, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(qhubTour.Number))
         {
             warnings.Add($"Тур {index + 1}: відсутній номер туру");
@@ -258,9 +220,12 @@ public class QhubExtractor
         var hasQuestions = qhubTour.Questions is { Count: > 0 };
         var hasBlocks = qhubTour.Blocks is { Count: > 0 };
 
+        if (qhubTour.Questions != null && qhubTour.Blocks != null)
+            throw new ExtractionException($"Тур {ImportDiagnostics.Label(qhubTour.Number ?? (index + 1).ToString())}: не може одночасно містити запитання (questions) і блоки (blocks)");
+
         if (!hasQuestions && !hasBlocks)
         {
-            warnings.Add($"Тур {qhubTour.Number ?? (index + 1).ToString()}: не містить запитань");
+            warnings.Add($"Тур {ImportDiagnostics.Label(qhubTour.Number ?? (index + 1).ToString())}: не містить запитань");
         }
 
         var tourDto = new TourDto
@@ -272,7 +237,8 @@ public class QhubExtractor
                  : qhubTour.IsWarmup == true ? TourType.Warmup
                  : TourType.Regular,
             Editors = qhubTour.Editors ?? [],
-            Preamble = qhubTour.Preamble
+            Preamble = qhubTour.Preamble,
+            Comment = qhubTour.Comment
         };
 
         // Map blocks
@@ -281,7 +247,7 @@ public class QhubExtractor
             for (var i = 0; i < qhubTour.Blocks!.Count; i++)
             {
                 var qhubBlock = qhubTour.Blocks[i];
-                var blockDto = await MapBlock(qhubBlock, i, tourDto.Number, assetsOutputPath, warnings, ct);
+                var blockDto = await MapBlock(qhubBlock, i, tourDto.Number, assetsOutputPath, warnings, assetContext, ct);
                 tourDto.Blocks.Add(blockDto);
             }
         }
@@ -292,7 +258,7 @@ public class QhubExtractor
             for (var i = 0; i < qhubTour.Questions!.Count; i++)
             {
                 var qhubQuestion = qhubTour.Questions[i];
-                var questionDto = await MapQuestion(qhubQuestion, i, tourDto.Number, assetsOutputPath, warnings, ct);
+                var questionDto = await MapQuestion(qhubQuestion, i, tourDto.Number, assetsOutputPath, warnings, assetContext, ct);
                 tourDto.Questions.Add(questionDto);
             }
         }
@@ -302,11 +268,11 @@ public class QhubExtractor
 
     private async Task<BlockDto> MapBlock(
         QhubBlock qhubBlock, int index, string tourNumber, string assetsOutputPath,
-        List<string> warnings, CancellationToken ct)
+        ImportWarnings warnings, AssetContext assetContext, CancellationToken ct)
     {
         if (qhubBlock.Questions == null || qhubBlock.Questions.Count == 0)
         {
-            warnings.Add($"Тур {tourNumber}, блок {index + 1}: не містить запитань");
+            warnings.Add($"Тур {ImportDiagnostics.Label(tourNumber)}, блок {index + 1}: не містить запитань");
         }
 
         var blockDto = new BlockDto
@@ -323,7 +289,7 @@ public class QhubExtractor
             {
                 var qhubQuestion = qhubBlock.Questions[i];
                 var questionDto = await MapQuestion(
-                    qhubQuestion, i, $"{tourNumber}/блок {index + 1}", assetsOutputPath, warnings, ct);
+                    qhubQuestion, i, $"{ImportDiagnostics.Label(tourNumber)}/блок {index + 1}", assetsOutputPath, warnings, assetContext, ct);
                 blockDto.Questions.Add(questionDto);
             }
         }
@@ -333,9 +299,10 @@ public class QhubExtractor
 
     private async Task<QuestionDto> MapQuestion(
         QhubQuestion qhubQuestion, int index, string context, string assetsOutputPath,
-        List<string> warnings, CancellationToken ct)
+        ImportWarnings warnings, AssetContext assetContext, CancellationToken ct)
     {
-        var questionLabel = $"Тур {context}, запитання {qhubQuestion.Number ?? (index + 1).ToString()}";
+        ct.ThrowIfCancellationRequested();
+        var questionLabel = $"Тур {ImportDiagnostics.Label(context)}, запитання {ImportDiagnostics.Label(qhubQuestion.Number ?? (index + 1).ToString())}";
 
         if (string.IsNullOrWhiteSpace(qhubQuestion.Number))
         {
@@ -356,13 +323,13 @@ public class QhubExtractor
         var handoutAssetFileName = await ResolveAsset(
             qhubQuestion.HandoutAssetFileName,
             qhubQuestion.HandoutAssetUrl,
-            assetsOutputPath, questionLabel, "роздатка", warnings, ct);
+            assetsOutputPath, questionLabel, "роздатка", warnings, assetContext, ct);
 
         // Resolve comment asset
         var commentAssetFileName = await ResolveAsset(
             qhubQuestion.CommentAssetFileName,
             qhubQuestion.CommentAssetUrl,
-            assetsOutputPath, questionLabel, "коментар", warnings, ct);
+            assetsOutputPath, questionLabel, "коментар", warnings, assetContext, ct);
 
         return new QuestionDto
         {
@@ -385,7 +352,7 @@ public class QhubExtractor
     /// <summary>
     /// Parses the gameType field ("www" / "shvager", case-insensitive). Absent → Що?Де?Коли?.
     /// </summary>
-    private static PackageType ParseGameType(string? gameType, List<string> warnings)
+    private static PackageType ParseGameType(string? gameType, ImportWarnings warnings)
     {
         if (string.IsNullOrWhiteSpace(gameType))
             return PackageType.Www;
@@ -396,7 +363,7 @@ public class QhubExtractor
         if (gameType.Equals("shvager", StringComparison.OrdinalIgnoreCase))
             return PackageType.Shvager;
 
-        warnings.Add($"Невідомий тип гри: {gameType}. Очікувалося www або shvager. Використано www");
+        warnings.Add($"Невідомий тип гри: {ImportDiagnostics.Label(gameType)}. Очікувалося www або shvager. Використано www");
         return PackageType.Www;
     }
 
@@ -410,14 +377,15 @@ public class QhubExtractor
         string assetsOutputPath,
         string questionLabel,
         string assetType,
-        List<string> warnings,
+        ImportWarnings warnings,
+        AssetContext assetContext,
         CancellationToken ct)
     {
         // Local file takes precedence. The name comes from package.json: only a bare file name of
         // an allowed media type (no paths, no SVG or other active content)
         if (!string.IsNullOrWhiteSpace(localFileName) && !MediaSecurityOptions.IsAllowedMediaFileName(localFileName))
         {
-            warnings.Add($"{questionLabel}: недопустима назва або тип файлу {assetType}: '{localFileName}'");
+            warnings.Add($"{questionLabel}: недопустима назва або тип файлу {assetType}: '{ImportDiagnostics.Label(localFileName)}'");
         }
         else if (!string.IsNullOrWhiteSpace(localFileName))
         {
@@ -425,13 +393,19 @@ public class QhubExtractor
             if (File.Exists(localPath))
                 return localFileName;
 
-            warnings.Add($"{questionLabel}: файл {assetType} '{localFileName}' не знайдено в архіві");
+            warnings.Add($"{questionLabel}: файл {assetType} '{ImportDiagnostics.Label(localFileName)}' не знайдено в архіві");
         }
 
         // Try external URL
         if (!string.IsNullOrWhiteSpace(externalUrl))
         {
-            return await DownloadAsset(externalUrl, assetsOutputPath, questionLabel, assetType, warnings, ct);
+            ct.ThrowIfCancellationRequested();
+            if (!assetContext.Downloads.TryGetValue(externalUrl, out var fileName))
+            {
+                fileName = await DownloadAsset(externalUrl, assetsOutputPath, questionLabel, assetType, warnings, assetContext, ct);
+                assetContext.Downloads.Add(externalUrl, fileName);
+            }
+            return fileName;
         }
 
         return null;
@@ -445,15 +419,19 @@ public class QhubExtractor
         string assetsOutputPath,
         string questionLabel,
         string assetType,
-        List<string> warnings,
+        ImportWarnings warnings,
+        AssetContext assetContext,
         CancellationToken ct)
     {
+        // One oversized or slow external file is skipped with a warning, as a missing one is; exceeding the
+        // budget of all media, or cancelling the job, fails the import.
+        var assetBudget = new ExtractionBudget(_options.MaxAssetBytes, "один медіафайл");
         try
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != "http" && uri.Scheme != "https"))
             {
-                warnings.Add($"{questionLabel}: некоректне посилання на {assetType}: {url}");
+                warnings.Add($"{questionLabel}: некоректне посилання на {assetType}: {ImportDiagnostics.Label(url)}");
                 return null;
             }
 
@@ -464,68 +442,54 @@ public class QhubExtractor
 
             if (!response.IsSuccessStatusCode)
             {
-                warnings.Add($"{questionLabel}: не вдалося завантажити {assetType} ({(int)response.StatusCode}): {url}");
+                warnings.Add($"{questionLabel}: не вдалося завантажити {assetType} ({(int)response.StatusCode}): {ImportDiagnostics.Label(url)}");
                 return null;
             }
 
-            // Check content length
-            if (response.Content.Headers.ContentLength > MaxAssetDownloadBytes)
+            // A declared length over the per-file limit skips the file before anything is read.
+            if (response.Content.Headers.ContentLength is long length)
             {
-                warnings.Add($"{questionLabel}: файл {assetType} завеликий ({response.Content.Headers.ContentLength / 1024 / 1024} МБ): {url}");
-                return null;
+                assetBudget.Check(length);
+                assetContext.Budget.Check(length);
             }
 
             // Determine file name from URL
             var extension = GetExtensionFromUrl(url, response.Content.Headers.ContentType?.MediaType);
             if (!MediaSecurityOptions.AllowedMediaExtensions.Contains(extension))
             {
-                warnings.Add($"{questionLabel}: непідтримуваний тип файлу {assetType} ({extension}): {url}");
+                warnings.Add($"{questionLabel}: непідтримуваний тип файлу {assetType} ({ImportDiagnostics.Label(extension)}): {ImportDiagnostics.Label(url)}");
                 return null;
             }
 
             var fileName = $"dl_{Guid.NewGuid():N}{extension}";
             var destPath = Path.Combine(assetsOutputPath, fileName);
 
-            // Download with size limit
-            await using var responseStream = await response.Content.ReadAsStreamAsync(cts.Token);
-            await using var fileStream = File.Create(destPath);
+            await using var responseStream = new LimitedExtractionStream(
+                await response.Content.ReadAsStreamAsync(cts.Token), cts.Token, assetContext.Budget, assetBudget);
+            await ExtractionLimits.CopyToFile(responseStream, destPath, cts.Token);
 
-            var buffer = new byte[81920];
-            long totalRead = 0;
-            int bytesRead;
-
-            while ((bytesRead = await responseStream.ReadAsync(buffer, cts.Token)) > 0)
-            {
-                totalRead += bytesRead;
-                if (totalRead > MaxAssetDownloadBytes)
-                {
-                    // Clean up oversized file
-                    fileStream.Close();
-                    File.Delete(destPath);
-                    warnings.Add($"{questionLabel}: файл {assetType} перевищив ліміт 20 МБ: {url}");
-                    return null;
-                }
-
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cts.Token);
-            }
-
-            _logger.LogDebug("Downloaded asset {Url} -> {FileName} ({Size} bytes)", url, fileName, totalRead);
+            _logger.LogDebug("Downloaded asset {Url} -> {FileName} ({Size} bytes)", url, fileName, assetBudget.Used);
             return fileName;
+        }
+        catch (ExtractionLimitException ex) when (ex.Budget == assetBudget)
+        {
+            warnings.Add($"{questionLabel}: файл {assetType} перевищує ліміт {PackageImportOptions.FormatFileSize(_options.MaxAssetBytes)}: {ImportDiagnostics.Label(url)}");
+            return null;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            warnings.Add($"{questionLabel}: таймаут завантаження {assetType}: {url}");
+            warnings.Add($"{questionLabel}: таймаут завантаження {assetType}: {ImportDiagnostics.Label(url)}");
             return null;
         }
         catch (HttpRequestException ex)
         {
-            warnings.Add($"{questionLabel}: помилка завантаження {assetType}: {url} ({ex.Message})");
+            warnings.Add($"{questionLabel}: помилка завантаження {assetType}: {ImportDiagnostics.Label(url)} ({ImportDiagnostics.Label(ex.Message)})");
             return null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not ExtractionException)
         {
             _logger.LogWarning(ex, "Failed to download asset {Url}", url);
-            warnings.Add($"{questionLabel}: помилка завантаження {assetType}: {url}");
+            warnings.Add($"{questionLabel}: помилка завантаження {assetType}: {ImportDiagnostics.Label(url)}");
             return null;
         }
     }
@@ -575,7 +539,7 @@ public class QhubExtractor
         };
     }
 
-    private static DateOnly? ParseDate(string? dateStr, string fieldName, List<string> warnings)
+    private static DateOnly? ParseDate(string? dateStr, string fieldName, ImportWarnings warnings)
     {
         if (string.IsNullOrWhiteSpace(dateStr))
             return null;
@@ -583,7 +547,7 @@ public class QhubExtractor
         if (DateOnly.TryParseExact(dateStr, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             return date;
 
-        warnings.Add($"Некоректний формат дати {fieldName}: '{dateStr}'. Очікувався YYYY-MM-DD.");
+        warnings.Add($"Некоректний формат дати {fieldName}: '{ImportDiagnostics.Label(dateStr)}'. Очікувався YYYY-MM-DD.");
         return null;
     }
 

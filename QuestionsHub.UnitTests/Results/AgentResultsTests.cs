@@ -304,7 +304,7 @@ public sealed class AgentResultsTests : IDisposable
         var controller = Controller(service);
         var source = await service.Attach(Agent(), id, "13097");
         var accessor = new HttpContextAccessor { HttpContext = controller.HttpContext };
-        var mcp = new AgentMcpTools(accessor, null!, null!, service);
+        var mcp = new AgentMcpTools(accessor, null!, null!, service, null!);
         for (var i = 0; i < 4; i++)
             await mcp.ReloadResultsSource(id, source.Id);
         var response = (ObjectResult)await controller.Delete(id, source.Id, default);
@@ -319,7 +319,7 @@ public sealed class AgentResultsTests : IDisposable
     {
         var id = await Seed();
         var accessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = Agent(write: false) } };
-        var mcp = new AgentMcpTools(accessor, null!, null!, Service());
+        var mcp = new AgentMcpTools(accessor, null!, null!, Service(), null!);
         Func<Task>[] writes = [() => mcp.AttachResultsSource(id, "13097"), () => mcp.ReloadResultsSource(id, 1), () => mcp.DeleteResultsSource(id, 1)];
         foreach (var write in writes)
             await write.Should().ThrowAsync<McpException>().WithMessage("*read-only token*");

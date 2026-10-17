@@ -16,10 +16,10 @@ public sealed class ClientRateLimitAttribute(string budget) : Attribute
 
 internal static class RateLimitWindows
 {
-    /// <summary>Sliding one-minute window in 10-second segments, no queueing.</summary>
-    public static SlidingWindowRateLimiterOptions PerMinute(int permitLimit) => new()
+    /// <summary>Sliding window in six segments, no queueing.</summary>
+    public static SlidingWindowRateLimiterOptions Create(int permitLimit, TimeSpan window) => new()
     {
-        Window = TimeSpan.FromMinutes(1),
+        Window = window,
         SegmentsPerWindow = 6,
         PermitLimit = permitLimit,
         QueueLimit = 0
@@ -69,11 +69,11 @@ public static class RateLimitingExtensions
     /// Writes the standard 429 JSON response with a <c>Retry-After</c> header. Sliding-window
     /// leases do not report when a permit frees up, so the hint falls back to the window length.
     /// </summary>
-    public static async Task WriteRejection(HttpContext context, RateLimitLease lease, CancellationToken cancellationToken)
+    public static async Task WriteRejection(HttpContext context, RateLimitLease lease, CancellationToken cancellationToken, TimeSpan? window = null)
     {
         var retryAfter = lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterValue)
             ? retryAfterValue
-            : TimeSpan.FromMinutes(1);
+            : window ?? TimeSpan.FromMinutes(1);
 
         context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.Response.ContentType = "application/json";
@@ -85,7 +85,7 @@ public static class RateLimitingExtensions
     private static RateLimitPartition<string> IpPartition(HttpContext context, Func<RateLimitSettings, int> limit)
     {
         var permitLimit = limit(context.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value);
-        return RateLimitPartition.GetSlidingWindowLimiter(ClientIp(context), _ => RateLimitWindows.PerMinute(permitLimit));
+        return RateLimitPartition.GetSlidingWindowLimiter(ClientIp(context), _ => RateLimitWindows.Create(permitLimit, TimeSpan.FromMinutes(1)));
     }
 }
 
@@ -112,7 +112,7 @@ public sealed class ClientRateLimitingMiddleware(RequestDelegate next, ClientRat
         using var lease = limiter.Acquire(budget, principalId);
         if (!lease.IsAcquired)
         {
-            await RateLimitingExtensions.WriteRejection(context, lease, context.RequestAborted);
+            await RateLimitingExtensions.WriteRejection(context, lease, context.RequestAborted, RateLimitBudgets.WindowFor(budget));
             return;
         }
 

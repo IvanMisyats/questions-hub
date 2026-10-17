@@ -1,7 +1,9 @@
 # Package Interchange Format (`.qhub`)
 
-**Version**: 1.1  
-**Last Updated**: July 3, 2026
+**Version**: 1.2  
+**Last Updated**: October 16, 2026
+
+**Changes in 1.2**: a person (author/editor) may also be an object `{"firstName": "…", "lastName": "…"}` when a first or last name has several words — the string form must be exactly two words. The exporter writes the object only for such names. Readers of 1.2 accept both forms.
 
 **Changes in 1.1**: added `gameType` (package), `title` (tour = theme name for Своя гра), `form` (question «Форма» hint). Files declaring `formatVersion: "1.0"` remain valid — the new fields are optional and absent `gameType` means Що?Де?Коли?.
 
@@ -61,7 +63,7 @@ When all media is available via external URLs, the `assets/` folder can be omitt
 
 ```jsonc
 {
-  "formatVersion": "1.1",
+  "formatVersion": "1.2",
   "gameType": "www",                        // optional: "www" (default) | "shvager" (Своя гра)
 
   // Optional metadata
@@ -106,7 +108,8 @@ When all media is available via external URLs, the `assets/` folder can be omitt
 **Blocks vs Questions**: A tour contains either:
 - `questions` only (no blocks) — the common case
 - `blocks` with questions inside them — when the tour is subdivided
-- Both `questions` and `blocks` — questions outside any block ("orphan" questions) plus block-grouped questions
+
+Never both: a tour with `questions` **and** `blocks` is rejected by the import (put the loose questions in a block of their own).
 
 ### Block Object
 
@@ -165,7 +168,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `formatVersion` | string | ✅ | `"1.0"` or `"1.1"` |
+| `formatVersion` | string | ✅ | `"1.0"`, `"1.1"` or `"1.2"` |
 | `gameType` | string | — | `"www"` (default) or `"shvager"` (Своя гра). Added in 1.1 |
 | `sourceUrl` | string | — | URL where the package was obtained |
 | `title` | string | ✅ | Package title |
@@ -175,7 +178,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 | `playedTo` | string | — | End date, ISO 8601 (`"YYYY-MM-DD"`). Omit for single-day events |
 | `numberingMode` | string | — | `"Global"`, `"PerTour"`, or `"Manual"`. Default: importer decides |
 | `sharedEditors` | boolean | — | `true` = editors at package level; `false` (default) = per-tour |
-| `editors` | string[] | — | Package-level editors. Meaningful when `sharedEditors=true` |
+| `editors` | person[] | — | Package-level editors. Meaningful when `sharedEditors=true` |
 | `tags` | string[] | — | Tag labels (e.g., `["2025", "ЛУК"]`) |
 | `tours` | Tour[] | ✅ | Array of tours, ordered by display order |
 
@@ -186,7 +189,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 | `number` | string | ✅ | Display number (`"0"` for warmup, `"1"`, `"2"`, …) |
 | `title` | string | — | Theme title (Своя гра). Added in 1.1 |
 | `isWarmup` | boolean | — | `true` if this is a warmup tour. Default: `false`. Not allowed for Своя гра |
-| `editors` | string[] | — | Tour editors (when `sharedEditors=false`) |
+| `editors` | person[] | — | Tour editors (when `sharedEditors=false`) |
 | `preamble` | string | — | Preamble text |
 | `comment` | string | — | Tour-level commentary |
 | `questions` | Question[] | — | Questions directly under the tour |
@@ -197,7 +200,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | — | Block name. If absent, displayed as "Блок N" |
-| `editors` | string[] | — | Block editors |
+| `editors` | person[] | — | Block editors |
 | `preamble` | string | — | Preamble text |
 | `questions` | Question[] | ✅ | Questions within the block |
 
@@ -219,7 +222,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 | `commentAssetFileName` | string | — | Filename in `assets/` for comment media |
 | `commentAssetUrl` | string | — | External URL for comment media |
 | `source` | string | — | Source references |
-| `authors` | string[] | — | Question authors |
+| `authors` | person[] | — | Question authors |
 
 ---
 
@@ -227,7 +230,7 @@ If both local and URL variants are provided for the same slot, the local file ta
 
 ### Author Names
 
-Authors and editors are represented as `"FirstName LastName"` strings (two words, space-separated).
+Authors and editors are represented as `"FirstName LastName"` strings (two words, space-separated). Since 1.2 a person whose first or last name has several words is an object instead, e.g. `{"firstName": "Жан Клод", "lastName": "Ван Дамм"}`; mixing both forms in one list is fine.
 
 ```json
 ["Андрій Пундор", "Іван Місяць"]
@@ -244,9 +247,10 @@ If the source has more complex attribution (e.g., "в редакції Іван�
 ### Null vs Absent
 
 Optional fields can be either:
-- Omitted from the JSON entirely (preferred — keeps files compact)
-- Set to `null` (also valid)
+- Omitted from the JSON entirely (preferred — keeps files compact, and the only form the JSON Schema accepts)
 - Set to empty string `""` (treated as absent)
+
+The importer also reads `null` as absent, but the schema does not allow it: omit the field instead.
 
 ### Asset Filenames
 
@@ -445,11 +449,11 @@ Key rules:
 
 A valid package file must satisfy:
 
-1. `formatVersion` is `"1.0"`
+1. `formatVersion` is `"1.0"`, `"1.1"` or `"1.2"` (another value imports with a warning)
 2. `title` is a non-empty string
 3. `tours` is a non-empty array
 4. Each tour has a non-empty `number`
-5. Each tour has at least one question (directly or within blocks)
+5. Each tour has at least one question, either directly or within blocks (not both)
 6. Each question has non-empty `number`, `text`, and `answer`
 7. If `handoutAssetFileName` is specified, the file must exist in `assets/`
 8. If `commentAssetFileName` is specified, the file must exist in `assets/`

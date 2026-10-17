@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 
@@ -39,9 +39,7 @@ public class StaleJobRecoveryService : IHostedService
 
         foreach (var job in staleJobs)
         {
-            job.Status = ImportJobStatus.Failed;
-            job.ErrorMessage = "Обробку було перервано через перезапуск сервера";
-            job.FinishedAt = DateTime.UtcNow;
+            ImportJobLifecycle.Fail(job, "Обробку було перервано через перезапуск сервера");
         }
 
         await db.SaveChangesAsync(cancellationToken);

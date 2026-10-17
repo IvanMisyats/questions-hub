@@ -218,9 +218,14 @@ public class TagService
 
     private static async Task<Tag> GetOrCreateInternal(QuestionsHubDbContext context, string name)
     {
-        // Case-insensitive lookup
+        // Case-insensitive, literal lookup (ILike would read '%' and '_' in a tag name as wildcards and
+        // reuse a different tag). ToLower() is translated to SQL lower(); it never runs in .NET, so the
+        // culture warning does not apply. Same rule as the changeset engine's tag resolution.
+        var key = name.ToLowerInvariant();
+#pragma warning disable CA1304, CA1311
         var existing = await context.Tags
-            .FirstOrDefaultAsync(t => EF.Functions.ILike(t.Name, name));
+            .FirstOrDefaultAsync(t => t.Name.ToLower() == key);
+#pragma warning restore CA1304, CA1311
 
         if (existing != null)
         {

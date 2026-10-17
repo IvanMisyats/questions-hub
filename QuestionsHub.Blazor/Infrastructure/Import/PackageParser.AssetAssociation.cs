@@ -17,7 +17,7 @@ public partial class PackageParser
         foreach (var asset in assets)
         {
             // Skip if already associated
-            if (ctx.AssociatedAssetFileNames.Contains(asset.FileName))
+            if (ctx.AssociatedAssets.Contains(asset))
                 continue;
 
             if (ctx.HasCurrentQuestion)
@@ -27,13 +27,13 @@ public partial class PackageParser
                     ? ParserSection.Handout
                     : ctx.SectionBeforeAnswerRelated;
                 AssociateAsset(asset, section, ctx.CurrentQuestion, ctx.Result);
-                ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                ctx.AssociatedAssets.Add(asset);
             }
             else
             {
                 // No question yet - add to pending assets for later association
                 ctx.PendingAssets.Add((asset, ctx.SectionBeforeAnswerRelated));
-                ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                ctx.AssociatedAssets.Add(asset);
             }
 
             // Only associate the first unassociated asset as handout/pre-answer;
@@ -56,7 +56,7 @@ public partial class PackageParser
     {
         // Get unassociated assets
         var unassociatedAssets = assets
-            .Where(a => !ctx.AssociatedAssetFileNames.Contains(a.FileName))
+            .Where(a => !ctx.AssociatedAssets.Contains(a))
             .ToList();
 
         if (unassociatedAssets.Count == 0)
@@ -76,13 +76,13 @@ public partial class PackageParser
                 // Remaining assets go to current question (as comment)
                 var firstAsset = unassociatedAssets[0];
                 AssociateAsset(firstAsset, ParserSection.Comment, ctx.PreviousQuestionInBlock, ctx.Result);
-                ctx.AssociatedAssetFileNames.Add(firstAsset.FileName);
+                ctx.AssociatedAssets.Add(firstAsset);
 
                 // Associate remaining assets with current question
                 foreach (var asset in unassociatedAssets.Skip(1))
                 {
                     AssociateAsset(asset, ParserSection.Comment, ctx.CurrentQuestion, ctx.Result);
-                    ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                    ctx.AssociatedAssets.Add(asset);
                 }
             }
             else
@@ -91,7 +91,7 @@ public partial class PackageParser
                 foreach (var asset in unassociatedAssets)
                 {
                     AssociateAsset(asset, section, ctx.CurrentQuestion, ctx.Result);
-                    ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                    ctx.AssociatedAssets.Add(asset);
                 }
             }
         }
@@ -101,7 +101,7 @@ public partial class PackageParser
             foreach (var asset in unassociatedAssets)
             {
                 ctx.PendingAssets.Add((asset, ctx.CurrentSection));
-                ctx.AssociatedAssetFileNames.Add(asset.FileName);
+                ctx.AssociatedAssets.Add(asset);
             }
         }
     }
@@ -159,7 +159,7 @@ public partial class PackageParser
             else
             {
                 // Warn about dropped asset
-                result?.Warnings.Add($"Question {question.Number}: extra comment asset ignored: {asset.FileName} (already has: {question.CommentAssetFileName})");
+                result?.Warnings.Add($"Question {ImportDiagnostics.Label(question.Number)}: extra comment asset ignored: {ImportDiagnostics.Label(asset.FileName)} (already has: {ImportDiagnostics.Label(question.CommentAssetFileName)})");
             }
         }
         else
@@ -171,7 +171,7 @@ public partial class PackageParser
             else
             {
                 // Warn about dropped asset
-                result?.Warnings.Add($"Question {question.Number}: extra handout asset ignored: {asset.FileName} (already has: {question.HandoutAssetFileName})");
+                result?.Warnings.Add($"Question {ImportDiagnostics.Label(question.Number)}: extra handout asset ignored: {ImportDiagnostics.Label(asset.FileName)} (already has: {ImportDiagnostics.Label(question.HandoutAssetFileName)})");
             }
         }
     }

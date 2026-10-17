@@ -95,6 +95,21 @@ public sealed class ManageReadTests(PostgresFixture database)
     }
 
     [SkippableFact]
+    public async Task List_SearchesTitles_CaseInsensitively_WithLiteralWildcards()
+    {
+        await using var factory = CreateFactory();
+        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        var cup = await TestData.CreatePackage(factory, editor.Id, title: "IX Кубок Лося");
+        var percent = await TestData.CreatePackage(factory, editor.Id, title: "100% Синхрон");
+        await TestData.CreatePackage(factory, editor.Id, title: "Інший пакет");
+        using var client = Client(factory, await TestData.CreateToken(factory, editor.Id));
+
+        (await List(client, "?search=" + Uri.EscapeDataString("кубок лося"))).Packages.Select(p => p.Id).Should().Equal(cup.Id);
+        (await List(client, "?search=" + Uri.EscapeDataString("%"))).Packages.Select(p => p.Id).Should().Equal(percent.Id);
+        (await List(client, "?search=" + Uri.EscapeDataString("Відсутній"))).Packages.Should().BeEmpty();
+    }
+
+    [SkippableFact]
     public async Task Get_OwnDraft_ReturnsTheEditableTree()
     {
         await using var factory = CreateFactory();

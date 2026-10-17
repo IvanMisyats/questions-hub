@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -44,7 +44,8 @@ public class PackageImportService
         string fileName,
         Stream fileStream,
         long fileSize,
-        PackageType type = PackageType.Www)
+        PackageType type = PackageType.Www,
+        CancellationToken ct = default)
     {
         // The name comes from the client: keep only the bare file name, never a path
         fileName = Path.GetFileName(fileName.Replace('\\', '/'));
@@ -57,7 +58,7 @@ public class PackageImportService
         if (!_options.IsExtensionAllowed(fileName))
         {
             throw new ValidationException(
-                $"Непідтримуваний формат файлу. Дозволені: {string.Join(", ", _options.AllowedExtensions)}");
+                $"Непідтримуваний формат файлу. Дозволені: {string.Join(", ", _options.AllowedExtensions.Distinct(StringComparer.OrdinalIgnoreCase))}");
         }
 
         if (fileSize > _options.MaxFileSizeBytes)
@@ -80,34 +81,45 @@ public class PackageImportService
         var inputFilePath = Path.Combine(inputFolder, fileName);
         var relativeInputPath = Path.Combine("jobs", jobId.ToString(), "input", fileName);
 
-        // Save file
-        await using (var output = new FileStream(inputFilePath, FileMode.CreateNew, FileAccess.Write))
+        try
         {
-            await fileStream.CopyToAsync(output);
+            // Save file
+            await using (var output = new FileStream(inputFilePath, FileMode.CreateNew, FileAccess.Write))
+            {
+                await fileStream.CopyToAsync(output, ct);
+            }
+
+            // Create job record
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+
+            var job = new PackageImportJob
+            {
+                Id = jobId,
+                OwnerId = ownerId,
+                Type = type,
+                CreatedAt = DateTime.UtcNow,
+                Status = ImportJobStatus.Queued,
+                InputFileName = fileName,
+                InputFilePath = relativeInputPath,
+                InputFileSizeBytes = fileSize
+            };
+
+            // Not cancellable once the file is on disk: a cancellation surfacing after the commit would
+            // otherwise delete the input of a job that exists.
+            db.PackageImportJobs.Add(job);
+            await db.SaveChangesAsync(CancellationToken.None);
+
+            _logger.LogInformation("Created import job: {JobId} for file: {FileName}", jobId, fileName);
+
+            return job;
         }
-
-        // Create job record
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
-
-        var job = new PackageImportJob
+        catch
         {
-            Id = jobId,
-            OwnerId = ownerId,
-            Type = type,
-            CreatedAt = DateTime.UtcNow,
-            Status = ImportJobStatus.Queued,
-            InputFileName = fileName,
-            InputFilePath = relativeInputPath,
-            InputFileSizeBytes = fileSize
-        };
-
-        db.PackageImportJobs.Add(job);
-        await db.SaveChangesAsync();
-
-        _logger.LogInformation("Created import job: {JobId} for file: {FileName}", jobId, fileName);
-
-        return job;
+            try { Directory.Delete(jobFolder, recursive: true); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up import folder {JobId}", jobId); }
+            throw;
+        }
     }
 
     /// <summary>
@@ -129,6 +141,12 @@ public class PackageImportService
         try
         {
             var jobFolder = GetJobFolder(jobId);
+            if (job.PackageId.HasValue)
+            {
+                ImportJobLifecycle.Succeed(job);
+                await db.SaveChangesAsync(CancellationToken.None);
+                return;
+            }
             var workingFolder = Path.Combine(jobFolder, "working");
             var assetsFolder = Path.Combine(jobFolder, "assets");
             var outputFolder = Path.Combine(jobFolder, "output");
@@ -170,41 +188,35 @@ public class PackageImportService
 
             var package = await importer.Import(parseResult, job.OwnerId, jobId, assetsFolder, ct);
 
-            // Finalize
-            await UpdateProgress(db, job, "Finalizing", 90, ct);
-
-            // Save original file to packages folder
-            await SaveOriginalPackageFile(job, package.Id, ct);
-
-            // Save warnings
-            if (parseResult.Warnings.Count > 0)
-            {
-                job.WarningsJson = JsonSerializer.Serialize(parseResult.Warnings);
-            }
-
-            // Mark success
+            // The importer commits the job link and success with the package. Persist immediately
+            // without the request token as well; no optional finalization may change this outcome.
             job.PackageId = package.Id;
-            job.Status = ImportJobStatus.Succeeded;
-            job.FinishedAt = DateTime.UtcNow;
-            job.CurrentStep = null;
-            job.Progress = 100;
+            ImportJobLifecycle.Succeed(job);
+            await db.SaveChangesAsync(CancellationToken.None);
 
-            await db.SaveChangesAsync(ct);
+            await SaveOriginalPackageFile(job, package.Id, ct);
 
             _logger.LogInformation("Job completed successfully: {JobId}, Package: {PackageId}", jobId, package.Id);
         }
+        catch (Exception ex) when (job.PackageId.HasValue)
+        {
+            _logger.LogWarning(ex, "Package {PackageId} committed; optional finalization interrupted for job {JobId}", job.PackageId, jobId);
+        }
         catch (ImportException ex)
         {
-            await HandleJobError(db, job, ex.UserMessage, ex.ToString(), ex.IsRetriable, ct);
+            await HandleJobError(db, job, ex.UserMessage, ex.ToString(), ex.IsRetriable);
+            ct.ThrowIfCancellationRequested();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            await HandleJobError(db, job, "Обробку було скасовано", null, false, ct);
+            await HandleJobError(db, job, "Обробку було скасовано", null, false);
+            throw; // Let the worker distinguish timeout from shutdown.
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error processing job: {JobId}", jobId);
-            await HandleJobError(db, job, "Неочікувана помилка при обробці", ex.ToString(), false, ct);
+            await HandleJobError(db, job, "Неочікувана помилка при обробці", ex.ToString(), false);
+            ct.ThrowIfCancellationRequested();
         }
     }
 
@@ -291,9 +303,10 @@ public class PackageImportService
         PackageImportJob job,
         string errorMessage,
         string? errorDetails,
-        bool isRetriable,
-        CancellationToken ct)
+        bool isRetriable)
     {
+        // Failure persistence must survive cancellation, including cancellation racing with another error.
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
             // Detach all tracked entities except the job itself to avoid
@@ -304,14 +317,14 @@ public class PackageImportService
                     entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
             }
 
-            job.ErrorMessage = errorMessage;
-            job.ErrorDetails = errorDetails;
+            ImportJobLifecycle.SetError(job, errorMessage, errorDetails);
 
             if (isRetriable && job.Attempts < _options.MaxRetryAttempts)
             {
                 // Schedule retry
                 var delay = GetRetryDelay(job.Attempts);
                 job.NextRetryAt = DateTime.UtcNow + delay;
+                job.FinishedAt = null;
                 job.Status = ImportJobStatus.Failed;
                 _logger.LogWarning(
                     "Job {JobId} failed (attempt {Attempt}/{Max}), will retry in {Delay}",
@@ -319,13 +332,11 @@ public class PackageImportService
             }
             else
             {
-                job.Status = ImportJobStatus.Failed;
-                job.FinishedAt = DateTime.UtcNow;
-                job.NextRetryAt = null;
+                ImportJobLifecycle.Fail(job, errorMessage);
                 _logger.LogError("Job {JobId} failed permanently: {Error}", job.Id, errorMessage);
             }
 
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(cleanup.Token);
         }
         catch (Exception ex)
         {
@@ -358,6 +369,7 @@ public class PackageImportService
             await using var dest = File.Create(destPath);
             await source.CopyToAsync(dest, ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to save original package file");
@@ -370,6 +382,36 @@ public class PackageImportService
         return Path.Combine(_mediaOptions.UploadsPath, _options.JobsFolder, jobId.ToString());
     }
 
+    public bool IsRetryPending(PackageImportJob job) => ImportJobLifecycle.IsRetryPending(job, _options.MaxRetryAttempts);
+
+    public bool IsUnfinished(PackageImportJob job) => ImportJobLifecycle.IsUnfinished(job, _options.MaxRetryAttempts);
+
+    /// <summary>One of the user's jobs, or null (another user's job included).</summary>
+    public async Task<PackageImportJob?> GetJobForUser(string userId, Guid jobId, CancellationToken ct = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+        return await db.PackageImportJobs.AsNoTracking().SingleOrDefaultAsync(j => j.Id == jobId && j.OwnerId == userId, ct);
+    }
+
+    /// <summary>The user's queued, running and retry-pending jobs.</summary>
+    public async Task<int> CountUnfinishedJobsForUser(string userId, CancellationToken ct = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+        return await db.PackageImportJobs.Where(j => j.OwnerId == userId)
+            .Where(ImportJobLifecycle.Unfinished(_options.MaxRetryAttempts)).CountAsync(ct);
+    }
+
+    /// <summary>Latest 20 owned jobs (the agent API's import list).</summary>
+    public async Task<List<PackageImportJob>> GetRecentJobsForUser(string userId, CancellationToken ct = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
+        return await db.PackageImportJobs.AsNoTracking().Where(j => j.OwnerId == userId)
+            .OrderByDescending(j => j.CreatedAt).ThenByDescending(j => j.Id).Take(20).ToListAsync(ct);
+    }
+
     /// <summary>
     /// Gets active (in-progress) import jobs for a user.
     /// </summary>
@@ -378,9 +420,7 @@ public class PackageImportService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
 
-        return await db.PackageImportJobs
-            .Where(j => j.OwnerId == userId &&
-                        (j.Status == ImportJobStatus.Queued || j.Status == ImportJobStatus.Running))
+        return await db.PackageImportJobs.Where(j => j.OwnerId == userId).Where(ImportJobLifecycle.Unfinished(_options.MaxRetryAttempts))
             .OrderByDescending(j => j.CreatedAt)
             .ToListAsync();
     }
@@ -393,8 +433,7 @@ public class PackageImportService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
 
-        return await db.PackageImportJobs
-            .Where(j => j.Status == ImportJobStatus.Queued || j.Status == ImportJobStatus.Running)
+        return await db.PackageImportJobs.Where(ImportJobLifecycle.Unfinished(_options.MaxRetryAttempts))
             .OrderByDescending(j => j.CreatedAt)
             .ToListAsync();
     }
@@ -416,4 +455,3 @@ public class PackageImportService
             .ToListAsync();
     }
 }
-

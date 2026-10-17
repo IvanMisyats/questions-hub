@@ -1,7 +1,9 @@
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
 
 namespace QuestionsHub.Blazor.Infrastructure.AgentApi;
@@ -94,6 +96,24 @@ public static class PackageGraph
 
         var bytes = JsonSerializer.SerializeToUtf8Bytes(canonical, FingerprintJson);
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
+    }
+
+    /// <summary>
+    /// One package of <paramref name="packages"/> with its editable graph, or null. The split query issues
+    /// one statement per collection; a Repeatable Read snapshot makes them see one consistent state, so a
+    /// concurrent edit cannot mix into the result. Retried as a unit under EnableRetryOnFailure.
+    /// </summary>
+    public static async Task<Package?> LoadSnapshot(
+        QuestionsHubDbContext context, IQueryable<Package> packages, int id, CancellationToken ct)
+    {
+        var strategy = context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+            var package = await packages.WithEditableGraph().FirstOrDefaultAsync(p => p.Id == id, ct);
+            await transaction.CommitAsync(ct);
+            return package;
+        });
     }
 
     /// <summary>Questions of <paramref name="tour"/> that are not in a block, in order.</summary>

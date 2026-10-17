@@ -1,4 +1,4 @@
-﻿# Package Import
+# Package Import
 
 This document describes the automatic import feature for question packages from DOCX files.
 
@@ -11,7 +11,9 @@ Both game types are supported via **two separate upload zones** on `/manage/pack
 - **Імпорт Що?Де?Коли?** — tour-based packages, parsed by `PackageParser`
 - **Імпорт Своя гра** — theme-based packages, parsed by `ShvagerParser`
 
-The chosen zone is stored on the job (`PackageImportJob.Type`) and selects the parser — there is no content sniffing for DOCX. `.qhub` files are accepted in either zone but are currently always imported as Що?Де?Коли? (a `gameType` field is planned for the format); uploading a `.qhub` in the Своя гра zone produces a warning.
+Agents upload through the Agent API instead (`POST /api/v1/manage/imports`, see [API.md](API.md) "Import"): the same job, pipeline and limits.
+
+The chosen zone is stored on the job (`PackageImportJob.Type`) and selects the parser — there is no content sniffing for DOCX. `.qhub` files are accepted in either zone; the file's own `gameType` decides (absent = Що?Де?Коли?), and a file whose type differs from the zone's produces a warning.
 
 ## Своя гра (Shvager) format recognition
 
@@ -47,6 +49,30 @@ Key rules:
 > **Note:** DOC support via automatic conversion is a potential future feature if needed.
 
 **File size limit:** 50 MB
+
+### Limits
+
+All limits are configurable under `PackageImport` (`PackageImportOptions`). Defaults:
+
+| Setting | Default | Enforcement |
+|---------|---------|-------------|
+| `MaxFileSizeBytes` | 50 MiB | Existing upload cap |
+| `MaxArchiveEntries` / `MaxExpandedBytes` | 1,024 / 100 MiB | Both archives, including ignored entries |
+| `MaxPackageJsonBytes` | 4 MiB | `.qhub` manifest reads |
+| `MaxDocxMainXmlBytes` / `MaxDocxOtherXmlBytes` / `MaxDocxTotalXmlBytes` | 4 / 1 / 8 MiB | Main part / each other XML or `.rels` part (including `[Content_Types].xml`) / all XML |
+| `MaxXmlDepth` / `MaxXmlElementsPerPart` | 64 / 200,000 | Streaming `XmlReader` scan of every XML part before OpenXML opens the document; DTD prohibited |
+| `MaxAssetBytes` / `MaxTotalAssetBytes` | 50 / 100 MiB | One binary asset (the site accepts 50 MB videos, so exports must re-import) / all extracted and downloaded assets together. An external `.qhub` asset over the per-file limit, or slower than 30 s, is skipped with a warning |
+| `MaxQhubCompressionRatio` / `MaxDocxXmlCompressionRatio` | 100× / 500× | All `.qhub` entries / DOCX XML parts |
+| `MaxStyleInheritanceDepth` | 64 | Style lookup stops at this depth or a cycle |
+| `MaxConcurrentJobs` | 1 | Background worker concurrency |
+
+Before an archive is opened, its end-of-central-directory record (ZIP64 included) bounds the entry
+count and the central directory size, so no huge entry list is ever allocated. Declared lengths are
+checked next, then counting streams enforce actual bytes with overflow-safe
+budgets. DOCX also sets OpenXML's `MaxCharactersInPart` to the main-part limit. A limit violation
+fails extraction with a Ukrainian error; cancellation propagates and partial output files are removed.
+Repeated URLs are downloaded once per import, and repeated DOCX images share one extracted file
+while retaining separate occurrences for question association. List numbering uses running counters.
 
 ## Import Process
 
@@ -294,7 +320,7 @@ Job folders are kept for debugging. Cleanup is handled separately (not in MVP).
 
 ## Concurrency
 
-- Maximum 2 jobs processed simultaneously
+- Maximum 1 job processed at a time by default
 - Jobs are processed in order of creation (FIFO)
 - Multiple users can upload files concurrently
 
@@ -331,7 +357,7 @@ Job folders are kept for debugging. Cleanup is handled separately (not in MVP).
     "MaxFileSizeBytes": 52428800,
     "AllowedExtensions": [".docx"],
     "JobTimeoutMinutes": 10,
-    "MaxConcurrentJobs": 2
+    "MaxConcurrentJobs": 1
   }
 }
 ```
@@ -362,4 +388,3 @@ If the application restarts during processing, jobs are automatically marked as 
 - PDF support with OCR
 - Auto-retry failed jobs from UI
 - Job folder cleanup scheduler
-

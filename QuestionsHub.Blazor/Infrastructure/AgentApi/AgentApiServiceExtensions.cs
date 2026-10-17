@@ -22,6 +22,8 @@ public static class AgentApiServiceExtensions
         services.AddScoped<Changesets.PackageChangesetService>();
         services.AddScoped<AgentPackageReader>();
         services.AddScoped<AgentResultsService>();
+        services.AddScoped<AgentImportService>();
+        services.AddScoped<AgentPackageExporter>();
 
         services.AddAuthentication()
             .AddScheme<PersonalAccessTokenAuthenticationOptions, PersonalAccessTokenAuthenticationHandler>(

@@ -23,7 +23,7 @@ public sealed class ClientRateLimiter : IDisposable
             {
                 var permitLimit = b.Limit(settings);
                 return PartitionedRateLimiter.Create<string, string>(key =>
-                    RateLimitPartition.GetSlidingWindowLimiter(key, _ => RateLimitWindows.PerMinute(permitLimit)));
+                    RateLimitPartition.GetSlidingWindowLimiter(key, _ => RateLimitWindows.Create(permitLimit, b.Window)));
             });
     }
 

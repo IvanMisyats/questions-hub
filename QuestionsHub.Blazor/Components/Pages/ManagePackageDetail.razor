@@ -3040,10 +3040,10 @@
                 await context.SaveChangesAsync();
             }
 
-            // Delete old file after successful save
+            // Delete old file after successful save (unless another question still uses it)
             if (!string.IsNullOrEmpty(existingUrl))
             {
-                MediaService.Delete(existingUrl);
+                await MediaService.DeleteIfUnreferenced(existingUrl);
             }
 
             _questionSaveStatus = "Медіа завантажено";
@@ -3098,8 +3098,8 @@
                 await context.SaveChangesAsync();
             }
 
-            // Delete file from disk
-            MediaService.Delete(existingUrl);
+            // Delete file from disk, unless another question still uses it
+            await MediaService.DeleteIfUnreferenced(existingUrl);
 
             // Update local state
             SetMediaUrl(target, null);

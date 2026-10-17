@@ -24,7 +24,8 @@ public sealed class AgentMcpTools(
     IHttpContextAccessor httpContextAccessor,
     AgentPackageReader reader,
     PackageChangesetService changesets,
-    AgentResultsService results)
+    AgentResultsService results,
+    AgentImportService imports)
 {
     private ClaimsPrincipal Agent =>
         httpContextAccessor.HttpContext?.User ?? throw new McpException("No request context.");
@@ -71,6 +72,34 @@ public sealed class AgentMcpTools(
         }
     }
 
+    private const string ImportsDescription = "Imports are uploaded with REST, not through MCP: POST /api/v1/manage/imports with multipart 'file' (.docx or .qhub, ≤ 50 MiB) and 'gameType' (www or shvager), the same Bearer token — see get_api_reference. Needs a token without a package list. The upload is not idempotent: after a lost response, check list_imports before uploading again.";
+
+    [McpServerTool(Name = "list_imports", ReadOnly = true, Idempotent = true, UseStructuredContent = true)]
+    [Description("The user's latest 20 import jobs, newest first: status (queued, running, retrying, succeeded, failed), warnings and packageId. " + ImportsDescription)]
+    public Task<ManageImportsResponse> ListImports(CancellationToken ct = default) =>
+        ImportCall(() => imports.List(Agent, ct));
+
+    [McpServerTool(Name = "get_import", ReadOnly = true, Idempotent = true, UseStructuredContent = true)]
+    [Description("One import job: status (queued, running, retrying, succeeded, failed), currentStep, progress, nextRetryAt, errorMessage, the parser's warnings (Ukrainian) and, once succeeded, packageId — a Draft owned by the user: compare get_package with the source and fix it with changesets. Poll every few seconds until succeeded or failed. " + ImportsDescription)]
+    public Task<ManageImportJobDto> GetImport(
+        [Description("The jobId from the upload response or list_imports.")] string jobId,
+        CancellationToken ct = default) =>
+        Guid.TryParse(jobId, out var id)
+            ? ImportCall(() => imports.Get(Agent, id, ct))
+            : throw new McpException("'jobId' must be a UUID.");
+
+    private static async Task<T> ImportCall<T>(Func<Task<T>> action)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (AgentImportException ex)
+        {
+            throw new McpException(ex.Message);
+        }
+    }
+
     /// <summary>Every operation with its properties; a test keeps it in step with the parser's operation list.</summary>
     internal const string ApplyChangesetDescription = """
         Applies (or, with dryRun true — the default — previews) an ordered list of operations to a package, atomically: all or nothing.
@@ -93,14 +122,19 @@ public sealed class AgentMcpTools(
     [Description("The complete Agent API reference (markdown): package model and field glossary, every changeset operation with its fields and rules, limits, the response format and errors. Read it before building a non-trivial changeset.")]
     public static string GetApiReference() => AgentApiReference.Text;
 
+    [McpServerTool(Name = "get_qhub_format", ReadOnly = true, Idempotent = true)]
+    [Description("The .qhub package format (markdown) with the JSON Schema of package.json. Read it before converting a document into a .qhub to import — e.g. when the site's DOCX parser cannot read a layout.")]
+    public static string GetQhubFormat() => QhubFormatReference.Text;
+
     [McpServerTool(Name = "whoami", ReadOnly = true, Idempotent = true, UseStructuredContent = true)]
     [Description("Who the token acts as (user, roles) and what it may do (scope 'read' or 'readWrite', expiry, package list or null = all editable packages).")]
     public AgentMeResponse WhoAmI() => ManageMeController.Describe(Agent);
 
     [McpServerTool(Name = "list_packages", ReadOnly = true, Idempotent = true, UseStructuredContent = true)]
-    [Description("Packages the token can edit (drafts included), newest first. Page size up to 50.")]
+    [Description("Packages the token can edit (drafts included), newest first. Page size up to 50. 'search' finds packages by part of the title — e.g. whether a package is already on the site before importing it.")]
     public async Task<ManagePackageListResponse> ListPackages(
         [Description("Optional filter: draft, published or archived.")] string? status = null,
+        [Description("Optional: part of the title, case-insensitive.")] string? search = null,
         [Description("1-based page.")] int page = 1,
         [Description("Packages per page (1–50).")] int pageSize = 20,
         CancellationToken ct = default)
@@ -108,7 +142,7 @@ public sealed class AgentMcpTools(
         if (!AgentPackageReader.TryParseStatus(status, out var statusFilter))
             throw new McpException(AgentPackageReader.InvalidStatusError);
 
-        return await reader.ListPackages(Agent, statusFilter, page, pageSize, ct);
+        return await reader.ListPackages(Agent, statusFilter, search, page, pageSize, ct);
     }
 
     [McpServerTool(Name = "get_package", ReadOnly = true, Idempotent = true, UseStructuredContent = true)]

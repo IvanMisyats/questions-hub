@@ -39,6 +39,7 @@ public class QhubPackage
     public bool? SharedEditors { get; set; }
 
     [JsonPropertyName("editors")]
+    [JsonConverter(typeof(QhubPeopleConverter))]
     public List<string>? Editors { get; set; }
 
     [JsonPropertyName("tags")]
@@ -67,6 +68,7 @@ public class QhubTour
     public bool? IsShootout { get; set; }
 
     [JsonPropertyName("editors")]
+    [JsonConverter(typeof(QhubPeopleConverter))]
     public List<string>? Editors { get; set; }
 
     [JsonPropertyName("preamble")]
@@ -91,6 +93,7 @@ public class QhubBlock
     public string? Name { get; set; }
 
     [JsonPropertyName("editors")]
+    [JsonConverter(typeof(QhubPeopleConverter))]
     public List<string>? Editors { get; set; }
 
     [JsonPropertyName("preamble")]
@@ -149,5 +152,6 @@ public class QhubQuestion
     public string? Source { get; set; }
 
     [JsonPropertyName("authors")]
+    [JsonConverter(typeof(QhubPeopleConverter))]
     public List<string>? Authors { get; set; }
 }

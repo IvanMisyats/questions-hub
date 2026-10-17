@@ -21,6 +21,9 @@
     <ItemGroup>
       <!-- The "Agent API" section of the docs is served to MCP clients (get_api_reference): one source of truth -->
       <EmbeddedResource Include="..\docs\API.md" LogicalName="QuestionsHub.Docs.API.md" Visible="false" />
+      <!-- The .qhub format for agents converting documents before an import (get_qhub_format) -->
+      <EmbeddedResource Include="..\docs\PACKAGE_FORMAT.md" LogicalName="QuestionsHub.Docs.PACKAGE_FORMAT.md" Visible="false" />
+      <EmbeddedResource Include="..\docs\package-format.schema.json" LogicalName="QuestionsHub.Docs.package-format.schema.json" Visible="false" />
     </ItemGroup>
 
     <ItemGroup>

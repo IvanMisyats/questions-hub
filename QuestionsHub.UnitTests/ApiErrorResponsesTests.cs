@@ -60,6 +60,20 @@ public class ApiErrorResponsesTests
     private static readonly RequestDelegate TooLarge =
         _ => throw new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ImportFormSizeErrors_IncludingWrappedKestrelErrors_Are413Json(bool wrapped)
+    {
+        var context = await Run("/api/v1/manage/imports", _ => throw (wrapped
+            ? new InvalidDataException("Failed to read form", new BadHttpRequestException("Too large", 413))
+            : new InvalidDataException("Multipart body length limit 57671680 exceeded.")));
+        context.Response.StatusCode.Should().Be(413);
+        context.Response.ContentType.Should().StartWith("application/json");
+        context.Response.Body.Position = 0;
+        (await new StreamReader(context.Response.Body).ReadToEndAsync()).Should().Contain("\"error\"");
+    }
+
     [Fact]
     public async Task TooLargeBody_OnTheApi_Is413Json()
     {

@@ -12,6 +12,12 @@ Daily automated backups using **restic** to **OVH Object Storage** (S3-compatibl
 | Nginx config (`/etc/nginx/conf.d/questions.com.ua.conf`) | restic file snapshot | 30 daily |
 | App env (`.env`) | restic file snapshot (encrypted client-side by restic) | 30 daily |
 
+**Format-level copies.** Besides these server-side snapshots, an admin keeps a second, off-server copy of
+every package as a `.qhub` file, downloaded daily by a scheduled script on a personal machine through the
+Agent API export (`GET /api/v1/manage/packages/{id}/export`, a read-only token; unchanged packages answer
+`304` to the stored `ETag`). It holds the content only — no accounts, results or statistics — and restores
+a package by importing the file as a new draft. The script is not part of this repository.
+
 ## Schedule
 
 - **Backup**: daily at **03:15 UTC** via systemd timer (`questionshub-backup.timer`)

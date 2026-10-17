@@ -1,4 +1,4 @@
-﻿namespace QuestionsHub.Blazor.Infrastructure.Import;
+namespace QuestionsHub.Blazor.Infrastructure.Import;
 
 /// <summary>
 /// Configuration options for package import feature.
@@ -26,7 +26,25 @@ public class PackageImportOptions
     /// <summary>
     /// Maximum number of concurrent import jobs.
     /// </summary>
-    public int MaxConcurrentJobs { get; set; } = 2;
+    public int MaxConcurrentJobs { get; set; } = 1;
+
+    /// <summary>Maximum queued, running or retry-pending imports admitted per agent user.</summary>
+    public int MaxActiveImportsPerUser { get; set; } = 3;
+
+    // Expanded sizes are bytes; these limits also apply to actual reads.
+    public int MaxArchiveEntries { get; set; } = 1024;
+    public long MaxExpandedBytes { get; set; } = 100 * 1024 * 1024;
+    public long MaxPackageJsonBytes { get; set; } = 4 * 1024 * 1024;
+    public long MaxDocxMainXmlBytes { get; set; } = 4 * 1024 * 1024;
+    public long MaxDocxOtherXmlBytes { get; set; } = 1024 * 1024;
+    public long MaxDocxTotalXmlBytes { get; set; } = 8 * 1024 * 1024;
+    public int MaxXmlDepth { get; set; } = 64;
+    public int MaxXmlElementsPerPart { get; set; } = 200_000;
+    public int MaxStyleInheritanceDepth { get; set; } = 64;
+    public long MaxAssetBytes { get; set; } = 50 * 1024 * 1024;
+    public long MaxTotalAssetBytes { get; set; } = 100 * 1024 * 1024;
+    public long MaxQhubCompressionRatio { get; set; } = 100;
+    public long MaxDocxXmlCompressionRatio { get; set; } = 500;
 
 
     /// <summary>

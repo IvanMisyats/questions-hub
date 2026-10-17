@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.Options
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
@@ -84,6 +84,9 @@
                                 </a>
                                 <ImportWarnings WarningsJson="@job.WarningsJson" />
                                 break;
+                            case ImportJobStatus.Failed when ImportService.IsRetryPending(job):
+                                <span class="badge bg-warning text-dark" title="@job.ErrorMessage">Очікує повторної спроби</span>
+                                break;
                             case ImportJobStatus.Failed:
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge bg-danger" title="@job.ErrorMessage">
@@ -149,6 +152,7 @@
     public async Task Refresh()
     {
         await LoadImportJobs();
+        StartPollingIfNeeded();
         StateHasChanged();
     }
 
@@ -156,7 +160,7 @@
     {
         try
         {
-            // Load only in-progress jobs from database
+            // In-progress jobs (agent uploads included) and those awaiting a retry
             var activeJobs = IsAdmin
                 ? await ImportService.GetActiveJobs()
                 : await ImportService.GetActiveJobsForUser(UserId);
@@ -174,7 +178,7 @@
             {
                 var allTrackedJobs = await ImportService.GetJobsByIds(_sessionTrackedJobIds.ToList());
                 completedTrackedJobs = allTrackedJobs
-                    .Where(j => j.Status is not (ImportJobStatus.Queued or ImportJobStatus.Running))
+                    .Where(j => !ImportService.IsUnfinished(j))
                     .ToList();
             }
 
@@ -233,8 +237,7 @@
 
     private void StartPollingIfNeeded()
     {
-        var hasActiveJobs = _importJobs.Any(j =>
-            j.Status is ImportJobStatus.Queued or ImportJobStatus.Running);
+        var hasActiveJobs = _importJobs.Any(ImportService.IsUnfinished);
 
         if (hasActiveJobs && _pollTimer == null)
         {
@@ -245,8 +248,7 @@
                     await LoadImportJobs();
                     StateHasChanged();
 
-                    if (!_importJobs.Any(j =>
-                        j.Status is ImportJobStatus.Queued or ImportJobStatus.Running))
+                    if (!_importJobs.Any(ImportService.IsUnfinished))
                     {
                         StopPolling();
                         await OnImportCompleted.InvokeAsync();

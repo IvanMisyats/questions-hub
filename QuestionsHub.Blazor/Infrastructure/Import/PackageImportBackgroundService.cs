@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using QuestionsHub.Blazor.Data;
 using QuestionsHub.Blazor.Domain;
@@ -68,7 +68,7 @@ public class PackageImportBackgroundService : BackgroundService
         _logger.LogInformation("Package import background service stopped");
     }
 
-    private async Task<PackageImportJob?> TryDequeueJob(CancellationToken ct)
+    internal async Task<PackageImportJob?> TryDequeueJob(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
@@ -77,24 +77,14 @@ public class PackageImportBackgroundService : BackgroundService
 
         // Find next queued job OR job ready for retry
         var job = await db.PackageImportJobs
-            .Where(j => j.Status == ImportJobStatus.Queued ||
-                        (j.Status == ImportJobStatus.Failed &&
-                         j.Attempts < _options.MaxRetryAttempts &&
-                         j.NextRetryAt != null &&
-                         j.NextRetryAt <= now))
+            .Where(ImportJobLifecycle.Due(_options.MaxRetryAttempts, now))
             .OrderBy(j => j.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
         if (job == null) return null;
 
         // Claim it
-        job.Status = ImportJobStatus.Running;
-        job.StartedAt = now;
-        job.Attempts++;
-        job.CurrentStep = "Validating";
-        job.Progress = 0;
-        job.ErrorMessage = null;
-        job.ErrorDetails = null;
+        ImportJobLifecycle.Claim(job, now);
 
         await db.SaveChangesAsync(ct);
 
@@ -105,7 +95,7 @@ public class PackageImportBackgroundService : BackgroundService
         return job;
     }
 
-    private async Task ProcessJobWithTimeout(PackageImportJob job, CancellationToken stoppingToken)
+    internal async Task ProcessJobWithTimeout(PackageImportJob job, CancellationToken stoppingToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         cts.CancelAfter(TimeSpan.FromMinutes(_options.JobTimeoutMinutes));
@@ -117,7 +107,7 @@ public class PackageImportBackgroundService : BackgroundService
 
             await importService.Process(job.Id, cts.Token);
         }
-        catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested && !stoppingToken.IsCancellationRequested)
         {
             _logger.LogWarning("Job {JobId} timed out after {Timeout} minutes",
                 job.Id, _options.JobTimeoutMinutes);
@@ -126,6 +116,10 @@ public class PackageImportBackgroundService : BackgroundService
                 job.Id,
                 $"Перевищено час очікування обробки ({_options.JobTimeoutMinutes} хвилин)");
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            await MarkJobFailed(job.Id, "Обробку було скасовано");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing job {JobId}", job.Id);
@@ -133,20 +127,21 @@ public class PackageImportBackgroundService : BackgroundService
         }
     }
 
-    private async Task MarkJobFailed(Guid jobId, string errorMessage)
+    internal async Task MarkJobFailed(Guid jobId, string errorMessage)
     {
         try
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<QuestionsHubDbContext>();
 
-            var job = await db.PackageImportJobs.FindAsync(jobId);
-            if (job != null && job.Status == ImportJobStatus.Running)
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var job = await db.PackageImportJobs.FindAsync([jobId], cleanup.Token);
+            // Process persists cancellation before rethrowing; overwrite that message with the timeout.
+            // A retry it scheduled (a retriable error racing the cancellation) is kept.
+            if (job is { Status: not ImportJobStatus.Succeeded, NextRetryAt: null })
             {
-                job.Status = ImportJobStatus.Failed;
-                job.ErrorMessage = errorMessage;
-                job.FinishedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync();
+                ImportJobLifecycle.Fail(job, errorMessage);
+                await db.SaveChangesAsync(cleanup.Token);
             }
         }
         catch (Exception ex)

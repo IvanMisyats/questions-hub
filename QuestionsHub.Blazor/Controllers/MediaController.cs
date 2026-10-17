@@ -100,10 +100,10 @@ public class MediaController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Delete old file only after new URL is saved to DB
+        // Delete old file only after new URL is saved to DB (and only if no other question uses it)
         if (!string.IsNullOrEmpty(existingUrl))
         {
-            _mediaService.Delete(existingUrl);
+            await _mediaService.DeleteIfUnreferenced(existingUrl);
             _logger.LogInformation(
                 "Deleted old {Target} media for question {QuestionId}: {Url}",
                 target, questionId, existingUrl);
@@ -156,9 +156,6 @@ public class MediaController : ControllerBase
             return NoContent(); // Nothing to delete
         }
 
-        // Delete file
-        _mediaService.Delete(existingUrl);
-
         // Update question
         if (attachmentTarget == MediaAttachmentTarget.Handout)
         {
@@ -170,6 +167,9 @@ public class MediaController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+
+        // Delete the file after the reference is gone, unless another question still uses it
+        await _mediaService.DeleteIfUnreferenced(existingUrl);
 
         _logger.LogInformation(
             "Deleted {Target} media for question {QuestionId}: {Url}",
