@@ -63,6 +63,7 @@ Use `tools/rating/find_tournaments.py <packageId>…` (reads the package through
 - **Not on the rating**: since 2022 the ЛУК in-person cups and finals (Весняний/Літній Кубок ЛУК, Фінал сезону ЛУК), Національна ліга 2018, the school synchrons, and a few author packages. Don't force a match.
 - **Extra questions in our package**: «0»-numbered questions inside regular tours, or replacement questions, break the positional count. Example: In a heartbeat has 40 questions vs 36 on the rating.
 - **Editors missing** on some rating tournaments (e.g. Simply White asynchron): rely on name and dates.
+- **`questionQty` can be wrong.** «Як не треба писати запитання V» (10635/10636) reports 1 question, but the team masks are 3 characters long. The loader skips such masks, so only the standings are kept. For a borderline match, check a mask length in `/results` too.
 
 ## Ivan's conventions
 
