@@ -704,3 +704,8 @@ h1:focus {
     opacity: 1;
     transform: translate(-50%, 0);
 }
+
+/* Items that "show more" links jump to: clear the sticky top bar (3.5rem) */
+.anchor-target {
+    scroll-margin-top: 4.5rem;
+}

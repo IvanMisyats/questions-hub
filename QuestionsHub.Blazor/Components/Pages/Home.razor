@@ -1,5 +1,4 @@
 @page "/"
-@attribute [StreamRendering]
 @using Microsoft.AspNetCore.WebUtilities
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
@@ -166,11 +165,7 @@
 
     @* Package list *@
     <div id="packages-section">
-        @if (_packages == null)
-        {
-            <div id="loading-indicator"><em>Завантаження...</em></div>
-        }
-        else if (!_packages.Any())
+        @if (_packages.Count == 0)
         {
             <div id="no-results">
                 @if (!string.IsNullOrEmpty(_searchTerm) || _editorId.HasValue)
@@ -291,7 +286,7 @@
     public int? PageParam { get; set; }
 
     // State
-    private List<PackageCardDto>? _packages;
+    private List<PackageCardDto> _packages = [];
     private int _totalCount;
     private int _totalPages;
     private string? _searchTerm;

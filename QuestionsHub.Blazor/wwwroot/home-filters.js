@@ -38,22 +38,16 @@
     let searchDebounceTimer = null;
     let editorSearchDebounceTimer = null;
     let isLoading = false;
-    let isActive = false;
 
     /**
-     * Initializes the home page filters.
-     * Can be called multiple times safely (idempotent).
+     * Initializes the home page filters (once, when the page has loaded).
      */
     function init() {
         // Only initialize if the home page elements exist
         const pageState = document.getElementById('page-state');
         if (!pageState) return;
 
-        // Read initial state from hidden div only on first init
-        // (not on MutationObserver re-triggers during DOM updates)
-        if (!isActive) {
-            loadInitialState();
-        }
+        loadInitialState();
 
         // Set up event listeners (each function is idempotent)
         setupSearchInput();
@@ -67,13 +61,8 @@
         setupPackageCardClicks();
         updateTagVisibility();
 
-        // Handle browser back/forward (only add once)
-        if (!window._homeFiltersPopstateAdded) {
-            window.addEventListener('popstate', handlePopState);
-            window._homeFiltersPopstateAdded = true;
-        }
-
-        isActive = true;
+        // Handle browser back/forward
+        window.addEventListener('popstate', handlePopState);
     }
 
     /**
@@ -380,11 +369,8 @@
         const section = document.getElementById('packages-section');
         if (!section) return;
 
-        // Remove loading and no-results states
-        const loading = section.querySelector('#loading-indicator');
-        const noResults = section.querySelector('#no-results');
-        loading?.remove();
-        noResults?.remove();
+        // Remove the no-results state
+        section.querySelector('#no-results')?.remove();
 
         let container = document.getElementById('packages-container');
         let paginationContainer = document.getElementById('pagination-container');
@@ -1047,14 +1033,10 @@
     }
 
     // Initialize on DOM ready or immediately if already loaded
-    function tryInit() {
-        init();
-    }
-
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInit);
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        tryInit();
+        init();
     }
 
     // Re-initialize when page is restored from bfcache (back/forward navigation)
@@ -1066,55 +1048,4 @@
             closeAllDropdowns();
         }
     });
-
-    // Handle Blazor enhanced navigation - re-init when navigating to this page
-    // Register for Blazor enhancedload event (only once)
-    function registerBlazorListener() {
-        if (window._homeFiltersBlazorListenerAdded) return;
-        if (typeof Blazor !== 'undefined' && Blazor.addEventListener) {
-            Blazor.addEventListener('enhancedload', function() {
-                // Reset active state for fresh initialization after navigation
-                isActive = false;
-                // Small delay to ensure DOM is ready after enhanced navigation
-                setTimeout(tryInit, 10);
-            });
-            window._homeFiltersBlazorListenerAdded = true;
-        }
-    }
-
-    // Try to register now if Blazor is ready
-    registerBlazorListener();
-
-    // If Blazor isn't ready yet, wait for it via polling
-    if (!window._homeFiltersBlazorListenerAdded) {
-        // Watch for Blazor to become available
-        const checkBlazor = setInterval(() => {
-            if (typeof Blazor !== 'undefined' && Blazor.addEventListener) {
-                registerBlazorListener();
-                clearInterval(checkBlazor);
-            }
-        }, 50);
-        
-        // Stop checking for Blazor after 5 seconds
-        setTimeout(() => clearInterval(checkBlazor), 5000);
-    }
-
-    // Also use MutationObserver as a reliable fallback for any DOM changes
-    // This handles cases where Blazor events don't fire or fire too early
-    if (!window._homeFiltersMutationObserverAdded) {
-        window._homeFiltersMutationObserverAdded = true;
-        const observer = new MutationObserver(function (mutations) {
-            // Only initialize if not already active
-            // (using closure variable instead of DOM attribute which can be lost by Blazor patching)
-            if (!isActive) {
-                const pageState = document.getElementById('page-state');
-                if (pageState) {
-                    tryInit();
-                }
-            }
-        });
-
-        // Observe body for any child changes
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
 })();

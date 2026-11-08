@@ -1,5 +1,4 @@
 ﻿@page "/Account/Profile"
-@rendermode InteractiveServer
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
@@ -31,21 +30,21 @@
                         </div>
                     }
 
-                    @if (_profileModel != null)
+                    @if (Model != null)
                     {
-                        <EditForm Model="@_profileModel" OnValidSubmit="@HandleUpdateProfile" FormName="ProfileForm">
+                        <EditForm Model="@Model" OnValidSubmit="@HandleUpdateProfile" FormName="ProfileForm">
                             <DataAnnotationsValidator />
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="firstName" class="form-label">Ім'я</label>
-                                    <InputText id="firstName" @bind-Value="_profileModel.FirstName" class="form-control" disabled />
+                                    <InputText id="firstName" @bind-Value="Model.FirstName" class="form-control" disabled />
                                     <small class="form-text text-muted">Ім'я не можна змінити</small>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
                                     <label for="lastName" class="form-label">Прізвище</label>
-                                    <InputText id="lastName" @bind-Value="_profileModel.LastName" class="form-control" disabled />
+                                    <InputText id="lastName" @bind-Value="Model.LastName" class="form-control" disabled />
                                     <small class="form-text text-muted">Прізвище не можна змінити</small>
                                 </div>
                             </div>
@@ -53,18 +52,18 @@
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="city" class="form-label">Місто</label>
-                                    <InputText id="city" @bind-Value="_profileModel.City" class="form-control" />
+                                    <InputText id="city" @bind-Value="Model.City" class="form-control" />
                                 </div>
 
                                 <div class="col-md-6 mb-3">
                                     <label for="team" class="form-label">Команда</label>
-                                    <InputText id="team" @bind-Value="_profileModel.Team" class="form-control" />
+                                    <InputText id="team" @bind-Value="Model.Team" class="form-control" />
                                 </div>
                             </div>
 
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email</label>
-                                <InputText id="email" @bind-Value="_profileModel.Email" class="form-control" disabled />
+                                <InputText id="email" @bind-Value="Model.Email" class="form-control" disabled />
                                 <small class="form-text text-muted">Email не можна змінити</small>
                             </div>
 
@@ -83,14 +82,17 @@
     {
         <div class="row justify-content-center mt-4 mb-5">
             <div class="col-lg-10 col-xl-9">
-                <AgentTokens UserId="@_agentTokensUserId" IsAdmin="@_isAdmin" />
+                @* The only interactive part of the page; editors and admins get Blazor's script (App.razor) *@
+                <AgentTokens @rendermode="InteractiveServer" UserId="@_agentTokensUserId" IsAdmin="@_isAdmin" />
             </div>
         </div>
     }
 </div>
 
 @code {
-    private ProfileModel? _profileModel;
+    /// <summary>The posted form on submit; built from the user on a plain visit.</summary>
+    [SupplyParameterFromForm(FormName = "ProfileForm")]
+    private ProfileModel? Model { get; set; }
 
     /// <summary>Set for editors and admins, who may create agent tokens.</summary>
     private string? _agentTokensUserId;
@@ -108,14 +110,12 @@
             var appUser = await UserManager.GetUserAsync(user);
             if (appUser != null)
             {
-                _profileModel = new ProfileModel
-                {
-                    FirstName = appUser.FirstName,
-                    LastName = appUser.LastName,
-                    City = appUser.City,
-                    Team = appUser.Team,
-                    Email = appUser.Email ?? ""
-                };
+                // A submit posts only City and Team (the other fields are disabled), so the
+                // read-only ones always come from the user — they must be present to validate
+                Model ??= new ProfileModel { City = appUser.City, Team = appUser.Team };
+                Model.FirstName = appUser.FirstName;
+                Model.LastName = appUser.LastName;
+                Model.Email = appUser.Email ?? "";
 
                 _isAdmin = user.IsInRole("Admin");
                 if (_isAdmin || user.IsInRole("Editor"))
@@ -135,10 +135,10 @@
         var user = authState.User;
         var appUser = await UserManager.GetUserAsync(user);
 
-        if (appUser != null && _profileModel != null)
+        if (appUser != null && Model != null)
         {
-            appUser.City = _profileModel.City;
-            appUser.Team = _profileModel.Team;
+            appUser.City = Model.City;
+            appUser.Team = Model.Team;
 
             var result = await UserManager.UpdateAsync(appUser);
 

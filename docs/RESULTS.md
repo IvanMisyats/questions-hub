@@ -119,10 +119,12 @@ Positional, in two independent groups:
   external-link icon, linking to `DisplayUrl` in a new tab. Each icon's tooltip is the fetched
   tournament title (`ResultsSource.Title`), falling back to the platform name. Each question
   shows «Взяли: X/Y (Z%)» inside the answer spoiler after the authors (only when a stat exists).
-- **Results page** (`/package/{id}/results`, `PackageResults.razor`, **InteractiveServer** — it
-  needs live recompute; same access gate): loaded-source platform icons (tooltip = tournament
-  title). When a package has more than one loaded source, a **source selector** (checkbox per
-  source, all checked by default) lets the user narrow the view; the difficulty chart **and**
+- **Results page** (`/package/{id}/results`, `PackageResults.razor`, static SSR; same access
+  gate): loaded-source platform icons (tooltip = tournament title). When a package has more than
+  one loaded source, a **source selector** (checkbox per source, all checked by default) lets the
+  user narrow the view. It is a GET form that `forms.js` submits on change:
+  `?sources=selected&source=3&source=5`, where `sources=selected` tells "none ticked" apart from
+  "all by default". The difficulty chart **and**
   the standings recompute in-memory for the selected subset (`QuestionStatsAggregator` +
   `StandingsBuilder` over the selected sources' team rows — the persisted `QuestionStat` table
   is not used here). One source → no selector. The chart comes first (server-rendered inline

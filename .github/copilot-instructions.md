@@ -144,8 +144,8 @@ A question contains:
   - UI-only interactions (focus, scroll, clipboard, DOM manipulation)
   - Form field pre-filling and validation feedback
 - Extract reusable JS to `/wwwroot/*.js` files
-- Use `@onchange` with server roundtrip only when data must be persisted
-- Use `@rendermode InteractiveServer` for interactive components
+- Public pages are static SSR and must work without `blazor.web.js` (older Safari can't parse it): use links/query strings, GET/POST forms (`@formname`) and `wwwroot/*.js`, never `[StreamRendering]`
+- Use `@rendermode InteractiveServer` only for editor/admin tools (`App.razor` loads Blazor's script for editors/admins and `@rendermode` pages, enhanced navigation off — so `NavigateTo` always passes `forceLoad: true`)
 
 ### Icons
 

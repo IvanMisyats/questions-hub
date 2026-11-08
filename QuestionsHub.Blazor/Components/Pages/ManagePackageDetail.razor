@@ -1816,7 +1816,7 @@
                 await context.SaveChangesAsync();
 
                 // Redirect to the new package's URL
-                Navigation.NavigateTo($"/manage/package/{_package.Id}", replace: true);
+                Navigation.NavigateTo($"/manage/package/{_package.Id}", forceLoad: true, replace: true);
             }
             else
             {

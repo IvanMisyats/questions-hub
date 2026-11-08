@@ -1,10 +1,7 @@
-// Handle smooth scrolling for anchor links in Blazor interactive mode
+// Smooth scrolling for the package page's tour/question navigation links
 window.scrollToElement = function(elementId) {
-    console.log('scrollToElement called with:', elementId);
     const element = document.getElementById(elementId);
     if (element) {
-        console.log('Element found:', element);
-
         // Get element position and add offset for fixed header/better spacing
         const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
         const offsetPosition = elementPosition - 100; // 100px offset for navbar and better spacing
@@ -84,23 +81,9 @@ window.handleSearchFormSubmit = function(form) {
     return false;
 };
 
-// Scroll position preservation for Blazor Server re-renders
-window._savedScrollPosition = null;
-
-window.saveScrollPosition = function() {
-    window._savedScrollPosition = window.scrollY;
-};
-
-window.restoreScrollPosition = function() {
-    if (window._savedScrollPosition !== null) {
-        window.scrollTo(0, window._savedScrollPosition);
-        window._savedScrollPosition = null;
-    }
-};
-
 // Sidebar collapse toggle (desktop)
 window.toggleSidebarCollapse = function() {
-    // State lives on <html> so Blazor's DOM morphing never strips it
+    // State lives on <html>, where the inline script in App.razor sets it before first paint
     const isCollapsed = document.documentElement.classList.toggle('sidebar-collapsed');
     localStorage.setItem('sidebar-collapsed', isCollapsed ? '1' : '0');
 };
@@ -146,8 +129,5 @@ window.closeMobileSidebar = function() {
     }
 
     applySidebarState();
-
-    // Re-apply after Blazor enhanced navigation (same pattern as theme.js)
-    Blazor.addEventListener('enhancedload', applySidebarState);
 })();
 

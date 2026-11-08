@@ -1,5 +1,4 @@
 @page "/question/{Id:int}"
-@attribute [StreamRendering]
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
@@ -10,7 +9,7 @@
 
 <PageTitle>@PageTitleText - База українських запитань</PageTitle>
 
-@if (_notFound)
+@if (_notFound || _question == null)
 {
     <div class="container mt-4">
         <div class="alert alert-warning">
@@ -18,12 +17,6 @@
             <p>Запитання з ідентифікатором @Id не існує або недоступне.</p>
             <a href="/" class="btn btn-primary">Повернутися на головну</a>
         </div>
-    </div>
-}
-else if (_question == null)
-{
-    <div class="container mt-4">
-        <p><em>Завантаження...</em></p>
     </div>
 }
 else

@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿@using Microsoft.AspNetCore.Components.Endpoints
+<!DOCTYPE html>
 <html lang="uk">
 
 <head>
@@ -34,15 +35,56 @@
 <Routes/>
 <script>window.__iconsSvgUrl = '@Assets["icons.svg"]';</script>
 <script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
-<script src="@Assets["sortable-interop.js"]"></script>
 <script src="@Assets["question-card.js"]"></script>
 <script src="@Assets["favorites.js"]"></script>
 <script src="@Assets["adult-content.js"]"></script>
-<script src="_framework/blazor.web.js"></script>
+<script src="@Assets["forms.js"]"></script>
 <script src="@Assets["navigation.js"]"></script>
 <script src="@Assets["theme.js"]"></script>
 <script src="@Assets["date-formatter.js"]"></script>
+@if (NeedsBlazorScript)
+{
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+    <script src="@Assets["sortable-interop.js"]"></script>
+    <script>
+        // blazor.web.js resumes an evicted circuit with Promise.withResolvers (Safari 17.4+)
+        if (!Promise.withResolvers) {
+            Promise.withResolvers = function () {
+                let resolve, reject;
+                const promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
+                return { promise: promise, resolve: resolve, reject: reject };
+            };
+        }
+    </script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        if (window.Blazor) {
+            // Every page loads in full, as without this script: no enhanced navigation or form handling.
+            // So NavigationManager.NavigateTo must always pass forceLoad: true (NavigateToTests).
+            Blazor.start({ ssr: { disableDomPreservation: true } });
+        } else {
+            // The browser could not parse blazor.web.js (Safari before 16.4): say so instead of dead buttons
+            document.body.insertAdjacentHTML('afterbegin',
+                '<div class="alert alert-warning rounded-0 mb-0 text-center">Інструменти редактора потребують новішого браузера (на iPhone — iOS 16.4 або новіша).</div>');
+        }
+    </script>
+}
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = null!;
+
+    /// <summary>
+    /// Public pages are plain server-rendered HTML and work without Blazor's script, which needs a
+    /// current browser (Safari 16.4+ parses it; iOS 16.1 does not). It is loaded only for the
+    /// interactive editing tools: for editors and admins, and on any page marked <c>@@rendermode</c>.
+    /// </summary>
+    private bool NeedsBlazorScript =>
+        HttpContext.User.IsInRole("Editor")
+        || HttpContext.User.IsInRole("Admin")
+        || HttpContext.GetEndpoint()?.Metadata.GetMetadata<ComponentTypeMetadata>()?.Type
+            .IsDefined(typeof(RenderModeAttribute), inherit: true) == true;
+}

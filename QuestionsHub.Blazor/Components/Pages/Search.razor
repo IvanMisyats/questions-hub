@@ -1,6 +1,5 @@
 @page "/search"
 @page "/search/{Query}"
-@attribute [StreamRendering]
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure
 @using static QuestionsHub.Blazor.Infrastructure.Search.HighlightSanitizer
@@ -16,7 +15,7 @@
 
     <div class="row mb-4">
         <div class="col-12 col-md-8 col-lg-6">
-            <form class="input-group" data-enhance="false" onsubmit="return handleSearchFormSubmit(this)">
+            <form class="input-group" onsubmit="return handleSearchFormSubmit(this)">
                 <input type="text"
                        name="q"
                        class="form-control form-control-lg"
@@ -51,14 +50,7 @@
         </div>
     }
 
-    @if (_isLoading)
-    {
-        <div class="d-flex align-items-center text-muted">
-            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-            <span>Шукаю...</span>
-        </div>
-    }
-    else if (_results != null)
+    @if (_results != null)
     {
         @if (_results.Count > 0)
         {
@@ -222,7 +214,6 @@
     public string? TypeParam { get; set; }
 
     private List<SearchResult>? _results;
-    private bool _isLoading = true;
     private bool _hasSearched;
     private string? _errorMessage;
     private string? _searchedQuery;
@@ -241,19 +232,12 @@
             _searchedQuery = Uri.UnescapeDataString(Query);
             await PerformSearch();
         }
-        else
-        {
-            _isLoading = false;
-        }
     }
 
     private async Task PerformSearch()
     {
         if (string.IsNullOrWhiteSpace(_searchedQuery))
-        {
-            _isLoading = false;
             return;
-        }
 
         try
         {
@@ -266,10 +250,6 @@
         {
             _errorMessage = "Помилка пошуку. Спробуйте ще раз пізніше.";
             _results = null;
-        }
-        finally
-        {
-            _isLoading = false;
         }
     }
 

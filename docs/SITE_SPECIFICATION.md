@@ -48,7 +48,7 @@ Both types share: statuses (Draft/Published/Archived), access levels, owners, ed
 | Layer | Technology |
 |-------|------------|
 | Backend | C#, ASP.NET Core, Blazor Server |
-| Frontend | HTML, CSS, Bootstrap, Blazor Components |
+| Frontend | HTML, CSS, Bootstrap, Blazor Components. Public pages are static server-rendered HTML + small `wwwroot/*.js` scripts and work in older browsers (iOS 15+); Blazor's own script (`blazor.web.js`, Safari 16.4+) is loaded only for the interactive editor/admin tools |
 | Database | PostgreSQL with Entity Framework Core (Ukrainian FTS: hunspell dictionary, tsvector, pg_trgm) |
 | Authentication | ASP.NET Core Identity (+ API keys for public API) |
 | Containerization | Docker, Docker Compose |
@@ -150,6 +150,8 @@ Public list of all authors with **per-type statistics** — separate columns for
 **Route**: `/editor/{id}`
 
 Author name, linked-user info, and per-type statistics. Packages the author edited are grouped **by game type** into separate sections; within ЩДК packages with per-tour editors, tour/block links are shown («Пакет → Тур 1 | Тур 2…»); Shvager packages list the author's themes.
+
+The two statistics cards switch between the packages list and the author's questions (`?view=questions`). «Показати більше» is a link that shows 20 more (`?shown=40`, capped at 1000) and jumps to the first new item. Admins also get two plain POST forms: link/unlink a user, and merge a duplicate author into another one (search by name, then a confirm dialog per candidate).
 
 ### 8. User Authentication
 

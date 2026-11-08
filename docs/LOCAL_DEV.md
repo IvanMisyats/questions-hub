@@ -105,8 +105,9 @@ Useful when hand-seeding: many-to-many join tables use EF conventional names/col
   `@SomeMethod()`) is HTML-entity-encoded (`&#x416;&#x435;...`), while literal Cyrillic in
   the `.razor` markup stays raw UTF-8. When grepping rendered HTML for markers, try both
   forms before concluding something is missing.
-- With `[StreamRendering]`, the streamed HTML can contain **both** the initial and the
-  updated frame of the same element (e.g. a count showing `0` then `1`) — match the last one.
+- Public pages are not streamed (no `[StreamRendering]`), so the response is the final HTML.
+  The `<script type="importmap">` in the head lists `_framework/blazor.web.js` on every page; only a
+  `<script src="_framework/blazor.web.js"` tag means the page actually loads it.
 - Scoped-CSS adds `b-xxxxxxxxxx` attributes to elements of components that have a `.razor.css`
   file — `grep '<strong>2</strong>'` misses `<strong b-xe4fulzb96>2</strong>`; use
   `<strong[^>]*>` patterns.

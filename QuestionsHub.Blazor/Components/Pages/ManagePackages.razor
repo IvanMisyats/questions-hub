@@ -283,7 +283,7 @@
         if (CurrentPage != 1)
         {
             // Reset pagination; OnParametersSetAsync reloads with the new filter
-            Navigation.NavigateTo("/manage/packages");
+            Navigation.NavigateTo("/manage/packages", forceLoad: true);
         }
         else
         {
@@ -312,7 +312,7 @@
             context.Packages.Add(newPackage);
             await context.SaveChangesAsync();
 
-            Navigation.NavigateTo($"/manage/package/{newPackage.Id}");
+            Navigation.NavigateTo($"/manage/package/{newPackage.Id}", forceLoad: true);
         }
         catch (Exception ex)
         {

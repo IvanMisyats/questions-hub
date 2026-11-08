@@ -1,5 +1,5 @@
 @page "/package/{Id:int}/results"
-@rendermode InteractiveServer
+@using System.Globalization
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
@@ -20,12 +20,6 @@
             <p>Пакет з ідентифікатором @Id не існує або недоступний.</p>
             <a href="/" class="btn btn-primary">Повернутися на головну</a>
         </div>
-    </div>
-}
-else if (_packageTitle == null)
-{
-    <div class="container mt-4">
-        <p><em>Завантаження...</em></p>
     </div>
 }
 else
@@ -50,28 +44,31 @@ else
         {
             @if (_loadedSources.Count > 1)
             {
-                <div class="mb-3">
+                @* A plain GET form: the choice lives in the URL (?sources=…&source=1&source=3); forms.js submits on change *@
+                <form method="get" class="mb-3" data-autosubmit>
+                    <input type="hidden" name="sources" value="selected" />
                     <div class="text-muted small mb-1">Джерела результатів</div>
-                    <div class="d-flex flex-wrap gap-3">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
                         @foreach (var source in _loadedSources)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="src-@source.Id"
-                                       checked="@_selectedSourceIds.Contains(source.Id)"
-                                       @onchange="e => ToggleSource(source.Id, (bool)(e.Value ?? false))" />
+                                       name="source" value="@source.Id"
+                                       checked="@_selectedSourceIds.Contains(source.Id)" />
                                 <label class="form-check-label d-inline-flex align-items-center gap-1" for="src-@source.Id">
                                     <PlatformIcon Platform="source.Platform" Size="16" />
                                     <span>@(source.Title ?? ResultsDisplay.PlatformName(source.Platform))</span>
                                     @if (!string.IsNullOrEmpty(source.DisplayUrl))
                                     {
                                         <a href="@source.DisplayUrl" target="_blank" rel="noopener noreferrer"
-                                           title="Відкрити на платформі" @onclick:stopPropagation="true"><Icon Name="external-link" Size="12" /></a>
+                                           title="Відкрити на платформі"><Icon Name="external-link" Size="12" /></a>
                                     }
                                 </label>
                             </div>
                         }
+                        <noscript><button type="submit" class="btn btn-sm btn-outline-secondary">Показати</button></noscript>
                     </div>
-                </div>
+                </form>
             }
             else
             {
@@ -160,6 +157,17 @@ else
     [Parameter]
     public int Id { get; set; }
 
+    /// <summary>"selected" when the source checkboxes were submitted; otherwise every source is shown.</summary>
+    [SupplyParameterFromQuery(Name = "sources")]
+    public string? SourcesMode { get; set; }
+
+    /// <summary>
+    /// The ticked sources. Read only together with <see cref="SourcesMode"/>, so unticking every box
+    /// shows none rather than falling back to all.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "source")]
+    public string[]? SourceIds { get; set; }
+
     private string? _packageTitle;
     private bool _notFound;
     private List<ResultsSourceInfo> _loadedSources = [];
@@ -237,28 +245,15 @@ else
                 .GroupBy(t => t.ResultsSourceId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            // Default: all sources selected (the aggregated view)
-            foreach (var source in _loadedSources)
+            // All sources by default (the aggregated view), the ticked ones once the checkboxes were submitted
+            var chosen = SourcesMode == "selected" ? (SourceIds ?? []).ToHashSet() : null;
+            foreach (var source in _loadedSources.Where(s => chosen == null || chosen.Contains(s.Id.ToString(CultureInfo.InvariantCulture))))
             {
                 _selectedSourceIds.Add(source.Id);
             }
 
             Recompute();
         }
-    }
-
-    private void ToggleSource(int sourceId, bool selected)
-    {
-        if (selected)
-        {
-            _selectedSourceIds.Add(sourceId);
-        }
-        else
-        {
-            _selectedSourceIds.Remove(sourceId);
-        }
-
-        Recompute();
     }
 
     private void Recompute()
@@ -291,10 +286,6 @@ else
             }
 
             _chartModel = DifficultyChartModel.Build(groups);
-        }
-        else
-        {
-            _chartModel = null;
         }
     }
 
