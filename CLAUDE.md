@@ -62,7 +62,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/PACKAGE_IMPORT.md` | DOCX import pipeline |
 | `docs/IMPORT_DEBUGGING.md` | Debugging imports: job artifacts, replaying the parser offline, numbering-cascade failure mode |
 | `docs/QHUB_CONVERSION.md` | Converting external packages (DOCX/TXT/SIGame JSON) to `.qhub` offline: harness, "bot" layout normalization, 3-way verification, Ivan's conventions (merging rounds, authors, file names) |
-| `docs/LOCAL_DEV.md` | Headless run/verification: ports, dev DB via bash, curl smoke-testing (Cyrillic URLs, SSR encoding), bin locks |
+| `docs/LOCAL_DEV.md` | Headless run/verification: ports, dev DB via bash, curl smoke-testing (Cyrillic URLs, SSR encoding), bin locks, Playwright + old-iOS checks |
 | `docs/RESULTS.md` | Tournament results & question statistics: platform loaders (Rating/OpenQuiz), mapping rules, debugging |
 | `docs/RATING_SITE.md` | rating.chgk.info: API, finding the tournaments a package was played at (`tools/rating/find_tournaments.py`), pitfalls, Ivan's conventions for attaching results and play dates |
 | `docs/Stats_plan.md` | Results/statistics feature: design decisions and phased plan |

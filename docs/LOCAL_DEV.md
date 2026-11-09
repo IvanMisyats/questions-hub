@@ -139,7 +139,41 @@ Captured 2026-10-11 (favorites end-to-end check).
   `RequestVerificationToken` header. Scrape it from any page you load while signed in; the logout form
   in the layout carries one.
 - Claude-in-Chrome cannot open `localhost` on this machine ("blocked by your organization's policy"),
-  so curl is the way to check the UI headlessly.
+  so check the UI with curl, or with Playwright (next section).
+
+## Browser checks with Playwright (and old iOS)
+
+Captured 2026-11-09 (static public pages for iOS before 16.4).
+
+- **Playwright's own browsers can open localhost** (the policy only blocks Claude-in-Chrome). Set it up in
+  a scratch dir, not the repo: `npm init -y && npm i --no-audit --no-fund playwright && npx playwright
+  install webkit chromium`. Run headless against `:5018`. Use `devices['iPhone 13']` on WebKit for the
+  phone layout; there the home filters are folded behind `#filter-toggle`.
+- **Roles:**
+  1. Register a throwaway user (through `/Account/Register`, or the curl recipe above).
+  2. Grant the role in SQL:
+     ```sql
+     INSERT INTO "AspNetUserRoles" ("UserId", "RoleId")
+     SELECT u."Id", r."Id" FROM "AspNetUsers" u, "AspNetRoles" r
+     WHERE u."Email" = '<email>' AND r."Name" = 'Editor';   -- or 'Admin'
+     ```
+  3. **Sign in again**: the cookie gets its roles at sign-in.
+
+  So run the script in phases (public → grant Editor → editor → grant Admin → admin), signing in fresh in each phase.
+- **Playwright's WebKit is current WebKit.** It parses `blazor.web.js`, so it cannot reproduce iOS 16.1's
+  endless «Завантаження...». Guard old browsers like this instead:
+  - **Anonymous pages:** no `<script src="_framework/blazor.web.js"`, no `<!--Blazor:` markers and no
+    `<blazor-ssr>`. `StaticPagesUiTests` checks this; use curl for ad-hoc checks.
+  - **Public scripts:** the `wwwroot/*.js` files that public pages load must parse as ES2020, because
+    Safari 16.1 lacks ES2022 class static blocks. In a scratch dir run `npm i acorn@8.14.0`, then
+    `require('acorn').parse(src, { ecmaVersion: 2020 })` on each file.
+  - **A tool page on an old Safari:** make the script fail to parse, then expect the "newer browser"
+    banner instead of dead buttons:
+    `page.route('**/_framework/blazor.web.js', r => r.fulfill({ contentType: 'text/javascript', body: 'class A { static {' }))`.
+  - **After deploy:** check on a real iPhone running iOS 15 or 16.1.
+- **Check what JS rebuilds, not only the server HTML.** `home-filters.js` redraws the home pagination
+  after a filter change. Its links once pointed to `/2`, which returns 404, while the server-rendered
+  links were fine. After clicking a filter, check the links again.
 
 ## Integration tests
 
