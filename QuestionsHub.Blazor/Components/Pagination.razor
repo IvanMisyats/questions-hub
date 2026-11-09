@@ -1,108 +1,56 @@
 ﻿@*
-    Reusable pagination component with icon-based navigation.
-    Usage with callbacks: <Pagination CurrentPage="1" HasNextPage="true" OnPageChanged="HandlePageChange" />
-    Usage with links (SSR): <Pagination CurrentPage="1" TotalPages="5" BaseUrl="/packages" />
-    Usage with JS interception: <Pagination CurrentPage="1" TotalPages="5" BaseUrl="/packages" JsIntercepted="true" />
+    Reusable pagination component with icon-based navigation (plain links).
+    Usage: <Pagination CurrentPage="1" TotalPages="5" BaseUrl="/packages" />                → /packages/2
+           <Pagination CurrentPage="1" TotalPages="5" BaseUrl="/?type=x" PageQueryName="page" /> → /?type=x&page=2
 *@
 
-@if (CurrentPage > 1 || HasNextPage || (TotalPages.HasValue && TotalPages.Value > 1))
+@if (CurrentPage > 1 || TotalPages > 1)
 {
     <nav aria-label="Навігація по сторінках" class="pagination-nav mt-3">
         <div class="pagination-container">
-            @if (UseLinks)
-            {
-                @* Link-based navigation for SSR (or JS-intercepted) *@
-                @* First page *@
-                <a class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
-                   href="@GetLinkHref(1, CurrentPage <= 1)"
-                   data-page="@(JsIntercepted ? 1 : null)"
-                   title="Перша сторінка">
-                    <Icon Name="chevron-double-left" Size="16" />
-                </a>
+            @* First page *@
+            <a class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
+               href="@GetLinkHref(1, CurrentPage <= 1)"
+               data-page="@(JsIntercepted ? 1 : null)"
+               title="Перша сторінка">
+                <Icon Name="chevron-double-left" Size="16" />
+            </a>
 
-                @* Previous page *@
-                <a class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
-                   href="@GetLinkHref(CurrentPage - 1, CurrentPage <= 1)"
-                   data-page="@(JsIntercepted ? CurrentPage - 1 : null)"
-                   title="Попередня сторінка">
-                    <Icon Name="chevron-left" Size="16" />
-                </a>
+            @* Previous page *@
+            <a class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
+               href="@GetLinkHref(CurrentPage - 1, CurrentPage <= 1)"
+               data-page="@(JsIntercepted ? CurrentPage - 1 : null)"
+               title="Попередня сторінка">
+                <Icon Name="chevron-left" Size="16" />
+            </a>
 
-                @* Page numbers *@
-                <div class="pagination-numbers">
-                    @foreach (var pageNumber in GetVisiblePages())
-                    {
-                        <a class="pagination-btn pagination-number @(pageNumber == CurrentPage ? "active" : "")"
-                           href="@GetLinkHref(pageNumber, pageNumber == CurrentPage)"
-                           data-page="@(JsIntercepted ? pageNumber : null)">
-                            @pageNumber
-                        </a>
-                    }
-                </div>
+            @* Page numbers *@
+            <div class="pagination-numbers">
+                @foreach (var pageNumber in GetVisiblePages())
+                {
+                    <a class="pagination-btn pagination-number @(pageNumber == CurrentPage ? "active" : "")"
+                       href="@GetLinkHref(pageNumber, pageNumber == CurrentPage)"
+                       data-page="@(JsIntercepted ? pageNumber : null)">
+                        @pageNumber
+                    </a>
+                }
+            </div>
 
-                @* Next page *@
-                <a class="pagination-btn @(!HasNext ? "disabled" : "")"
-                   href="@GetLinkHref(CurrentPage + 1, !HasNext)"
-                   data-page="@(JsIntercepted ? CurrentPage + 1 : null)"
-                   title="Наступна сторінка">
-                    <Icon Name="chevron-right" Size="16" />
-                </a>
+            @* Next page *@
+            <a class="pagination-btn @(!HasNext ? "disabled" : "")"
+               href="@GetLinkHref(CurrentPage + 1, !HasNext)"
+               data-page="@(JsIntercepted ? CurrentPage + 1 : null)"
+               title="Наступна сторінка">
+                <Icon Name="chevron-right" Size="16" />
+            </a>
 
-                @* Last page *@
-                <a class="pagination-btn @(!HasLast ? "disabled" : "")"
-                   href="@GetLinkHref(TotalPages ?? CurrentPage, !HasLast)"
-                   data-page="@(JsIntercepted ? TotalPages ?? CurrentPage : null)"
-                   title="Остання сторінка">
-                    <Icon Name="chevron-double-right" Size="16" />
-                </a>
-            }
-            else
-            {
-                @* Button-based navigation for interactive mode *@
-                @* First page *@
-                <button class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
-                        @onclick="GoToFirstPage"
-                        disabled="@(CurrentPage <= 1)"
-                        title="Перша сторінка">
-                    <Icon Name="chevron-double-left" Size="16" />
-                </button>
-
-                @* Previous page *@
-                <button class="pagination-btn @(CurrentPage <= 1 ? "disabled" : "")"
-                        @onclick="GoToPreviousPage"
-                        disabled="@(CurrentPage <= 1)"
-                        title="Попередня сторінка">
-                    <Icon Name="chevron-left" Size="16" />
-                </button>
-
-                @* Page numbers *@
-                <div class="pagination-numbers">
-                    @foreach (var pageNumber in GetVisiblePages())
-                    {
-                        <button class="pagination-btn pagination-number @(pageNumber == CurrentPage ? "active" : "")"
-                                @onclick="() => GoToPage(pageNumber)"
-                                disabled="@(pageNumber == CurrentPage)">
-                            @pageNumber
-                        </button>
-                    }
-                </div>
-
-                @* Next page *@
-                <button class="pagination-btn @(!HasNext ? "disabled" : "")"
-                        @onclick="GoToNextPage"
-                        disabled="@(!HasNext)"
-                        title="Наступна сторінка">
-                    <Icon Name="chevron-right" Size="16" />
-                </button>
-
-                @* Last page *@
-                <button class="pagination-btn @(!HasLast ? "disabled" : "")"
-                        @onclick="GoToLastPage"
-                        disabled="@(!HasLast)"
-                        title="Остання сторінка">
-                    <Icon Name="chevron-double-right" Size="16" />
-                </button>
-            }
+            @* Last page *@
+            <a class="pagination-btn @(!HasNext ? "disabled" : "")"
+               href="@GetLinkHref(TotalPages, !HasNext)"
+               data-page="@(JsIntercepted ? TotalPages : null)"
+               title="Остання сторінка">
+                <Icon Name="chevron-double-right" Size="16" />
+            </a>
         </div>
     </nav>
 }
@@ -115,152 +63,72 @@
     public int CurrentPage { get; set; } = 1;
 
     /// <summary>
-    /// Whether there are more pages after the current one.
-    /// Used when total pages is unknown.
+    /// Total number of pages.
     /// </summary>
-    [Parameter]
-    public bool HasNextPage { get; set; }
+    [Parameter, EditorRequired]
+    public int TotalPages { get; set; }
 
     /// <summary>
-    /// Total number of pages. When set, enables exact pagination with last page button.
-    /// </summary>
-    [Parameter]
-    public int? TotalPages { get; set; }
-
-    /// <summary>
-    /// Callback when page changes. Receives the new page number.
-    /// Used for interactive (button-based) navigation.
-    /// </summary>
-    [Parameter]
-    public EventCallback<int> OnPageChanged { get; set; }
-
-    /// <summary>
-    /// Base URL for link-based pagination (SSR mode).
-    /// When set, uses anchor tags instead of buttons.
+    /// URL of the first page, optionally with a query string.
     /// Example: "/packages" generates "/packages/2", "/packages/3", etc.
-    /// Use empty string "" for root-level pages like "/" -> "/2", "/3".
     /// </summary>
-    [Parameter]
-    public string? BaseUrl { get; set; }
+    [Parameter, EditorRequired]
+    public string BaseUrl { get; set; } = "";
 
     /// <summary>
-    /// When true, links use href="#" with data-page attributes for JS interception.
-    /// The actual page URL is still available in data-page for JS to construct the URL.
+    /// When set, the page number goes into this query parameter ("/?type=x&amp;page=2")
+    /// instead of the path ("/packages/2").
+    /// </summary>
+    [Parameter]
+    public string? PageQueryName { get; set; }
+
+    /// <summary>
+    /// When true, the links carry data-page for a script that loads the page itself
+    /// (home-filters.js); their href stays the real URL, for new tabs and when the script fails.
     /// </summary>
     [Parameter]
     public bool JsIntercepted { get; set; }
 
-    private bool UseLinks => BaseUrl != null;
-    private bool HasNext => TotalPages.HasValue ? CurrentPage < TotalPages.Value : HasNextPage;
-    private bool HasLast => TotalPages.HasValue && CurrentPage < TotalPages.Value;
+    private bool HasNext => CurrentPage < TotalPages;
 
-    private string? GetLinkHref(int page, bool isDisabled)
-    {
-        if (isDisabled) return null;
-        return JsIntercepted ? "#" : GetPageUrl(page);
-    }
+    private string? GetLinkHref(int page, bool isDisabled) => isDisabled ? null : GetPageUrl(page);
 
     private string GetPageUrl(int page)
     {
-        if (string.IsNullOrEmpty(BaseUrl))
-        {
-            return page <= 1 ? "/" : $"/{page}";
-        }
+        if (page <= 1)
+            return BaseUrl;
 
-        // Check if BaseUrl contains query string
         var queryIndex = BaseUrl.IndexOf('?');
-        if (queryIndex >= 0)
-        {
-            var path = BaseUrl[..queryIndex];
-            var query = BaseUrl[queryIndex..];
-            return page <= 1 ? BaseUrl : $"{path}/{page}{query}";
-        }
+        var path = queryIndex >= 0 ? BaseUrl[..queryIndex] : BaseUrl;
+        var query = queryIndex >= 0 ? BaseUrl[queryIndex..] : "";
 
-        return page <= 1 ? BaseUrl : $"{BaseUrl}/{page}";
+        return PageQueryName != null
+            ? $"{BaseUrl}{(query.Length > 0 ? "&" : "?")}{PageQueryName}={page}"
+            : $"{path}/{page}{query}";
     }
 
     private IEnumerable<int> GetVisiblePages()
     {
-        if (TotalPages.HasValue)
+        // If 10 or fewer pages, show all
+        if (TotalPages <= 10)
         {
-            // When we know total pages, show all pages (or a smart subset for many pages)
-            var totalPages = TotalPages.Value;
-
-            // If 10 or fewer pages, show all
-            if (totalPages <= 10)
-            {
-                for (var i = 1; i <= totalPages; i++)
-                {
-                    yield return i;
-                }
-                yield break;
-            }
-
-            // For many pages, show first, last, and pages around current
-            var pagesToShow = new HashSet<int> { 1, totalPages };
-
-            // Add pages around current page
-            for (var i = Math.Max(1, CurrentPage - 2); i <= Math.Min(totalPages, CurrentPage + 2); i++)
-            {
-                pagesToShow.Add(i);
-            }
-
-            foreach (var page in pagesToShow.OrderBy(p => p))
-            {
-                yield return page;
-            }
-        }
-        else
-        {
-            // Only show pages we know exist:
-            // - All pages from 1 to CurrentPage (we've visited them)
-            // - CurrentPage + 1 only if HasNextPage is true
-            var lastKnownPage = HasNextPage ? CurrentPage + 1 : CurrentPage;
-
-            for (var i = 1; i <= lastKnownPage; i++)
+            for (var i = 1; i <= TotalPages; i++)
             {
                 yield return i;
             }
+            yield break;
         }
-    }
 
-    private async Task GoToFirstPage()
-    {
-        if (CurrentPage > 1)
+        // For many pages, show first, last, and pages around current
+        var pagesToShow = new HashSet<int> { 1, TotalPages };
+        for (var i = Math.Max(1, CurrentPage - 2); i <= Math.Min(TotalPages, CurrentPage + 2); i++)
         {
-            await OnPageChanged.InvokeAsync(1);
+            pagesToShow.Add(i);
         }
-    }
 
-    private async Task GoToPreviousPage()
-    {
-        if (CurrentPage > 1)
+        foreach (var page in pagesToShow.OrderBy(p => p))
         {
-            await OnPageChanged.InvokeAsync(CurrentPage - 1);
-        }
-    }
-
-    private async Task GoToNextPage()
-    {
-        if (HasNext)
-        {
-            await OnPageChanged.InvokeAsync(CurrentPage + 1);
-        }
-    }
-
-    private async Task GoToLastPage()
-    {
-        if (TotalPages.HasValue && CurrentPage < TotalPages.Value)
-        {
-            await OnPageChanged.InvokeAsync(TotalPages.Value);
-        }
-    }
-
-    private async Task GoToPage(int pageNum)
-    {
-        if (pageNum != CurrentPage)
-        {
-            await OnPageChanged.InvokeAsync(pageNum);
+            yield return page;
         }
     }
 }

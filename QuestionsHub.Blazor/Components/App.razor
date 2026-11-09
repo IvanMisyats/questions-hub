@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@using Microsoft.AspNetCore.Components.Endpoints
+@using Microsoft.AspNetCore.Components.Sections
+<!DOCTYPE html>
 <html lang="uk">
 
 <head>
@@ -34,15 +36,33 @@
 <Routes/>
 <script>window.__iconsSvgUrl = '@Assets["icons.svg"]';</script>
 <script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
-<script src="@Assets["sortable-interop.js"]"></script>
 <script src="@Assets["question-card.js"]"></script>
 <script src="@Assets["favorites.js"]"></script>
 <script src="@Assets["adult-content.js"]"></script>
-<script src="_framework/blazor.web.js"></script>
+<script src="@Assets["forms.js"]"></script>
 <script src="@Assets["navigation.js"]"></script>
 <script src="@Assets["theme.js"]"></script>
 <script src="@Assets["date-formatter.js"]"></script>
+<SectionOutlet SectionName="@BlazorScript.SectionName" />
+@if (PageIsInteractive)
+{
+    <BlazorScript />
+}
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = null!;
+
+    /// <summary>
+    /// Public pages are plain server-rendered HTML and work without Blazor's script, which needs a
+    /// current browser (Safari 16.4+ parses it; iOS 16.1 does not). It is loaded only where an
+    /// interactive tool is: on pages marked <c>@@rendermode</c>, and where a static page renders
+    /// <see cref="BlazorScript"/> next to its interactive part.
+    /// </summary>
+    private bool PageIsInteractive =>
+        HttpContext.GetEndpoint()?.Metadata.GetMetadata<ComponentTypeMetadata>()?.Type
+            .IsDefined(typeof(RenderModeAttribute), inherit: true) == true;
+}

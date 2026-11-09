@@ -137,6 +137,7 @@ Package side: stat-eligible questions = questions of `TourType.Regular` tours in
 ### 5. Results page (`Components/Pages/PackageResults.razor`, route `/package/{Id:int}/results`)
 
 **InteractiveServer** (revised from static SSR — the source selector needs live recompute), same `CanViewPackage` gate.
+*(Revised back to static SSR in 2026-11: the selector is a GET form, see `RESULTS.md`; public pages must work without `blazor.web.js`.)*
 
 - **Source selector** (when >1 loaded source): a checkbox per source (all checked by default = aggregated view); toggling recomputes both the chart and the standings in-memory for the selected subset via `QuestionStatsAggregator` + `StandingsBuilder`. One source → no selector. Two tournaments of the same platform (e.g. a package played in two languages) are distinct sources and separately toggleable.
 - **Difficulty chart** («Складність запитань»), shown first: inline SVG in `DifficultyChart.razor` — one bar per stat-eligible question, height = % correct, alternating tour background bands + tour labels, % scale, native `<title>` tooltips, bars link to `/package/{id}#question-{qid}`, zero-correct bars tinted red.

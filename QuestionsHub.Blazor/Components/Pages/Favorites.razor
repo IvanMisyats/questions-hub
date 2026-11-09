@@ -1,6 +1,5 @@
 @page "/favorites"
 @page "/favorites/{Page:int}"
-@attribute [StreamRendering]
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using QuestionsHub.Blazor.Utils
@@ -18,11 +17,7 @@
     {
         <div class="alert alert-info">Обране доступне після підтвердження електронної пошти.</div>
     }
-    else if (_page == null)
-    {
-        <p><em>Завантаження...</em></p>
-    }
-    else
+    else if (_page != null)
     {
         <ul class="nav nav-tabs mb-3">
             @foreach (var (kind, label) in Tabs)

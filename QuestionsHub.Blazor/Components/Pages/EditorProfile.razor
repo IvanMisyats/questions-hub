@@ -1,7 +1,6 @@
 @page "/editor/{Id:int}"
+@using System.Globalization
 @using Microsoft.EntityFrameworkCore
-@rendermode InteractiveServer
-@inject IJSRuntime JS
 @inject NavigationManager Navigation
 
 @inject IDbContextFactory<QuestionsHubDbContext> DbContextFactory
@@ -9,18 +8,13 @@
 @inject AccessControlService AccessControl
 @inject FavoriteService Favorites
 
+@* Plain server-rendered page: the views and "show more" are links (?view=questions&shown=40),
+   the admin tools are ordinary POST forms. *@
+
 <PageTitle>@(_author?.FullName ?? "Редактора не знайдено")</PageTitle>
 
 <div class="container py-4">
-    @if (_isLoading)
-    {
-        <div class="d-flex justify-content-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Завантаження...</span>
-            </div>
-        </div>
-    }
-    else if (_author == null)
+    @if (_author == null)
     {
         <div class="alert alert-warning" role="alert">
             <Icon Name="exclamation-triangle" Class="me-2" />Редактора не знайдено
@@ -52,19 +46,23 @@
                                     <small class="text-muted">@_linkedUser.City</small>
                                 }
                             </div>
-                            <button class="btn btn-outline-danger btn-sm" @onclick="UnlinkUser" disabled="@_isProcessing">
-                                <Icon Name="link" Class="me-1" />Від'єднати
-                            </button>
+                            <form method="post" @formname="unlink-user" @onsubmit="UnlinkUser">
+                                <AntiforgeryToken />
+                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                    <Icon Name="link" Class="me-1" />Від'єднати
+                                </button>
+                            </form>
                         </div>
                     }
                     else
                     {
                         <p class="text-muted mb-0">Автор не пов'язаний з жодним користувачем.</p>
                         <hr/>
-                        <div class="row g-3 align-items-end">
+                        <form method="post" @formname="link-user" @onsubmit="LinkUser" class="row g-3 align-items-end">
+                            <AntiforgeryToken />
                             <div class="col-md-8">
-                                <label class="form-label">Обрати користувача для зв'язування:</label>
-                                <select class="form-select" @bind="_selectedUserId" disabled="@_isProcessing">
+                                <label class="form-label" for="link-user-id">Обрати користувача для зв'язування:</label>
+                                <select class="form-select" id="link-user-id" name="LinkUserId" required>
                                     <option value="">-- Оберіть користувача --</option>
                                     @foreach (var user in _availableUsers)
                                     {
@@ -73,17 +71,16 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <button class="btn btn-primary" @onclick="LinkUser"
-                                        disabled="@(string.IsNullOrEmpty(_selectedUserId) || _isProcessing)">
+                                <button type="submit" class="btn btn-primary">
                                     <Icon Name="link" Class="me-1" />Пов'язати
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     }
 
                     @if (!string.IsNullOrEmpty(_linkMessage))
                     {
-                        <div class="alert @(_linkSuccess ? "alert-success" : "alert-danger") mt-3 mb-0" role="alert">
+                        <div class="alert alert-danger mt-3 mb-0" role="alert">
                             @_linkMessage
                         </div>
                     }
@@ -104,64 +101,37 @@
                         та пакети буде перенесено до нього, а автора «<strong>@_author.FullName</strong>» видалено.
                     </p>
 
-                    @if (_mergeTarget == null)
+                    <form method="get" class="d-flex gap-2 mb-2" style="max-width: 400px;">
+                        <input type="text" name="merge" class="form-control" value="@MergeQuery"
+                               placeholder="Прізвище правильного автора..." aria-label="Правильний автор" />
+                        <button type="submit" class="btn btn-outline-secondary">Знайти</button>
+                    </form>
+
+                    @if (!string.IsNullOrWhiteSpace(MergeQuery))
                     {
-                        <label class="form-label">Правильний автор:</label>
-                        <div class="dropdown" style="max-width: 400px;">
-                            <input type="text"
-                                   class="form-control"
-                                   placeholder="Почніть вводити прізвище..."
-                                   value="@_mergeSearchQuery"
-                                   @oninput="OnMergeSearchInput"
-                                   disabled="@_mergeProcessing" />
-                            @if (_showMergeDropdown)
-                            {
-                                <ul class="dropdown-menu show w-100" style="max-height: 250px; overflow-y: auto;">
-                                    @if (_mergeSearching)
+                        @if (_mergeCandidates.Count > 0)
+                        {
+                            @* Each candidate is a submit button; forms.js asks for confirmation first *@
+                            <form method="post" @formname="merge-author" @onsubmit="MergeIntoTarget"
+                                  data-confirm="Об'єднати авторів? Дію не можна скасувати." style="max-width: 400px;">
+                                <AntiforgeryToken />
+                                <div class="small text-muted mb-1">Перенести все до:</div>
+                                <div class="list-group">
+                                    @foreach (var candidate in _mergeCandidates)
                                     {
-                                        <li>
-                                            <span class="dropdown-item text-muted">
-                                                <span class="spinner-border spinner-border-sm me-2"></span>Пошук...
-                                            </span>
-                                        </li>
+                                        <button type="submit" name="MergeTargetId" value="@candidate.Id"
+                                                class="list-group-item list-group-item-action"
+                                                data-confirm="@($"Об'єднати «{_author.FullName}» → «{candidate.FullName}»? Дію не можна скасувати.")">
+                                            <Icon Name="arrow-repeat" Class="me-1" />@candidate.FullName
+                                        </button>
                                     }
-                                    else if (_mergeSearchResults.Any())
-                                    {
-                                        @foreach (var candidate in _mergeSearchResults)
-                                        {
-                                            <li>
-                                                <button type="button" class="dropdown-item"
-                                                        @onclick="() => SelectMergeTarget(candidate)">
-                                                    @candidate.FullName
-                                                </button>
-                                            </li>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <li><span class="dropdown-item text-muted">Авторів не знайдено</span></li>
-                                    }
-                                </ul>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                            <div>
-                                Перенести все до: <strong>@_mergeTarget.FullName</strong>
-                            </div>
-                            <div>
-                                <button class="btn btn-outline-secondary btn-sm me-2"
-                                        @onclick="ClearMergeTarget" disabled="@_mergeProcessing">
-                                    Змінити
-                                </button>
-                                <button class="btn btn-warning btn-sm"
-                                        @onclick="MergeIntoTarget" disabled="@_mergeProcessing">
-                                    <Icon Name="arrow-repeat" Class="me-1" />Об'єднати
-                                </button>
-                            </div>
-                        </div>
+                                </div>
+                            </form>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0">Авторів не знайдено.</p>
+                        }
                     }
 
                     @if (!string.IsNullOrEmpty(_mergeMessage))
@@ -174,12 +144,14 @@
             </div>
         }
 
-        <!-- Statistics Section -->
+        <!-- Statistics Section: each card switches the list below -->
         <div class="row mb-4">
             <div class="col-md-6">
-                <div class="card h-100" @onclick="ShowPackagesList" style="cursor: pointer;">
+                <div class="card h-100 @(ShowQuestions ? "" : "border-primary")">
                     <div class="card-header">
-                        <Icon Name="box" Class="me-2" />Пакети
+                        <a href="@ViewUrl(questions: false)" class="stretched-link text-reset text-decoration-none">
+                            <Icon Name="box" Class="me-2" />Пакети
+                        </a>
                     </div>
                     <div class="card-body">
                         <h3 class="card-title">@(_stats?.PackageCount ?? 0)</h3>
@@ -189,9 +161,11 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100" @onclick="ShowQuestionsList" style="cursor: pointer;">
+                <div class="card h-100 @(ShowQuestions ? "border-primary" : "")">
                     <div class="card-header">
-                        <Icon Name="question-circle" Class="me-2" />Запитання
+                        <a href="@ViewUrl(questions: true)" class="stretched-link text-reset text-decoration-none">
+                            <Icon Name="question-circle" Class="me-2" />Запитання
+                        </a>
                     </div>
                     <div class="card-body">
                         <h3 class="card-title">@(_stats?.QuestionCount ?? 0)</h3>
@@ -203,7 +177,7 @@
         </div>
 
         <!-- Packages List Section -->
-        @if (_packagesList.Any() && _showPackagesList)
+        @if (!ShowQuestions && _packagesList.Count > 0)
         {
             <div class="card mb-4" id="packages-list">
                 <div class="card-header">
@@ -221,7 +195,7 @@
                         <ul class="list-unstyled">
                             @foreach (var packageItem in group)
                             {
-                                <li class="mb-2">
+                                <li class="mb-2 anchor-target" id="package-@packageItem.PackageId">
                                     <a href="/package/@packageItem.PackageId">@packageItem.PackageTitle</a>
                                     @if (!packageItem.IsGlobalEditor && packageItem.Tours.Any())
                                     {
@@ -239,41 +213,37 @@
                             }
                         </ul>
                     }
-                    @if (_packagesList.Count > _displayedPackagesCount)
+                    @if (_packagesList.Count > ShownCount)
                     {
-                        <button type="button" class="btn btn-link" @onclick="ShowMorePackages" @onclick:preventDefault>
+                        @* Reloads with more items and jumps to the first new one *@
+                        <a class="btn btn-link"
+                           href="@ViewUrl(questions: false, ShownCount + PageSize, $"package-{_packagesList[ShownCount].PackageId}")">
                             показати більше
-                        </button>
+                        </a>
                     }
                 </div>
             </div>
         }
 
         <!-- Questions List Section -->
-        @if (_showQuestionsList)
+        @if (ShowQuestions)
         {
             <div class="mb-4" id="questions-list">
                 <h4 class="mb-3">Список питань</h4>
-                @if (_isLoadingQuestions)
-                {
-                    <div class="d-flex justify-content-center py-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Завантаження...</span>
-                        </div>
-                    </div>
-                }
-                else if (_questionsList.Any())
+                @if (_questionsList.Count > 0)
                 {
                     @foreach (var question in _questionsList)
                     {
-                        <QuestionCard Question="@question" ShowFullHeader="true" IsBlurred="TagService.IsAdultContent(question.Tour.Package.Tags)" Favorites="_favorites" />
+                        <div class="anchor-target" id="question-@question.Id">
+                            <QuestionCard Question="@question" ShowFullHeader="true" IsBlurred="TagService.IsAdultContent(question.Tour.Package.Tags)" Favorites="_favorites" />
+                        </div>
                     }
-                    @if (_hasMoreQuestions)
+                    @if (_nextQuestionId is { } nextQuestionId)
                     {
                         <div class="text-center mt-3">
-                            <button type="button" class="btn btn-primary" @onclick="LoadMoreQuestions" @onclick:preventDefault disabled="@_isLoadingQuestions">
+                            <a class="btn btn-primary" href="@ViewUrl(questions: true, ShownCount + PageSize, $"question-{nextQuestionId}")">
                                 Показати більше
-                            </button>
+                            </a>
                         </div>
                     }
                 }
@@ -293,89 +263,136 @@
 </div>
 
 @code {
+    private const int PageSize = 20;
+
+    /// <summary>Upper bound for <see cref="Shown"/>, so a hand-made URL cannot ask for an author's every question.</summary>
+    private const int MaxShown = 1000;
+
+    private const string TourSeparator = " → ";
+
     [Parameter]
     public int Id { get; set; }
 
+    /// <summary>"questions" lists the author's questions; anything else lists their packages.</summary>
+    [SupplyParameterFromQuery(Name = "view")]
+    public string? View { get; set; }
+
+    /// <summary>How many items of the current list are shown ("show more" adds a page); text, so junk falls back to a page.</summary>
+    [SupplyParameterFromQuery(Name = "shown")]
+    public string? Shown { get; set; }
+
+    /// <summary>Admin: the name searched for as the author to merge this one into.</summary>
+    [SupplyParameterFromQuery(Name = "merge")]
+    public string? MergeQuery { get; set; }
+
+    [SupplyParameterFromForm(FormName = "link-user")]
+    private string? LinkUserId { get; set; }
+
+    [SupplyParameterFromForm(FormName = "merge-author")]
+    private int? MergeTargetId { get; set; }
+
+    private bool ShowQuestions => View == "questions";
+    private int ShownCount => Math.Clamp(
+        int.TryParse(Shown, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shown) ? shown : PageSize,
+        PageSize, MaxShown);
+
     private Author? _author;
-    private UserForLinking? _linkedUser;
-    private List<UserForLinking> _availableUsers = [];
-    private string? _selectedUserId;
-    private bool _isLoading = true;
     private bool _isAdmin;
-    private bool _isProcessing;
-    private string? _linkMessage;
-    private bool _linkSuccess;
     private AuthorStatistics? _stats;
     private List<AuthorPackageListItem> _packagesList = [];
     private bool _hasBothTypes;
-    private const int PackagesPerPage = 20;
-    private int _displayedPackagesCount = PackagesPerPage;
-    private const string TourSeparator = " → ";
-    private bool _showPackagesList = true;
-    private bool _showQuestionsList = false;
     private List<Question> _questionsList = [];
     private FavoriteLookup? _favorites;
-    private const int QuestionsPerPage = 20;
-    private int _displayedQuestionsCount = 0;
-    private bool _isLoadingQuestions = false;
-    private bool _hasMoreQuestions = false;
 
-    // Merge author (admin)
-    private string _mergeSearchQuery = string.Empty;
-    private List<Author> _mergeSearchResults = [];
-    private bool _mergeSearching;
-    private bool _showMergeDropdown;
-    private Author? _mergeTarget;
-    private bool _mergeProcessing;
+    /// <summary>The first question beyond the shown ones, if any: the "show more" link jumps to it.</summary>
+    private int? _nextQuestionId;
+
+    // Admin tools
+    private UserForLinking? _linkedUser;
+    private List<UserForLinking> _availableUsers = [];
+    private string? _linkMessage;
+    private List<Author> _mergeCandidates = [];
     private string? _mergeMessage;
-    private CancellationTokenSource? _mergeSearchCts;
-
-
 
     protected override async Task OnInitializedAsync()
     {
-        // Check if current user is admin
         _isAdmin = await AccessControl.IsAdmin();
 
-        await LoadAuthorDataAsync();
-        _isLoading = false;
-    }
-
-    private async Task LoadAuthorDataAsync()
-    {
         await using var context = await DbContextFactory.CreateDbContextAsync();
-
-        // First, load just the author with User (lightweight)
         _author = await context.Authors
             .AsNoTracking()
-            .Include(a => a.User)
             .FirstOrDefaultAsync(a => a.Id == Id);
 
         if (_author == null) return;
 
-        // Get current user's access context
         var accessContext = await AccessControl.GetPackageAccessContext();
-
-        // Get statistics using the centralized AuthorService
         _stats = await AuthorService.GetAuthorStatistics(Id, accessContext);
-
-        // Get packages list using the centralized AuthorService
         _packagesList = await AuthorService.GetAuthorPackages(Id, accessContext);
         _hasBothTypes = _packagesList.Select(p => p.Type).Distinct().Count() > 1;
 
-        // Load linked user info
-        _linkedUser = await AuthorService.GetLinkedUser(Id);
-
-        // If admin and no linked user, load available users
-        if (_isAdmin && _linkedUser == null)
+        if (ShowQuestions)
         {
-            _availableUsers = await AuthorService.GetAvailableUsersForLinking();
+            await LoadQuestions(context, accessContext);
+        }
+
+        if (_isAdmin)
+        {
+            await LoadLinkedUser();
+            if (!string.IsNullOrWhiteSpace(MergeQuery))
+            {
+                // Exclude the current author — you cannot merge someone into themselves.
+                _mergeCandidates = (await AuthorService.SearchAuthors(MergeQuery.Trim(), 10))
+                    .Where(a => a.Id != Id)
+                    .ToList();
+            }
         }
     }
 
-    private void ShowMorePackages()
+    /// <summary>The first <see cref="ShownCount"/> of the author's questions in accessible published packages.</summary>
+    private async Task LoadQuestions(QuestionsHubDbContext context, PackageAccessContext accessContext)
     {
-        _displayedPackagesCount += PackagesPerPage;
+        var accessiblePackageIds = context.Packages
+            .Where(accessContext.GetAccessFilter())
+            .Select(p => p.Id);
+
+        // One extra row tells whether there is more, and where "show more" should land
+        var questions = await context.Questions
+            .AsNoTracking()
+            .Where(q => q.Authors.Any(a => a.Id == Id))
+            .Where(q => q.Tour.Package.Status == PackageStatus.Published)
+            .Where(q => accessiblePackageIds.Contains(q.Tour.PackageId))
+            .Include(q => q.Authors)
+            .Include(q => q.Tour)
+                .ThenInclude(t => t.Package)
+                    .ThenInclude(p => p.Tags)
+            .OrderByDescending(q => q.Tour.PackageId)
+            .ThenBy(q => q.Tour.Number)
+            .ThenBy(q => q.OrderIndex)
+            .ThenBy(q => q.Id) // a total order: "show more" re-queries and must list the same questions first
+            .Take(ShownCount + 1)
+            .ToListAsync();
+
+        _nextQuestionId = questions.Count > ShownCount ? questions[ShownCount].Id : null;
+        _questionsList = questions.Take(ShownCount).ToList();
+        _favorites = await Favorites.GetLookupForQuestions(accessContext, _questionsList.Select(q => q.Id));
+    }
+
+    private async Task LoadLinkedUser()
+    {
+        _linkedUser = await AuthorService.GetLinkedUser(Id);
+        _availableUsers = _linkedUser == null ? await AuthorService.GetAvailableUsersForLinking() : [];
+    }
+
+    /// <summary>Link to this page's packages or questions list, optionally longer and scrolled to an item.</summary>
+    private string ViewUrl(bool questions, int? shown = null, string? anchor = null)
+    {
+        var query = new List<string>();
+        if (questions) query.Add("view=questions");
+        if (shown is > PageSize) query.Add($"shown={shown}");
+
+        return $"/editor/{Id}"
+               + (query.Count > 0 ? "?" + string.Join("&", query) : "")
+               + (anchor != null ? "#" + anchor : "");
     }
 
     /// <summary>
@@ -383,7 +400,7 @@
     /// </summary>
     private IEnumerable<IGrouping<PackageType, AuthorPackageListItem>> PackageGroups()
         => _packagesList
-            .Take(_displayedPackagesCount)
+            .Take(ShownCount)
             .GroupBy(p => p.Type)
             .OrderBy(g => g.Key);
 
@@ -432,212 +449,50 @@
         }
     }
 
-    private void ShowPackagesList()
-    {
-        _showPackagesList = true;
-        _showQuestionsList = false;
-    }
-
-    private async Task ShowQuestionsList()
-    {
-        _showPackagesList = false;
-        _showQuestionsList = true;
-
-        if (_questionsList.Count == 0)
-        {
-            await LoadMoreQuestions();
-        }
-        else
-        {
-            // Hearts toggled in the browser since the list was rendered: re-read their state,
-            // or the re-created cards would show the old one
-            _favorites = await Favorites.GetLookupForQuestions(
-                await AccessControl.GetPackageAccessContext(), _questionsList.Select(q => q.Id));
-        }
-    }
-
-    private async Task LoadMoreQuestions()
-    {
-        if (_author == null) return;
-
-        // Save scroll position before re-render
-        await JS.InvokeVoidAsync("saveScrollPosition");
-
-        _isLoadingQuestions = true;
-
-        try
-        {
-            await using var context = await DbContextFactory.CreateDbContextAsync();
-            var accessContext = await AccessControl.GetPackageAccessContext();
-            var packageAccessFilter = accessContext.GetAccessFilter();
-
-            var skip = _displayedQuestionsCount;
-            var take = QuestionsPerPage;
-
-            // Build base query for author's questions in accessible published packages
-            var baseQuery = context.Questions
-                .AsNoTracking()
-                .Where(q => q.Authors.Any(a => a.Id == _author.Id))
-                .Where(q => q.Tour.Package.Status == PackageStatus.Published);
-
-            // Apply access filter via subquery
-            var accessiblePackageIds = context.Packages
-                .Where(packageAccessFilter)
-                .Select(p => p.Id);
-
-            var questions = await baseQuery
-                .Where(q => accessiblePackageIds.Contains(q.Tour.PackageId))
-                .Include(q => q.Authors)
-                .Include(q => q.Tour)
-                    .ThenInclude(t => t.Package)
-                        .ThenInclude(p => p.Tags)
-                .OrderByDescending(q => q.Tour.PackageId)
-                .ThenBy(q => q.Tour.Number)
-                .ThenBy(q => q.OrderIndex)
-                .Skip(skip)
-                .Take(take)
-                .ToListAsync();
-
-            _hasMoreQuestions = questions.Count == take;
-
-            _questionsList.AddRange(questions);
-            _favorites = await Favorites.GetLookupForQuestions(accessContext, _questionsList.Select(q => q.Id));
-            _displayedQuestionsCount += questions.Count;
-        }
-        finally
-        {
-            _isLoadingQuestions = false;
-
-            // Restore scroll position after re-render
-            await JS.InvokeVoidAsync("restoreScrollPosition");
-        }
-    }
-
-
     private async Task LinkUser()
     {
-        if (string.IsNullOrEmpty(_selectedUserId))
+        if (!_isAdmin || string.IsNullOrEmpty(LinkUserId))
             return;
 
-        _isProcessing = true;
-        _linkMessage = null;
-
-        var result = await AuthorService.LinkAuthorToUser(Id, _selectedUserId);
-
-        _linkSuccess = result.Success;
-        _linkMessage = result.Message;
-
-        if (result.Success)
-        {
-            _linkedUser = await AuthorService.GetLinkedUser(Id);
-            _selectedUserId = null;
-            _availableUsers = [];
-        }
-
-        _isProcessing = false;
+        ReloadOrShowError(await AuthorService.LinkAuthorToUser(Id, LinkUserId));
     }
 
     private async Task UnlinkUser()
     {
-        _isProcessing = true;
-        _linkMessage = null;
+        if (!_isAdmin)
+            return;
 
-        var result = await AuthorService.UnlinkAuthorFromUser(Id);
-
-        _linkSuccess = result.Success;
-        _linkMessage = result.Message;
-
-        if (result.Success)
-        {
-            _linkedUser = null;
-            _availableUsers = await AuthorService.GetAvailableUsersForLinking();
-        }
-
-        _isProcessing = false;
+        ReloadOrShowError(await AuthorService.UnlinkAuthorFromUser(Id));
     }
 
-    private async Task OnMergeSearchInput(ChangeEventArgs e)
+    /// <summary>
+    /// Success → redirect to the page (post/redirect/get), so a refresh doesn't re-post a form that is
+    /// no longer on the page (Blazor answers that with a bare 400).
+    /// </summary>
+    private void ReloadOrShowError(AuthorOperationResult result)
     {
-        _mergeSearchQuery = e.Value?.ToString() ?? string.Empty;
-        _mergeMessage = null;
-
-        if (string.IsNullOrWhiteSpace(_mergeSearchQuery))
+        if (result.Success)
         {
-            _mergeSearchResults = [];
-            _showMergeDropdown = false;
+            Navigation.NavigateTo($"/editor/{Id}", forceLoad: true);
             return;
         }
 
-        _mergeSearchCts?.Cancel();
-        _mergeSearchCts = new CancellationTokenSource();
-        var ct = _mergeSearchCts.Token;
-
-        _showMergeDropdown = true;
-        _mergeSearching = true;
-
-        try
-        {
-            await Task.Delay(200, ct);
-
-            var results = await AuthorService.SearchAuthors(_mergeSearchQuery, 10, ct);
-            // Exclude the current author — you cannot merge someone into themselves.
-            _mergeSearchResults = results.Where(a => a.Id != Id).ToList();
-        }
-        catch (TaskCanceledException)
-        {
-            // Superseded by a newer keystroke; ignore.
-        }
-        finally
-        {
-            if (!ct.IsCancellationRequested)
-            {
-                _mergeSearching = false;
-                StateHasChanged();
-            }
-        }
-    }
-
-    private void SelectMergeTarget(Author author)
-    {
-        _mergeTarget = author;
-        _showMergeDropdown = false;
-        _mergeSearchResults = [];
-        _mergeSearchQuery = string.Empty;
-        _mergeMessage = null;
-    }
-
-    private void ClearMergeTarget()
-    {
-        _mergeTarget = null;
-        _mergeMessage = null;
+        _linkMessage = result.Message;
     }
 
     private async Task MergeIntoTarget()
     {
-        if (_mergeTarget == null || _author == null)
+        if (!_isAdmin || MergeTargetId is not { } targetId || targetId == Id)
             return;
 
-        var confirmed = await JS.InvokeAsync<bool>(
-            "confirm",
-            $"Об'єднати «{_author.FullName}» → «{_mergeTarget.FullName}»? Дію не можна скасувати.");
-
-        if (!confirmed)
-            return;
-
-        _mergeProcessing = true;
-        _mergeMessage = null;
-
-        var result = await AuthorService.MergeAuthors(Id, _mergeTarget.Id);
-
+        var result = await AuthorService.MergeAuthors(Id, targetId);
         if (result.Success)
         {
-            // The current (source) author is deleted; navigate to the surviving author's page.
-            Navigation.NavigateTo($"/editor/{_mergeTarget.Id}", forceLoad: true);
+            // The current (source) author is deleted; continue on the surviving author's page.
+            Navigation.NavigateTo($"/editor/{targetId}", forceLoad: true);
             return;
         }
 
         _mergeMessage = result.Message;
-        _mergeProcessing = false;
     }
 }
-

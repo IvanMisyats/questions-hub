@@ -39,7 +39,7 @@
         formatDates();
     }
 
-    // Re-run when Blazor updates the DOM
+    // Re-run when the DOM gains dated elements (home page AJAX results, interactive editor pages)
     const observer = new MutationObserver(function(mutations) {
         let hasNewDates = false;
         mutations.forEach(function(mutation) {
@@ -63,7 +63,4 @@
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
-
-    // Expose for manual calls if needed
-    window.formatUtcDates = formatDates;
 })();

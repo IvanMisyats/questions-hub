@@ -1,6 +1,5 @@
 @page "/editors"
 @page "/editors/{Page:int}"
-@attribute [StreamRendering]
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Infrastructure
 
@@ -34,66 +33,55 @@
         </form>
     </div>
 
-    @if (_authors == null)
-    {
-        <div class="d-flex justify-content-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Завантаження...</span>
-            </div>
+    <div class="card">
+        <div class="card-header">
+            <Icon Name="group" Class="me-2" />Список авторів (@_totalCount)
         </div>
-    }
-    else
-    {
-        <div class="card">
-            <div class="card-header">
-                <Icon Name="group" Class="me-2" />Список авторів (@_totalCount)
-            </div>
-            <div class="card-body p-0">
-                @if (_authors.Count == 0)
-                {
-                    <p class="text-muted p-3 mb-0">Авторів не знайдено.</p>
-                }
-                else
-                {
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
+        <div class="card-body p-0">
+            @if (_authors.Count == 0)
+            {
+                <p class="text-muted p-3 mb-0">Авторів не знайдено.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th rowspan="2" class="align-middle">Ім'я</th>
+                                <th colspan="2" class="text-center border-start">Що?Де?Коли?</th>
+                                <th colspan="2" class="text-center border-start">Своя гра</th>
+                            </tr>
+                            <tr>
+                                <th class="text-end border-start">Пакети</th>
+                                <th class="text-end">Запитання</th>
+                                <th class="text-end border-start">Пакети</th>
+                                <th class="text-end">Запитання</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var author in _authors)
+                            {
                                 <tr>
-                                    <th rowspan="2" class="align-middle">Ім'я</th>
-                                    <th colspan="2" class="text-center border-start">Що?Де?Коли?</th>
-                                    <th colspan="2" class="text-center border-start">Своя гра</th>
+                                    <td>
+                                        <a href="/editor/@author.Id">@author.FullName</a>
+                                    </td>
+                                    <td class="text-end border-start">@CountOrDash(author.WwwPackageCount)</td>
+                                    <td class="text-end">@CountOrDash(author.WwwQuestionCount)</td>
+                                    <td class="text-end border-start">@CountOrDash(author.ShvagerPackageCount)</td>
+                                    <td class="text-end">@CountOrDash(author.ShvagerQuestionCount)</td>
                                 </tr>
-                                <tr>
-                                    <th class="text-end border-start">Пакети</th>
-                                    <th class="text-end">Запитання</th>
-                                    <th class="text-end border-start">Пакети</th>
-                                    <th class="text-end">Запитання</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var author in _authors)
-                                {
-                                    <tr>
-                                        <td>
-                                            <a href="/editor/@author.Id">@author.FullName</a>
-                                        </td>
-                                        <td class="text-end border-start">@CountOrDash(author.WwwPackageCount)</td>
-                                        <td class="text-end">@CountOrDash(author.WwwQuestionCount)</td>
-                                        <td class="text-end border-start">@CountOrDash(author.ShvagerPackageCount)</td>
-                                        <td class="text-end">@CountOrDash(author.ShvagerQuestionCount)</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
+    </div>
 
-        <Pagination CurrentPage="CurrentPage"
-                    TotalPages="_totalPages"
-                    BaseUrl="@GetPaginationBaseUrl()" />
-    }
+    <Pagination CurrentPage="CurrentPage"
+                TotalPages="_totalPages"
+                BaseUrl="@GetPaginationBaseUrl()" />
 </div>
 
 @code {
@@ -107,7 +95,7 @@
 
     private int CurrentPage => Page < 1 ? 1 : Page;
 
-    private List<AuthorListItem>? _authors;
+    private List<AuthorListItem> _authors = [];
     private int _totalCount;
     private int _totalPages;
 

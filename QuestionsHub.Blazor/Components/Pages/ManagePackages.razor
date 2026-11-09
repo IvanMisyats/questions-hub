@@ -50,14 +50,13 @@
     }
     else
     {
-        @if (_packages?.Count > 0 || _typeFilter != null)
+        @if (_packages?.Count > 0 || TypeFilter != null)
         {
             <div class="d-flex justify-content-end mb-2">
-                <select class="form-select form-select-sm" style="max-width: 200px;"
-                        value="@(_typeFilter?.ToString() ?? "")" @onchange="OnTypeFilterChanged">
+                <select class="form-select form-select-sm" style="max-width: 200px;" @onchange="OnTypeFilterChanged">
                     <option value="">Всі типи</option>
-                    <option value="@PackageType.Www">@PackageType.Www.DisplayName()</option>
-                    <option value="@PackageType.Shvager">@PackageType.Shvager.DisplayName()</option>
+                    <option value="@PackageType.Www" selected="@(TypeFilter == PackageType.Www)">@PackageType.Www.DisplayName()</option>
+                    <option value="@PackageType.Shvager" selected="@(TypeFilter == PackageType.Shvager)">@PackageType.Shvager.DisplayName()</option>
                 </select>
             </div>
         }
@@ -65,7 +64,7 @@
         {
             <div class="alert alert-info" role="alert">
                 <Icon Name="info-circle" Class="me-2" />
-                @(_typeFilter != null
+                @(TypeFilter != null
                     ? "Немає пакетів обраного типу."
                     : "У вас ще немає пакетів. Натисніть \"Пакет ЩДК\" або \"Пакет Своєї гри\", щоб почати.")
             </div>
@@ -123,7 +122,7 @@
             </table>
         </div>
 
-        <Pagination CurrentPage="CurrentPage" TotalPages="_totalPages" BaseUrl="/manage/packages" />
+        <Pagination CurrentPage="CurrentPage" TotalPages="_totalPages" BaseUrl="@ListUrl(TypeFilter)" />
         }
     }
 </div>
@@ -177,6 +176,16 @@
     [Parameter]
     public int Page { get; set; } = 1;
 
+    /// <summary>
+    /// Game-type filter (Www/Shvager; empty = all types). It lives in the URL because every
+    /// navigation is a full page load (enhanced navigation is off), which starts a new component.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeQuery { get; set; }
+
+    private PackageType? TypeFilter =>
+        Enum.TryParse<PackageType>(TypeQuery, out var type) && Enum.IsDefined(type) ? type : null;
+
     private List<PackageListItem>? _packages;
     private bool _isLoading = true;
     private bool _isAdmin;
@@ -194,16 +203,12 @@
     private PackageListItem? _packageToDelete;
     private bool _isDeleting;
 
-    // Game-type filter (null = all types)
-    private PackageType? _typeFilter;
-
     // Component reference
     private PackageImportSection? _importSection;
 
     protected override async Task OnInitializedAsync()
     {
         await CheckUser();
-        await LoadPackages();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -236,9 +241,8 @@
                 query = query.Where(p => p.OwnerId == _userId);
             }
 
-            if (_typeFilter.HasValue)
+            if (TypeFilter is { } type)
             {
-                var type = _typeFilter.Value;
                 query = query.Where(p => p.Type == type);
             }
 
@@ -276,20 +280,12 @@
         }
     }
 
-    private async Task OnTypeFilterChanged(ChangeEventArgs e)
-    {
-        _typeFilter = Enum.TryParse<PackageType>(e.Value?.ToString(), out var type) ? type : null;
+    /// <summary>Back to page 1 with the chosen type.</summary>
+    private void OnTypeFilterChanged(ChangeEventArgs e) =>
+        Navigation.NavigateTo(ListUrl(Enum.TryParse<PackageType>(e.Value?.ToString(), out var type) ? type : null), forceLoad: true);
 
-        if (CurrentPage != 1)
-        {
-            // Reset pagination; OnParametersSetAsync reloads with the new filter
-            Navigation.NavigateTo("/manage/packages");
-        }
-        else
-        {
-            await LoadPackages();
-        }
-    }
+    private static string ListUrl(PackageType? type) =>
+        type == null ? "/manage/packages" : $"/manage/packages?type={type}";
 
     private async Task CreateNewPackage(PackageType type)
     {
@@ -312,7 +308,7 @@
             context.Packages.Add(newPackage);
             await context.SaveChangesAsync();
 
-            Navigation.NavigateTo($"/manage/package/{newPackage.Id}");
+            Navigation.NavigateTo($"/manage/package/{newPackage.Id}", forceLoad: true);
         }
         catch (Exception ex)
         {

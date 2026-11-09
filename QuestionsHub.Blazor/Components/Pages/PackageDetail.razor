@@ -1,5 +1,4 @@
 @page "/package/{Id:int}"
-@attribute [StreamRendering]
 @using Microsoft.EntityFrameworkCore
 @using QuestionsHub.Blazor.Data
 @using QuestionsHub.Blazor.Domain
@@ -12,7 +11,7 @@
 
 <PageTitle>@(_package?.Title ?? "Пакет не знайдено") - База українських запитань</PageTitle>
 
-@if (_notFound)
+@if (_notFound || _package == null)
 {
     <div class="container mt-4">
         <div class="alert alert-warning">
@@ -20,12 +19,6 @@
             <p>Пакет з ідентифікатором @Id не існує або недоступний.</p>
             <a href="/" class="btn btn-primary">Повернутися на головну</a>
         </div>
-    </div>
-}
-else if (_package == null)
-{
-    <div class="container mt-4">
-        <p><em>Завантаження...</em></p>
     </div>
 }
 else

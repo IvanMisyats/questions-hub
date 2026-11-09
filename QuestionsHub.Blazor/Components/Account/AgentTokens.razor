@@ -2,6 +2,7 @@
 @using QuestionsHub.Blazor.Domain
 @using QuestionsHub.Blazor.Infrastructure.AgentApi
 @inject PersonalAccessTokenService TokenService
+@inject AccessControlService AccessControl
 @inject ILogger<AgentTokens> Logger
 
 @* Personal access tokens for agents (Claude Code, Codex, MCP clients) acting on the user's behalf. *@
@@ -77,10 +78,10 @@
                         <input class="form-check-input" type="radio" name="token-packages" id="token-packages-all"
                                checked="@_allPackages" @onchange="() => _allPackages = true" />
                         <label class="form-check-label" for="token-packages-all">
-                            @(IsAdmin ? "Усі пакети сайту" : "Усі мої пакети")
+                            @(_isAdmin ? "Усі пакети сайту" : "Усі мої пакети")
                         </label>
                     </div>
-                    @if (_allPackages && IsAdmin)
+                    @if (_allPackages && _isAdmin)
                     {
                         <div class="alert alert-warning small mt-2 mb-0">
                             Ви адміністратор: такий токен матиме доступ до <strong>будь-якого</strong> пакета на сайті@(_scope == TokenScope.ReadWrite ? " і зможе його змінювати" : "").
@@ -152,10 +153,10 @@
 </div>
 
 @code {
-    /// <summary>The signed-in user (an editor or admin).</summary>
-    [Parameter, EditorRequired] public string UserId { get; set; } = "";
-
-    [Parameter] public bool IsAdmin { get; set; }
+    /// <summary>The circuit's signed-in user (an editor or admin). Not a parameter: this island's
+    /// parameters would make a round trip through the browser.</summary>
+    private string _userId = "";
+    private bool _isAdmin;
 
     private List<PersonalAccessToken> _tokens = [];
 
@@ -169,19 +170,24 @@
     private string? _errorMessage;
     private bool _isProcessing;
 
-    protected override async Task OnInitializedAsync() => await Reload();
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await AccessControl.GetCurrentUserId() ?? "";
+        _isAdmin = await AccessControl.IsAdmin();
+        await Reload();
+    }
 
     /// <summary>Reloads the list; returns false (and sets an error) when the database is unavailable.</summary>
     private async Task<bool> Reload()
     {
         try
         {
-            _tokens = await TokenService.GetForUser(UserId);
+            _tokens = await TokenService.GetForUser(_userId);
             return true;
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Loading agent tokens failed for user {UserId}", UserId);
+            Logger.LogError(ex, "Loading agent tokens failed for user {UserId}", _userId);
             _errorMessage = "Не вдалося завантажити список токенів. Оновіть сторінку.";
             return false;
         }
@@ -213,11 +219,11 @@
             CreateTokenResult result;
             try
             {
-                result = await TokenService.Create(UserId, new CreateTokenRequest(_name, _scope, _validDays, packageIds));
+                result = await TokenService.Create(_userId, new CreateTokenRequest(_name, _scope, _validDays, packageIds));
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Creating an agent token failed for user {UserId}", UserId);
+                Logger.LogError(ex, "Creating an agent token failed for user {UserId}", _userId);
                 _errorMessage = "Не вдалося створити токен. Спробуйте ще раз.";
                 return;
             }
@@ -249,7 +255,7 @@
         _isProcessing = true;
         try
         {
-            if (!await TokenService.Revoke(token.Id, UserId))
+            if (!await TokenService.Revoke(token.Id, _userId))
                 _errorMessage = "Токен не знайдено.";
         }
         catch (Exception ex)
@@ -274,6 +280,6 @@
 
     private string PackagesLabel(PersonalAccessToken token) =>
         token.PackageIds == null
-            ? (IsAdmin ? "усі пакети сайту" : "усі мої")
+            ? (_isAdmin ? "усі пакети сайту" : "усі мої")
             : string.Join(", ", token.PackageIds);
 }

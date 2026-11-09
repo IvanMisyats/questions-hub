@@ -38,24 +38,18 @@
     let searchDebounceTimer = null;
     let editorSearchDebounceTimer = null;
     let isLoading = false;
-    let isActive = false;
 
     /**
-     * Initializes the home page filters.
-     * Can be called multiple times safely (idempotent).
+     * Initializes the home page filters (once, when the page has loaded).
      */
     function init() {
         // Only initialize if the home page elements exist
         const pageState = document.getElementById('page-state');
         if (!pageState) return;
 
-        // Read initial state from hidden div only on first init
-        // (not on MutationObserver re-triggers during DOM updates)
-        if (!isActive) {
-            loadInitialState();
-        }
+        loadInitialState();
 
-        // Set up event listeners (each function is idempotent)
+        // Set up event listeners
         setupSearchInput();
         setupEditorDropdown();
         setupSortControls();
@@ -67,13 +61,8 @@
         setupPackageCardClicks();
         updateTagVisibility();
 
-        // Handle browser back/forward (only add once)
-        if (!window._homeFiltersPopstateAdded) {
-            window.addEventListener('popstate', handlePopState);
-            window._homeFiltersPopstateAdded = true;
-        }
-
-        isActive = true;
+        // Handle browser back/forward
+        window.addEventListener('popstate', handlePopState);
     }
 
     /**
@@ -105,8 +94,7 @@
      */
     function setupSearchInput() {
         const searchInput = document.getElementById('package-search');
-        if (!searchInput || searchInput._hfInit) return;
-        searchInput._hfInit = true;
+        if (!searchInput) return;
 
         searchInput.addEventListener('input', function () {
             clearTimeout(searchDebounceTimer);
@@ -142,23 +130,12 @@
         const editorDropdown = document.getElementById('editor-dropdown');
         if (!editorDropdown) return;
         
-        // Use a synchronous flag to prevent race conditions during initialization
-        if (editorDropdown._hfInit || editorDropdown._hfInitializing) {
-            return;
-        }
-        editorDropdown._hfInitializing = true;
-
         const dropdownBtn = editorDropdown.querySelector('.dropdown-toggle');
         const dropdownMenu = editorDropdown.querySelector('.dropdown-menu');
         const editorSearchInput = document.getElementById('editor-search');
         const editorList = document.getElementById('editor-list');
 
-        // Don't mark as initialized until we've verified critical elements exist
-        if (!dropdownBtn || !dropdownMenu) {
-            editorDropdown._hfInitializing = false;
-            return;
-        }
-        editorDropdown._hfInit = true;
+        if (!dropdownBtn || !dropdownMenu) return;
 
         // Toggle dropdown
         dropdownBtn.addEventListener('click', function (e) {
@@ -172,17 +149,12 @@
             }
         });
 
-        // Close on outside click (only add this listener once globally)
-        if (!window._homeFiltersDocumentClickAdded) {
-            window._homeFiltersDocumentClickAdded = true;
-            document.addEventListener('click', function (e) {
-                const dropdown = document.getElementById('editor-dropdown');
-                if (dropdown && !dropdown.contains(e.target)) {
-                    const menu = dropdown.querySelector('.dropdown-menu');
-                    menu?.classList.remove('show');
-                }
-            }, true);
-        }
+        // Close on outside click
+        document.addEventListener('click', function (e) {
+            if (!editorDropdown.contains(e.target)) {
+                dropdownMenu.classList.remove('show');
+            }
+        }, true);
 
         // Editor search with debounce
         editorSearchInput?.addEventListener('input', function () {
@@ -222,8 +194,7 @@
         const sortSelect = document.getElementById('sort-select');
         const sortDirBtn = document.getElementById('sort-dir-btn');
 
-        if (sortSelect && !sortSelect._hfInit) {
-            sortSelect._hfInit = true;
+        if (sortSelect) {
             sortSelect.addEventListener('change', function () {
                 state.sort = this.value;
                 state.page = 1;
@@ -231,8 +202,7 @@
             });
         }
 
-        if (sortDirBtn && !sortDirBtn._hfInit) {
-            sortDirBtn._hfInit = true;
+        if (sortDirBtn) {
             sortDirBtn.addEventListener('click', function () {
                 state.dir = state.dir === 'Desc' ? 'Asc' : 'Desc';
                 state.page = 1;
@@ -249,8 +219,7 @@
         const filterToggle = document.getElementById('filter-toggle');
         const filterPanel = document.getElementById('filter-panel');
 
-        if (filterToggle && !filterToggle._hfInit) {
-            filterToggle._hfInit = true;
+        if (filterToggle) {
             filterToggle.addEventListener('click', function () {
                 const isExpanded = filterPanel.classList.contains('show');
                 filterPanel.classList.toggle('show');
@@ -260,14 +229,12 @@
     }
 
     /**
-     * Sets up pagination link interception.
+     * Sets up pagination link interception: the links are real URLs (?page=N), loaded here via AJAX.
      * Uses document-level delegation so it survives container removal/recreation.
      */
     function setupPaginationLinks() {
-        if (window._homeFiltersPaginationAdded) return;
-        window._homeFiltersPaginationAdded = true;
-
         document.addEventListener('click', function (e) {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; // opening in a new tab or window
             const link = e.target.closest('#pagination-container a.pagination-btn');
             if (link && !link.classList.contains('disabled')) {
                 e.preventDefault();
@@ -291,10 +258,6 @@
      * Uses delegated event on document to handle dynamically added buttons.
      */
     function setupResetFiltersButton() {
-        // Only add this listener once globally
-        if (window._homeFiltersResetBtnAdded) return;
-        window._homeFiltersResetBtnAdded = true;
-
         document.addEventListener('click', function (e) {
             if (e.target.closest('#reset-filters-btn')) {
                 e.preventDefault();
@@ -380,11 +343,8 @@
         const section = document.getElementById('packages-section');
         if (!section) return;
 
-        // Remove loading and no-results states
-        const loading = section.querySelector('#loading-indicator');
-        const noResults = section.querySelector('#no-results');
-        loading?.remove();
-        noResults?.remove();
+        // Remove the no-results state
+        section.querySelector('#no-results')?.remove();
 
         let container = document.getElementById('packages-container');
         let paginationContainer = document.getElementById('pagination-container');
@@ -558,7 +518,6 @@
         }
 
         const pages = getVisiblePages(state.page, state.totalPages);
-        const baseUrl = buildBaseUrl();
 
         const firstDisabled = state.page <= 1;
         const lastDisabled = state.page >= state.totalPages;
@@ -567,13 +526,13 @@
             <nav aria-label="Навігація по сторінках" class="pagination-nav mt-3">
                 <div class="pagination-container">
                     <a class="pagination-btn ${firstDisabled ? 'disabled' : ''}"
-                       href="${firstDisabled ? '#' : getPageUrl(1, baseUrl)}"
+                       href="${firstDisabled ? '#' : buildBrowserUrl(1)}"
                        data-page="1"
                        title="Перша сторінка">
                         <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-double-left"></use></svg>
                     </a>
                     <a class="pagination-btn ${firstDisabled ? 'disabled' : ''}"
-                       href="${firstDisabled ? '#' : getPageUrl(state.page - 1, baseUrl)}"
+                       href="${firstDisabled ? '#' : buildBrowserUrl(state.page - 1)}"
                        data-page="${state.page - 1}"
                        title="Попередня сторінка">
                         <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-left"></use></svg>
@@ -581,20 +540,20 @@
                     <div class="pagination-numbers">
                         ${pages.map(p => `
                             <a class="pagination-btn pagination-number ${p === state.page ? 'active' : ''}"
-                               href="${p === state.page ? '#' : getPageUrl(p, baseUrl)}"
+                               href="${p === state.page ? '#' : buildBrowserUrl(p)}"
                                data-page="${p}">
                                 ${p}
                             </a>
                         `).join('')}
                     </div>
                     <a class="pagination-btn ${lastDisabled ? 'disabled' : ''}"
-                       href="${lastDisabled ? '#' : getPageUrl(state.page + 1, baseUrl)}"
+                       href="${lastDisabled ? '#' : buildBrowserUrl(state.page + 1)}"
                        data-page="${state.page + 1}"
                        title="Наступна сторінка">
                         <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-right"></use></svg>
                     </a>
                     <a class="pagination-btn ${lastDisabled ? 'disabled' : ''}"
-                       href="${lastDisabled ? '#' : getPageUrl(state.totalPages, baseUrl)}"
+                       href="${lastDisabled ? '#' : buildBrowserUrl(state.totalPages)}"
                        data-page="${state.totalPages}"
                        title="Остання сторінка">
                         <svg class="icon" width="16" height="16"><use href="${ICONS_SVG}#i-chevron-double-right"></use></svg>
@@ -623,39 +582,6 @@
         }
         
         return pages;
-    }
-
-    /**
-     * Builds the base URL for pagination (without page number).
-     */
-    function buildBaseUrl() {
-        const params = new URLSearchParams();
-        if (state.type && state.type !== 'Www') params.set('type', state.type.toLowerCase());
-        if (state.search) params.set('search', state.search);
-        if (state.editorId) params.set('editor', state.editorId);
-        if (state.sort && state.sort !== 'PublicationDate') params.set('sort', state.sort);
-        if (state.dir && state.dir !== 'Desc') params.set('dir', state.dir);
-        return params.toString() ? '?' + params.toString() : '';
-    }
-
-    /**
-     * Gets URL for a specific page.
-     */
-    function getPageUrl(page, baseUrl) {
-        if (page <= 1) {
-            return '/' + baseUrl;
-        }
-        return '/' + page + baseUrl;
-    }
-
-    /**
-     * Extracts page number from URL.
-     */
-    function extractPageFromUrl(href) {
-        const match = href.match(/^\/(\d+)/);
-        if (match) return parseInt(match[1]);
-        if (href === '/' || href.startsWith('/?')) return 1;
-        return 1;
     }
 
     /**
@@ -711,10 +637,10 @@
     }
 
     /**
-     * Builds browser URL from current state.
-     * Uses query parameters only (no page in path).
+     * Builds the browser URL of the current filters on the given page (default: the current one).
+     * Uses query parameters only (no page in path): the home page reads ?page=N.
      */
-    function buildBrowserUrl() {
+    function buildBrowserUrl(page = state.page) {
         const params = new URLSearchParams();
         if (state.type && state.type !== 'Www') params.set('type', state.type.toLowerCase());
         if (state.search) params.set('search', state.search);
@@ -722,7 +648,7 @@
         if (state.tagId) params.set('tag', state.tagId);
         if (state.sort && state.sort !== 'PublicationDate') params.set('sort', state.sort);
         if (state.dir && state.dir !== 'Desc') params.set('dir', state.dir);
-        if (state.page > 1) params.set('page', state.page);
+        if (page > 1) params.set('page', page);
 
         const queryString = params.toString();
         return '/' + (queryString ? '?' + queryString : '');
@@ -1047,14 +973,10 @@
     }
 
     // Initialize on DOM ready or immediately if already loaded
-    function tryInit() {
-        init();
-    }
-
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInit);
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        tryInit();
+        init();
     }
 
     // Re-initialize when page is restored from bfcache (back/forward navigation)
@@ -1066,55 +988,4 @@
             closeAllDropdowns();
         }
     });
-
-    // Handle Blazor enhanced navigation - re-init when navigating to this page
-    // Register for Blazor enhancedload event (only once)
-    function registerBlazorListener() {
-        if (window._homeFiltersBlazorListenerAdded) return;
-        if (typeof Blazor !== 'undefined' && Blazor.addEventListener) {
-            Blazor.addEventListener('enhancedload', function() {
-                // Reset active state for fresh initialization after navigation
-                isActive = false;
-                // Small delay to ensure DOM is ready after enhanced navigation
-                setTimeout(tryInit, 10);
-            });
-            window._homeFiltersBlazorListenerAdded = true;
-        }
-    }
-
-    // Try to register now if Blazor is ready
-    registerBlazorListener();
-
-    // If Blazor isn't ready yet, wait for it via polling
-    if (!window._homeFiltersBlazorListenerAdded) {
-        // Watch for Blazor to become available
-        const checkBlazor = setInterval(() => {
-            if (typeof Blazor !== 'undefined' && Blazor.addEventListener) {
-                registerBlazorListener();
-                clearInterval(checkBlazor);
-            }
-        }, 50);
-        
-        // Stop checking for Blazor after 5 seconds
-        setTimeout(() => clearInterval(checkBlazor), 5000);
-    }
-
-    // Also use MutationObserver as a reliable fallback for any DOM changes
-    // This handles cases where Blazor events don't fire or fire too early
-    if (!window._homeFiltersMutationObserverAdded) {
-        window._homeFiltersMutationObserverAdded = true;
-        const observer = new MutationObserver(function (mutations) {
-            // Only initialize if not already active
-            // (using closure variable instead of DOM attribute which can be lost by Blazor patching)
-            if (!isActive) {
-                const pageState = document.getElementById('page-state');
-                if (pageState) {
-                    tryInit();
-                }
-            }
-        });
-
-        // Observe body for any child changes
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
 })();

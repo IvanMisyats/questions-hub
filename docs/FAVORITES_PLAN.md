@@ -108,7 +108,7 @@ The feature must not slow existing pages down.
 - `wwwroot/favorites.js`: optimistic toggle, button disabled while in flight, revert + `title` message on
   error, 401 → login redirect, keeps every button with the same `kind:id` in sync.
 - `QuestionCard` gets an optional `FavoriteLookup? Favorites` parameter.
-- `/favorites` (`Favorites.razor`): static SSR, `[StreamRendering]`, `[Authorize]`; query `tab`, `type`,
+- `/favorites` (`Favorites.razor`): static SSR (streaming dropped in 2026-11), `[Authorize]`; query `tab`, `type`,
   `year`; route-segment paging like `Authors.razor`.
 - Shared helpers so the favorites page and the package page can't drift: tour display name
   (Розминка / Перестрілка / Тур N / `ThemeDisplayName`) and package-wide block numbering.
@@ -126,8 +126,9 @@ The feature must not slow existing pages down.
 
 - The antiforgery token on the page comes from `LoginDisplay`'s logout form. If that ever changes,
   hearts would fail — an integration test asserts the token is present, and the JS logs a clear error.
-- `EditorProfile` is InteractiveServer: Blazor diffs its render tree, not the DOM, so a JS-toggled heart
-  keeps its state across "load more" re-renders.
+- *(Superseded 2026-11: `EditorProfile` is static SSR now; "show more" reloads the page, so hearts are re-read
+  with it.)* `EditorProfile` was InteractiveServer: Blazor diffs its render tree, not the DOM, so a JS-toggled heart
+  kept its state across "load more" re-renders.
 - InMemory unit tests can't check constraints or cascades — those live in the Postgres integration tests
   (they skip locally without Docker, never on CI).
 
@@ -168,7 +169,8 @@ Grill + plan approved by Ivan. Ivan's extra requirement: performance must not de
 - `FavoriteKindSegments` is the one kind ↔ URL-segment mapping (button and controller).
 - Errors show in a small toast (`.fav-toast` in `app.css`): tooltips don't appear on touch screens. 401 → login
   page; 403 / 429 / other errors → revert + Ukrainian message.
-- `EditorProfile` is InteractiveServer: JS toggles don't reach the circuit, so the page re-reads the hearts of its
+- *(Superseded 2026-11: `EditorProfile` is static SSR; every view is a fresh page load.)* `EditorProfile` was
+  InteractiveServer: JS toggles don't reach the circuit, so the page re-reads the hearts of its
   loaded questions (one query) whenever the list is shown or grows; otherwise re-created cards showed stale state.
   This replaced `FavoriteLookup.Merge`.
 - On the search page the heart lookup has its own try/catch: if it fails, the results still render, without hearts.

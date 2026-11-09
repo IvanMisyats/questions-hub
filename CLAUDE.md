@@ -37,6 +37,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 - No `Async` suffix on method names
 - Nullable reference types for optional fields
 - **Prefer client-side JS over Blazor server roundtrips** for UI-only interactions
+- **Public pages are static SSR without `blazor.web.js`** (it needs Safari 16.4+): links/query strings, GET/POST forms, `wwwroot/*.js`; no `[StreamRendering]`. `@rendermode InteractiveServer` only for editor/admin tools — `App.razor` loads the script only on `@rendermode` pages (a static page with an interactive island renders `<BlazorScript />` next to it), with enhanced navigation off, so **`NavigateTo` always needs `forceLoad: true`** and state that must survive a navigation (filters, page) lives in the URL (details: `docs/PROJECT_CONTEXT.md`)
 - Icons: `<Icon Name="check" Class="text-success" />` (SVG sprite in `wwwroot/icons.svg`)
 - **Browser JS calling a cookie-auth JSON endpoint:** follow the favorites pattern (`docs/FAVORITES_PLAN.md` → "Authentication & CSRF": cookie-only policy, `[ValidateAntiForgeryToken]`, token from the layout's logout form sent as the `RequestVerificationToken` header)
 - **Never hard-code the developer's real OS username in files** (paths, examples, comments) — use `/tmp`, an env var, or a placeholder like `<user>`
