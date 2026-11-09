@@ -145,7 +145,7 @@ A question contains:
   - Form field pre-filling and validation feedback
 - Extract reusable JS to `/wwwroot/*.js` files
 - Public pages are static SSR and must work without `blazor.web.js` (older Safari can't parse it): use links/query strings, GET/POST forms (`@formname`) and `wwwroot/*.js`, never `[StreamRendering]`
-- Use `@rendermode InteractiveServer` only for editor/admin tools (`App.razor` loads Blazor's script for editors/admins and `@rendermode` pages, enhanced navigation off — so `NavigateTo` always passes `forceLoad: true`)
+- Use `@rendermode InteractiveServer` only for editor/admin tools (`App.razor` loads Blazor's script only on `@rendermode` pages, and a static page with an interactive island renders `<BlazorScript />` next to it; enhanced navigation off — so `NavigateTo` always passes `forceLoad: true`)
 
 ### Icons
 

@@ -82,8 +82,9 @@
     {
         <div class="row justify-content-center mt-4 mb-5">
             <div class="col-lg-10 col-xl-9">
-                @* The only interactive part of the page; editors and admins get Blazor's script (App.razor) *@
+                @* The only interactive part of the page, so only editors and admins load Blazor's script *@
                 <AgentTokens @rendermode="InteractiveServer" UserId="@_agentTokensUserId" IsAdmin="@_isAdmin" />
+                <BlazorScript />
             </div>
         </div>
     }

@@ -36,32 +36,55 @@ public sealed partial class StaticPagesUiTests(PostgresFixture database)
         var authorId = question.Authors.Single().Id;
         using var browser = TestBrowser.Create(factory);
 
-        foreach (var url in new[]
-                 {
-                     "/", $"/package/{package.Id}", $"/question/{question.Id}", $"/editor/{authorId}",
-                     $"/editor/{authorId}?view=questions", $"/package/{package.Id}/results", "/editors",
-                     "/search/%D0%BF%D0%B8%D1%82%D0%B0%D0%BD%D0%BD%D1%8F"
-                 })
+        foreach (var url in PublicUrls(package.Id, question.Id, authorId).Concat(
+                 [
+                     "/search", "/disclaimer", "/Error", "/Account/Login", "/Account/Register",
+                     "/Account/ForgotPassword", "/Account/ResendConfirmation", "/Account/ResetPassword",
+                     "/Account/AccessDenied"
+                 ]))
         {
             var html = await TestBrowser.GetDecodedHtml(browser, url);
 
-            html.Should().NotContain(BlazorScript, url)
-                .And.NotContain("<blazor-ssr", $"{url} must not stream its content after a placeholder")
+            ExpectBlazorScript(html, url, expected: false);
+            html.Should().NotContain("<blazor-ssr", $"{url} must not stream its content after a placeholder")
                 .And.NotContain("Завантаження...", url);
         }
+
+        var notFound = await browser.GetAsync("/no-such-page");
+        notFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        ExpectBlazorScript(await notFound.Content.ReadAsStringAsync(), "/no-such-page", expected: false);
     }
 
-    [SkippableFact]
-    public async Task BlazorScript_IsLoadedForEditors_WithoutEnhancedNavigation()
+    /// <summary>
+    /// Editors and admins load Blazor's script only where an interactive tool is: the @rendermode
+    /// pages and the agent-token panel on the profile. Public pages stay static for them too,
+    /// including the admin forms on an author's page.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData("Editor", "/manage/packages")]
+    [InlineData("Admin", "/admin/users")]
+    public async Task BlazorScript_ForEditorsAndAdmins_OnlyWhereAToolIsInteractive(string role, string toolUrl)
     {
         await using var factory = CreateFactory();
-        var editor = await TestBrowser.CreateUser(factory, "Editor");
+        var package = await TestData.CreatePackage(factory, ownerId: null, status: PackageStatus.Published);
+        var question = package.Tours.First().Questions.First();
+        var authorId = question.Authors.Single().Id;
+        var user = await TestBrowser.CreateUser(factory, role);
         using var browser = TestBrowser.Create(factory);
-        await TestBrowser.Login(browser, editor.Email, editor.Password);
+        await TestBrowser.Login(browser, user.Email, user.Password);
 
-        var html = await browser.GetStringAsync("/");
+        foreach (var url in PublicUrls(package.Id, question.Id, authorId).Append("/favorites"))
+        {
+            ExpectBlazorScript(await TestBrowser.GetDecodedHtml(browser, url), url, expected: false);
+        }
 
-        html.Should().Contain(BlazorScript).And.Contain("disableDomPreservation: true");
+        var profile = await TestBrowser.GetDecodedHtml(browser, "/Account/Profile");
+        ExpectBlazorScript(profile, "/Account/Profile", expected: true);
+        profile.Should().Contain("Токени доступу для агентів", "the agent-token panel is the reason for the script");
+
+        var tool = await TestBrowser.GetDecodedHtml(browser, toolUrl);
+        ExpectBlazorScript(tool, toolUrl, expected: true);
+        tool.Should().Contain("disableDomPreservation: true", "enhanced navigation stays off");
     }
 
     [SkippableFact]
@@ -73,7 +96,8 @@ public sealed partial class StaticPagesUiTests(PostgresFixture database)
         await TestBrowser.Login(browser, user.Email, user.Password);
 
         var page = await TestBrowser.GetDecodedHtml(browser, "/Account/Profile");
-        page.Should().NotContain(BlazorScript).And.Contain("name=\"Model.City\"").And.Contain("name=\"Model.Team\"");
+        ExpectBlazorScript(page, "/Account/Profile", expected: false);
+        page.Should().Contain("name=\"Model.City\"").And.Contain("name=\"Model.Team\"");
 
         var html = await Post(browser, "/Account/Profile", "ProfileForm", new()
         {
@@ -225,6 +249,23 @@ public sealed partial class StaticPagesUiTests(PostgresFixture database)
     }
 
     /// <summary>Submits the server-rendered form named <paramref name="formName"/> and returns the decoded response HTML.</summary>
+    private static string[] PublicUrls(int packageId, int questionId, int authorId) =>
+    [
+        "/", $"/package/{packageId}", $"/question/{questionId}", $"/editor/{authorId}",
+        $"/editor/{authorId}?view=questions", $"/package/{packageId}/results", "/editors",
+        "/search/%D0%BF%D0%B8%D1%82%D0%B0%D0%BD%D0%BD%D1%8F"
+    ];
+
+    /// <summary>
+    /// The page loads Blazor's script exactly when it renders an interactive component (whose
+    /// prerendered markup is wrapped in <c>&lt;!--Blazor:</c> markers that the script picks up).
+    /// </summary>
+    private static void ExpectBlazorScript(string html, string url, bool expected)
+    {
+        html.Contains(BlazorScript, StringComparison.Ordinal).Should().Be(expected, $"{url}: blazor.web.js loaded?");
+        html.Contains("<!--Blazor:", StringComparison.Ordinal).Should().Be(expected, $"{url}: interactive component rendered?");
+    }
+
     private static async Task<string> Post(HttpClient browser, string url, string formName, Dictionary<string, string> fields)
     {
         using var response = await PostRaw(browser, url, formName, fields);
