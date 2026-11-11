@@ -30,7 +30,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD}
+      # Pool capped below what Postgres admits for this role (max_connections 20 minus 3 reserved
+      # for superusers): under a burst, requests queue for a connection instead of failing with
+      # "too many clients", and the number of concurrent queries (and their memory) stays bounded.
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=questionshub;Username=questionshub;Password=${QUESTIONSHUB_PASSWORD};Maximum Pool Size=15
       - AdminCredentials__Email=${ADMIN_EMAIL}
       - AdminCredentials__Password=${ADMIN_PASSWORD}
       - Email__ApiKey=${EMAIL_API_KEY}
@@ -119,8 +122,10 @@ services:
       - SETUID
 
     restart: unless-stopped
-    mem_limit: 768m
-    memswap_limit: 1g
+    # Postgres needs the headroom: at 768m it was OOM-killed under load on the previous 2 GB host,
+    # and every kill resets all connections. Still well inside the 4 GB box with AnkiLearner.
+    mem_limit: 1536m
+    memswap_limit: 2g
     cpus: 1.0
     pids_limit: 256
 
@@ -130,13 +135,16 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    # Tuned small: this box also hosts AnkiLearner.
+    # The database is small (~70 MB), so shared_buffers already holds all of it. effective_cache_size
+    # is only a planner hint for the OS cache actually available. Parallel workers are off: with
+    # one CPU they add little speed but multiply the processes (and memory) of every heavy query.
     command: >
       postgres
       -c shared_buffers=128MB
       -c work_mem=4MB
       -c maintenance_work_mem=64MB
-      -c effective_cache_size=256MB
+      -c effective_cache_size=1GB
+      -c max_parallel_workers_per_gather=0
       -c max_connections=20
 
   # One-shot: extensions -> app user/permissions -> full-text search config. Idempotent.
