@@ -328,7 +328,7 @@ Editors and admins create tokens on their profile page (`/Account/Profile` → �
 ```
 GET /api/v1/manage/me HTTP/1.1
 Host: questions.com.ua
-Authorization: Bearer qh_pat_00112233445566778899aabbccddeeff
+Authorization: Bearer qh_pat_…
 ```
 
 - The token acts with the user's **current** rights on every request: an admin token can edit any package, an editor token only the user's own packages; the token's package list narrows that further. Revocation, expiry, lockout and role changes apply to the next request.
