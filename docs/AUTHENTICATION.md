@@ -181,6 +181,7 @@ ADMIN_PASSWORD=SecurePassword123!
 - Application **will fail to start** if these variables are missing
 - This is intentional to prevent accidental deployment without admin access
 - Admin credentials should be changed immediately after first login
+- `ADMIN_PASSWORD` is read **only when no user with `ADMIN_EMAIL` exists** (`DbSeeder`). Once the admin exists, changing the env value changes nothing. Change the real password on the site (`/Account/ForgotPassword` → emailed link; there is no change-password page), then put a strong value in the env file too, so a rebuild from an empty database doesn't seed a weak one. The value must pass the password policy (8+ characters, a digit, an uppercase letter, a symbol). In the compose env file, wrap a value containing `$` in single quotes, or Compose interpolates it
 
 ### Adding More Admins
 Currently, there is only one admin user (the bootstrapped one). Additional admins cannot be created through the UI in the current scope.

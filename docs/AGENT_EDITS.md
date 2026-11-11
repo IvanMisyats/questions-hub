@@ -23,6 +23,7 @@ A small script per task beats hand-written curl. Keep the operations in data (pa
 
 - **Cloudflare blocks Python's default User-Agent** (`Python-urllib/…` → `403`, error code 1010, Browser Integrity Check). Set any other User-Agent in Python scripts. curl, Node, httpx and reqwest (the MCP clients) pass.
 - **Windows Python + Cyrillic output:** `python -I` ignores `PYTHONIOENCODING`, so `print` fails with `cp1252`. Run `python -I -X utf8`.
+- **A Cloudflare `502` from the MCP server or the API within ~2 minutes of a push to `main`** is usually the deploy: CD recreates the web container, and requests in that window (about 6 s) get `502 origin_bad_gateway`. Check `gh run list` and retry once CD is done; don't debug the server first.
 - **Structural changes are refused on packages with results** (`hasResults: true`). Author and text fixes still work; adding, deleting or moving questions has to be done in the editor.
 
 ## Testing changes to the MCP server

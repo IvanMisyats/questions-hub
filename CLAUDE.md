@@ -41,6 +41,7 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 - Icons: `<Icon Name="check" Class="text-success" />` (SVG sprite in `wwwroot/icons.svg`)
 - **Browser JS calling a cookie-auth JSON endpoint:** follow the favorites pattern (`docs/FAVORITES_PLAN.md` → "Authentication & CSRF": cookie-only policy, `[ValidateAntiForgeryToken]`, token from the layout's logout form sent as the `RequestVerificationToken` header)
 - **Never hard-code the developer's real OS username in files** (paths, examples, comments) — use `/tmp`, an env var, or a placeholder like `<user>`
+- **No realistic-looking secrets in docs examples** — write `qh_pat_…` / `<token>`. A random 32-hex example token in `docs/API.md` was reported by a secret scanner as a leaked bearer token (2026-10). Test fixtures use obvious patterns (`qh_pat_000…`, `0123…`)
 
 ## Git Workflow
 
