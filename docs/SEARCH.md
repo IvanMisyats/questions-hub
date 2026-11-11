@@ -195,6 +195,7 @@ This ensures:
    ```
 2. Re-run db-setup:
    ```bash
-   docker compose --profile production run --rm db-setup
+   docker compose --profile dev run --rm db-setup                      # local
+   docker compose --env-file app.env run --rm db-setup                 # production, as qh in /srv/questions-hub/deploy
    ```
 

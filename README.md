@@ -108,9 +108,9 @@ questions-hub/
 The application is deployed automatically via GitHub Actions:
 
 1. Push to `main` branch triggers the CI/CD pipeline
-2. Docker image is built and pushed to GitHub Container Registry
-3. Deployment files are copied to VPS
-4. Application is deployed using `docker compose --profile production`
+2. Docker image is built and pushed to GitHub Container Registry (`:latest` and `:sha-<short>`)
+3. CI triggers the VPS through a forced-command SSH key, which can only say "redeploy"
+4. The host pulls the image and reconciles the stack from its root-owned `infra/docker-compose.yml` copy
 
 See [VPS Deployment Guide](docs/VPS_DEPLOYMENT.md) for setup instructions.
 

@@ -44,11 +44,11 @@ and in the monthly report the "All good!" columns are past months, not the curre
 
 | Item | Value |
 |------|-------|
-| Backup user | `github-actions` (UID 1001); the unit grants `CAP_DAC_READ_SEARCH` to read the container-owned `keys/` |
-| App directory | `/home/github-actions/questions-hub/` |
-| Backup secrets | `/home/github-actions/.config/questions-hub-backup/backup.env` |
-| Backup script (runtime) | `/home/github-actions/questions-hub/infra/backup/runtime/backup.sh` |
-| systemd units | `/etc/systemd/system/questionshub-backup.{service,timer}` |
+| Backup user | `qh` — **no `docker` group, no sudo**; uses its own rootless Docker socket |
+| App directory | `/srv/questions-hub/` |
+| Backup secrets | `/srv/questions-hub/backup/backup.env` (`qh:qh` 0600) |
+| Backup script | `/usr/local/bin/qh-backup` (`root:root` 0755) |
+| systemd units | **user** units: `~qh/.config/systemd/user/questionshub-backup.{service,timer}` |
 | restic version | 0.16.4 |
 
 ## IaC (Infrastructure as Code)
@@ -75,22 +75,22 @@ infra/backup/
 
 ### List snapshots
 ```bash
-sudo -u github-actions bash -lc '
-set -a; source /home/github-actions/.config/questions-hub-backup/backup.env; set +a
+sudo machinectl shell qh@ /bin/bash -c '
+set -a; source /srv/questions-hub/backup/backup.env; set +a
 restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" snapshots
 '
 ```
 
 ### Run backup manually
 ```bash
-sudo systemctl start questionshub-backup.service   # blocks until done
+sudo machinectl shell qh@ /usr/local/bin/qh-backup
 ```
-Not `sudo -u github-actions .../backup.sh`: that skips the unit's capability and fails on `keys/`.
 
 ### Check logs
 ```bash
-journalctl -u questionshub-backup.service -n 200 --no-pager
-systemctl list-timers | grep questionshub
+# User units, so journalctl needs --user-unit under that account:
+sudo machinectl shell qh@ /bin/bash -c 'journalctl --user -u questionshub-backup.service -n 200 --no-pager'
+sudo machinectl shell qh@ /bin/bash -c 'systemctl --user list-timers'
 ```
 
 ### Restore

@@ -4,18 +4,14 @@
 -- Idempotent: safe to run multiple times
 -- Note: QUESTIONSHUB_PASSWORD must be set via psql variable or environment
 
--- Create user if not exists
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub') THEN
-    CREATE USER questionshub WITH PASSWORD :'QUESTIONSHUB_PASSWORD';
-    RAISE NOTICE 'Created user questionshub';
-  ELSE
-    -- Update password to ensure it matches current configuration
-    EXECUTE format('ALTER USER questionshub WITH PASSWORD %L', :'QUESTIONSHUB_PASSWORD');
-    RAISE NOTICE 'Updated password for user questionshub';
-  END IF;
-END $$;
+-- Create the login role if it does not exist yet. Not a DO block: psql does not substitute
+-- :'variables' inside dollar-quoted text, so a DO block cannot see the password, and on a fresh
+-- database the CREATE there was a syntax error (the role then never existed).
+SELECT 'CREATE ROLE questionshub LOGIN'
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'questionshub')\gexec
+
+-- Set (or reset) the password to match the current configuration
+ALTER ROLE questionshub WITH LOGIN PASSWORD :'QUESTIONSHUB_PASSWORD';
 
 -- Grant connection privileges
 GRANT CONNECT ON DATABASE questionshub TO questionshub;

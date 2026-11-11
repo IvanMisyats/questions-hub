@@ -1,0 +1,16 @@
+[Unit]
+# USER unit — install to ~qh/.config/systemd/user/, enable with:
+#   systemctl --user enable --now qh-deploy.timer
+# It must be a user unit because rootless Docker's socket lives in this user's runtime dir.
+# `loginctl enable-linger qh` (done at bootstrap) keeps it running without an interactive login.
+Description=QuestionsHub deploy reconcile (pull current image, converge stack)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/qh-deploy
+
+# The script takes its own flock, so a slow deploy just delays the next tick rather than
+# stacking up.
+TimeoutStartSec=600

@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -8,37 +8,40 @@ on:
     branches:
       - main
 
+# Read-only by default. CD (which needs packages:write) is a separate workflow, so a compromised
+# dependency in the build cannot publish an image or touch the repo.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      # 1. Check out the code
+      # GitHub-owned actions pinned by commit SHA: version tags are mutable and can be
+      # repointed at new code.
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      # 2. Set up .NET SDK
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: '10.0.x'
 
-      # 3. Cache NuGet packages
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-
 
-      # 4. Restore dependencies
       - name: Restore dependencies
         run: dotnet restore
 
-      # 4. Build the project
       - name: Build
         run: dotnet build --no-restore
 
-      # 5. Run tests
       - name: Run tests
         run: dotnet test --no-build --verbosity normal
-
