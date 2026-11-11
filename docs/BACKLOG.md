@@ -52,6 +52,12 @@ Security findings are **not** listed here: this repository is public, so open vu
 - **Import job folders.** `uploads/jobs/*` (input, extracted assets, parse dumps) is never cleaned, for site and agent uploads alike. Add a retention job (e.g. delete finished jobs' folders after 30 days, keep the DB rows) and watch the volume's free space.
 - **Login dropdown.** The guest dropdown (Увійти / Реєстрація) has an extra gap on the left, and the selection background overflows to the right. Reported 2026-03, not re-checked.
 - **Stale docs.** `AUTHENTICATION.md` → "Future Enhancements" still lists access levels and email sending as planned; both are implemented.
+- **Password reset asks for the email again.** The reset link carries only `code` (`ForgotPassword.razor`), so `ResetPassword.razor` makes the user retype their email and finds them with `FindByEmailAsync`. This is the stock Identity template, not a bug. Fix it the way email confirmation already works (`AuthController` link with `userId`, `ConfirmEmail.razor` → `FindByIdAsync`):
+  - Add `userId` to the reset link. When it is present, look the user up by id and hide the email field.
+  - Links without `userId` keep the email field, because already-sent links stay valid for 24 h.
+  - A tampered id is harmless: the token is bound to the user and their security stamp, so the page shows its generic error. Show the address on the page only after `VerifyUserTokenAsync` succeeds.
+  - Don't put the email itself in the URL, or it lands in proxy logs and browser history.
+  - No tests cover these pages yet. Add integration tests for a valid link without a typed email, a tampered id, and a link without `userId`.
 
 ## Pending manual steps
 
