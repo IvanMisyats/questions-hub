@@ -75,4 +75,4 @@ C# 13, ASP.NET Core 10, Blazor Server, PostgreSQL 16 (Ukrainian FTS), EF Core, B
 | `docs/AGENT_EDITS.md` | Applying editors' corrections to production packages with the agent token: workflow, Ivan's conventions (pasted text only identifies; theme authors), Cloudflare/Python gotchas, acceptance-testing the MCP server with a fresh agent |
 | `docs/FAVORITES_PLAN.md` | Favorites (Обране): hearts on questions/tours/blocks/packages, `/favorites` page — decisions, indexes/performance, phased plan |
 | `docs/BACKLOG.md` | Planned features and fixes with pointers to their design notes (public repo: no open security findings there) |
-| `docs/CLOUDFLARE.md` | Cloudflare proxy settings, Blazor gotchas, origin protection |
+| `docs/CLOUDFLARE.md` | Cloudflare proxy settings, Blazor gotchas, origin protection, e-mail (Email Routing for admin@, Mailjet sending, the single SPF record) |

@@ -1,0 +1,33 @@
+@*
+    Site-wide footer: community links, contact, donations, and the fair-use notice. Static HTML; the chat
+    invite link and the e-mail address are filled in by protected-links.js (see SiteLinks).
+*@
+
+<footer class="site-footer">
+    <nav class="footer-links" aria-label="Проєкт">
+        <a href="@SiteLinks.UpdatesChannelUrl" target="_blank" rel="noopener">
+            <Icon Name="telegram" Size="18" Class="brand-telegram" />
+            Підписатись на оновлення
+        </a>
+        <a href="#" data-protected-href="@SiteLinks.DiscussionChatProtected" target="_blank" rel="nofollow noopener">
+            <Icon Name="telegram" Size="18" Class="brand-telegram" />
+            Обговорення та пропозиції
+        </a>
+        <a href="@SiteLinks.GitHubUrl" target="_blank" rel="noopener">
+            <Icon Name="github" Size="18" Class="brand-neutral" />
+            Код на GitHub
+        </a>
+        <ContactEmailLink>
+            <Icon Name="gmail" Size="18" Class="brand-gmail" />
+        </ContactEmailLink>
+        @* noreferrer: the jar page fails ("Connection error") for some referrers, e.g. http://localhost *@
+        <a href="@SiteLinks.DonationJarUrl" target="_blank" rel="noopener noreferrer">
+            <Icon Name="jar" Size="18" Class="brand-neutral" />
+            Банка на підтримку сайту
+        </a>
+    </nav>
+    <p class="footer-notice">
+        Матеріали на сайті — лише для ознайомлення. Комерційне використання та перепублікація без письмової згоди автора заборонені.
+        <a href="/disclaimer">Докладніше</a>
+    </p>
+</footer>

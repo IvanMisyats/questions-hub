@@ -1,0 +1,14 @@
+@*
+    The site's contact address as a mailto: link, kept out of the page HTML (bots harvest addresses):
+    protected-links.js writes the address in on page load. ChildContent goes before the address (an icon).
+*@
+
+<a href="#" class="@Class" data-protected-email="@SiteLinks.Protect(SiteLinks.ContactEmail)">@ChildContent<span data-email-text>електронна пошта</span></a>
+
+@code {
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

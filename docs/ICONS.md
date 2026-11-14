@@ -59,6 +59,10 @@ The following icons are available in the sprite file:
 | `i-bar-chart` | bar-chart, stats, statistics | Filled bar chart marking a package that has loaded tournament statistics |
 | `i-heart` | heart | Outline heart: not in favorites (heart buttons, «Обране» nav) |
 | `i-heart-fill` | heart-fill | Filled heart: in favorites |
+| `i-telegram` | telegram | Telegram logo: footer links to the updates channel and the discussion chat |
+| `i-github` | github | GitHub logo: footer link to the source code |
+| `i-gmail` | gmail | Gmail logo: footer contact e-mail |
+| `i-jar` | jar | Empty jar with lid: footer donation link («Банка на підтримку сайту») |
 
 ## Usage
 
@@ -132,3 +136,5 @@ To add a new icon:
 ## Icon Sources
 
 The icons are based on Bootstrap Icons path data but do not require the Bootstrap Icons package. Only the raw SVG path data is used.
+
+Exceptions, each noted in a comment above its symbol: `i-gmail` is the Simple Icons Gmail mark (CC0, 24×24 viewBox), and `i-jar` is Phosphor Icons' regular `jar` (MIT, 256×256 viewBox). Bootstrap Icons has no Gmail logo and no jar. Brand logos (`i-telegram`, `i-github`, `i-gmail`) are the companies' own marks: don't redraw them. The footer colors Telegram and Gmail with their brand colors (`SiteFooter.razor.css`).

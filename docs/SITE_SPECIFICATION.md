@@ -19,6 +19,8 @@
 
 **Branding**: Site name is game-neutral — «База українських запитань» (top bar, page titles, emails); nav sidebar brand is «База запитань». Game names appear as type labels, tabs, and badges only.
 
+**Footer** (`Layout/SiteFooter.razor`, every page; links and address in `Infrastructure/SiteLinks.cs`): «Підписатись на оновлення» (Telegram channel), «Обговорення та пропозиції» (Telegram discussion chat), «Код на GitHub», the contact address, «Банка на підтримку сайту» (Monobank jar), then the fair-use notice with a link to `/disclaimer`. The chat's invite link and the e-mail address (here and on `/disclaimer`) are not in the page HTML. They are written as reversed Base64, and `wwwroot/protected-links.js` decodes them in the browser. The address is filled in on page load; the invite link only when someone clicks, taps or focuses it, so crawlers that run scripts don't see it either. The invite link is stored only in that encoded form, so it is not in the public repo either. To replace it, follow the comment on `SiteLinks.DiscussionChatProtected`. The real protection against spam bots is on Telegram's side: join requests or a captcha bot.
+
 **Last Updated**: July 2, 2026
 
 ---

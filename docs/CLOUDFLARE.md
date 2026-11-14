@@ -78,6 +78,16 @@ These are first-line defenses before requests reach ASP.NET, which has its own p
 
 Cloudflare answers `403` with **error code 1010** to Python's default `User-Agent` (`Python-urllib/…`) — on every path, including `/api/v1` and `/mcp`. Scripts must send another User-Agent. curl, Node (Claude Code), httpx (Python MCP SDK), reqwest (Codex) and an empty User-Agent pass (checked 2026-10-10).
 
+## Email (receiving and sending)
+
+Set up 2026-11-14 through the Cloudflare API MCP server (`https://mcp.cloudflare.com/mcp`, user scope, OAuth login).
+
+- **Receiving: Cloudflare Email Routing.** One rule forwards `admin@questions.com.ua` (the site's public contact address, `SiteLinks.ContactEmail`) to the admin's private inbox. That inbox is a verified destination address in Cloudflare only, never in the code or the env files. There is no catch-all, so Cloudflare rejects mail to any other address. Enabling Email Routing added three MX records (`route1/2/3.mx.cloudflare.net`) and the routing DKIM key `cf2024-1._domainkey`, all locked by Email Routing.
+- **Sending: Mailjet** (`noreply@questions.com.ua`; DKIM `mailjet._domainkey`).
+- **SPF: exactly one record**, holding both: `v=spf1 include:spf.mailjet.com include:_spf.mx.cloudflare.net ~all`. A second `v=spf1` record makes every SPF check fail (permerror). Cloudflare adds its own SPF record only when none exists, so a new mail service has to be merged into this one by hand. The old `+a +mx +ip4:<old box>` entries were dropped then, because the app sends only through Mailjet's API.
+- **DMARC** `p=none; adkim=s; aspf=s` (strict alignment): mail that claims `@questions.com.ua` must be DKIM-signed for this domain. A Gmail "Send mail as admin@" alias therefore has to use Mailjet's SMTP (`in-v3.mailjet.com:587`, Mailjet API key/secret), not `smtp.gmail.com`.
+- Through the API, enable routing on the root domain with `POST /zones/{zone_id}/email/routing/enable`. `POST …/email/routing/dns` with a `name` only accepts subdomains (error 2007).
+
 ## Do NOT enable
 
 | Setting | Why |

@@ -1,0 +1,71 @@
+.site-footer {
+    background-color: var(--app-bg-secondary);
+    border-top: 1px solid var(--app-border);
+    padding: 1rem;
+    margin-top: auto;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    color: var(--app-text-muted);
+    text-align: center;
+}
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1.5rem;
+}
+
+/* The links' text and icon sit in a flex row, which also drops the markup's whitespace around them */
+.footer-links ::deep a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--app-link);
+    text-decoration: none;
+}
+
+.footer-links ::deep a:hover {
+    text-decoration: underline;
+}
+
+.footer-links ::deep .icon {
+    flex-shrink: 0;
+}
+
+.footer-links ::deep .brand-telegram {
+    color: #229ed9;
+}
+
+.footer-links ::deep .brand-gmail {
+    color: #ea4335;
+}
+
+.footer-links ::deep .brand-neutral {
+    color: var(--app-text);
+}
+
+.footer-notice {
+    margin: 0.75rem 0 0;
+    font-size: 0.8125rem;
+}
+
+.footer-notice a {
+    color: var(--app-link);
+    text-decoration: none;
+}
+
+.footer-notice a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 767.98px) {
+    .site-footer {
+        text-align: left;
+    }
+
+    .footer-links {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
