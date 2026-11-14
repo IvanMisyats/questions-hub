@@ -197,7 +197,9 @@ public sealed partial class StaticPagesUiTests(PostgresFixture database)
         using var browser = TestBrowser.Create(factory);
 
         var html = await TestBrowser.GetDecodedHtml(browser, "/?type=shvager");
-        var pagination = html[html.IndexOf("pagination-container", StringComparison.Ordinal)..];
+        // Only the pagination nav: the footer's protected links legitimately use href="#".
+        var start = html.IndexOf("pagination-container", StringComparison.Ordinal);
+        var pagination = html[start..html.IndexOf("</nav>", start, StringComparison.Ordinal)];
 
         pagination.Should().Contain("href=\"/?type=shvager&page=2\" data-page=\"2\"").And.NotContain("href=\"#\"");
         (await browser.GetAsync("/?type=shvager&page=2")).StatusCode.Should().Be(HttpStatusCode.OK);
