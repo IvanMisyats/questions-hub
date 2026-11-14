@@ -133,6 +133,15 @@ To add a new icon:
    ```
 3. Optionally, add name aliases in `Components/Icon.razor` in the `GetSymbolId` method
 
+**Getting the path data:** download the SVG from jsDelivr with an exact version, e.g.
+`https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/<name>.svg`,
+`…/npm/simple-icons@13.21.0/icons/<name>.svg` (brand logos, CC0) or
+`…/npm/@phosphor-icons/core@2.1.1/assets/regular/<name>.svg`. Then copy the `d` attribute into the
+sprite with a script (regex over the file, checking for exactly one `<path>`), not by retyping it:
+long path strings break silently. Keep the source's `viewBox`, and check the sprite still parses
+(`([xml](Get-Content -Raw wwwroot/icons.svg)).svg.symbol.Count`). In 2026-11 Tabler, Lucide and
+MDI had no jar icon; Phosphor's `jar` is the one in use.
+
 ## Icon Sources
 
 The icons are based on Bootstrap Icons path data but do not require the Bootstrap Icons package. Only the raw SVG path data is used.

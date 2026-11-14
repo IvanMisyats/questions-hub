@@ -107,7 +107,9 @@ Useful when hand-seeding: many-to-many join tables use EF conventional names/col
   forms before concluding something is missing.
 - Public pages are not streamed (no `[StreamRendering]`), so the response is the final HTML.
   The `<script type="importmap">` in the head lists `_framework/blazor.web.js` on every page; only a
-  `<script src="_framework/blazor.web.js"` tag means the page actually loads it.
+  `<script src="_framework/blazor.web.js"` tag means the page actually loads it. The import map lists
+  **every** fingerprinted `wwwroot` script, so `grep -c <name>.js` counts 2 for a script the page loads
+  once. That's not a duplicate tag.
 - Scoped-CSS adds `b-xxxxxxxxxx` attributes to elements of components that have a `.razor.css`
   file — `grep '<strong>2</strong>'` misses `<strong b-xe4fulzb96>2</strong>`; use
   `<strong[^>]*>` patterns.
@@ -149,6 +151,14 @@ Captured 2026-11-09 (static public pages for iOS before 16.4).
   a scratch dir, not the repo: `npm init -y && npm i --no-audit --no-fund playwright && npx playwright
   install webkit chromium`. Run headless against `:5018`. Use `devices['iPhone 13']` on WebKit for the
   phone layout; there the home filters are folded behind `#filter-toggle`.
+  - **Skip the browser download:** browsers are cached in `%LOCALAPPDATA%\ms-playwright`
+    (`chromium-1200`, `webkit-2227` as of 2026-11). `npm i playwright@1.57.0` uses those revisions,
+    so `playwright install` isn't needed. Another version would download its own.
+  - **External links** (footer t.me, Monobank): stub the destination with
+    `context.route('https://t.me/**', r => r.fulfill({ body: 'stub' }))`, then
+    `Promise.all([context.waitForEvent('page'), link.click()])` and check `popup.url()`. Never call
+    the real service from a test. For "works typed in, fails from the site" bugs, compare
+    `page.goto(url, { referer })` with and without a referrer.
 - **Roles:**
   1. Register a throwaway user (through `/Account/Register`, or the curl recipe above).
   2. Grant the role in SQL:
