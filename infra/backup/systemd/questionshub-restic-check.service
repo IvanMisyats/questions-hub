@@ -8,5 +8,8 @@ After=network-online.target
 [Service]
 Type=oneshot
 Environment=RESTIC_CACHE_DIR=/srv/questions-hub/backup/restic-cache
-ExecStart=/bin/bash -c 'set -a; source /srv/questions-hub/backup/backup.env; set +a; restic -r "s3:${OVH_S3_ENDPOINT}/${OVH_S3_BUCKET}/restic" check'
+# `$$` is deliberate: systemd expands `${VAR}` in ExecStart itself — even inside single quotes —
+# before bash has sourced backup.env, which turned the repo URL into `s3://restic`. `$$` passes
+# a literal `$` through to bash.
+ExecStart=/bin/bash -c 'set -a; source /srv/questions-hub/backup/backup.env; set +a; restic -r "s3:$${OVH_S3_ENDPOINT}/$${OVH_S3_BUCKET}/restic" check'
 TimeoutStartSec=3600
