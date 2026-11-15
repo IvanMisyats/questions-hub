@@ -1,13 +1,3 @@
----
-project_name: 'questions-hub'
-user_name: 'Johny'
-date: '2026-05-25'
-sections_completed:
-  ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
-status: 'complete'
-optimized_for_llm: true
----
-
 # Project Context for AI Agents
 
 _This file contains critical rules and patterns that AI agents must follow when implementing code in this project. Focus on unobvious details that agents might otherwise miss._
@@ -154,7 +144,6 @@ cd QuestionsHub.Blazor && dotnet ef migrations add <Name> --output-dir Data/Migr
 
 **Change log / planning notes**
 - Implementation notes, plans, and post-mortems go in `.github/upgrades/` — treat as scratch unless told otherwise.
-- BMad planning artifacts go under `_bmad-output/`. Do not commit by default.
 
 **Don't touch without permission**
 - `uploads/` — user-uploaded media and import jobs (not source).
