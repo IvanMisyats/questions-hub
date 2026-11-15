@@ -58,10 +58,12 @@ run_backup() {
   # --- Retention ---
   # `--group-by host,tags`: forget groups by host+paths by default, and the dated --stdin-filename
   # gives every dump a unique path, so each snapshot was its own group and nothing ever expired.
+  # Files need it too: when the backed-up paths change (a server move, a new path in the list above)
+  # the snapshots with the old paths would form their own group and be kept forever.
   restic -r "${RESTIC_REPO}" forget --tag db --host "${RESTIC_HOST}" --group-by host,tags \
       --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
 
-  restic -r "${RESTIC_REPO}" forget --tag files --host "${RESTIC_HOST}" \
+  restic -r "${RESTIC_REPO}" forget --tag files --host "${RESTIC_HOST}" --group-by host,tags \
       --keep-daily 30 --prune
 }
 

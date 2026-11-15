@@ -35,6 +35,8 @@ a package by importing the file as a new draft. The script is not part of this r
 Optional [Healthchecks](https://healthchecks.io/) integration:
 - Pings `HC_URL/<exit code>` after every run: `/0` is success, anything else is a failure.
 - The ping body is the last 50 lines of the run's output, so the DOWN email shows the error.
+- The weekly `restic check` pings `HC_URL/fail` only when it fails, with its last log lines; the next
+  successful backup sets the check UP again. It never pings success, which could hide a missed backup.
 - Configure by setting `HC_URL` in `backup.env` on the host.
 
 Healthchecks emails only when the status changes. A check that stays DOWN sends nothing more,

@@ -12,4 +12,8 @@ Environment=RESTIC_CACHE_DIR=/srv/questions-hub/backup/restic-cache
 # before bash has sourced backup.env, which turned the repo URL into `s3://restic`. `$$` passes
 # a literal `$` through to bash.
 ExecStart=/bin/bash -c 'set -a; source /srv/questions-hub/backup/backup.env; set +a; restic -r "s3:$${OVH_S3_ENDPOINT}/$${OVH_S3_BUCKET}/restic" check'
+# A failure (or a timeout) pings the backup's Healthchecks check `/fail` with the last log lines,
+# so the DOWN email shows the error; the next good nightly backup sets it UP again. Failures only:
+# a success ping here would restart the backup check's period and could hide a missed backup.
+ExecStopPost=/bin/bash -c '[ "$$SERVICE_RESULT" = success ] && exit 0; source /srv/questions-hub/backup/backup.env; [ -n "$${HC_URL:-}" ] || exit 0; journalctl --user -u questionshub-restic-check.service -n 30 --no-pager -o cat | curl -fsS -m 10 --retry 3 --data-binary @- "$${HC_URL}/fail" >/dev/null 2>&1 || true'
 TimeoutStartSec=3600

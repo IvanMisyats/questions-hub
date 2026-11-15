@@ -160,7 +160,9 @@ No `chown` to UID 10000 any more — under rootless Docker the container writes 
 
 ## Verification and maintenance
 
-- `questionshub-restic-check.timer` runs `restic check` weekly.
+- `questionshub-restic-check.timer` runs `restic check` weekly. A failure pings `HC_URL/fail`
+  (failures only — a success ping would restart the backup check's period and hide a missed backup).
+  It had never once succeeded until 2026-11-15, unnoticed, because it pinged nothing.
 - `HC_URL` (Healthchecks.io) is pinged on success and on failure — set it, otherwise a silently
   broken backup looks identical to a working one.
 - **Run a restore drill quarterly.** A backup that has never been restored is a hypothesis.
