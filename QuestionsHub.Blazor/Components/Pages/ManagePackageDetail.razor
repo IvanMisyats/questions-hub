@@ -1167,6 +1167,9 @@
     private string? _userId;
     private bool _isSaving;
     private string? _saveStatus;
+    /// <summary>The user changed the start / end play date since the last save (see SavePackageAsync).</summary>
+    private bool _playedFromEdited;
+    private bool _playedToEdited;
     private bool _isExporting;
 
     // Accordion state
@@ -1892,11 +1895,21 @@
                 dbPackage.Title = _package.Title;
                 dbPackage.Description = _package.Description;
                 dbPackage.Preamble = _package.Preamble;
-                dbPackage.PlayedFrom = _package.PlayedFrom;
-                dbPackage.PlayedTo = _package.PlayedTo;
+                // Each date only when edited here: loading results (here or through the agent API)
+                // fills empty dates on the server, and a stale in-memory null must not undo that
+                if (_playedFromEdited)
+                {
+                    dbPackage.PlayedFrom = _package.PlayedFrom;
+                }
+                if (_playedToEdited)
+                {
+                    dbPackage.PlayedTo = _package.PlayedTo;
+                }
                 dbPackage.Status = _package.Status;
                 dbPackage.AccessLevel = _package.AccessLevel;
                 await context.SaveChangesAsync();
+                _playedFromEdited = false;
+                _playedToEdited = false;
             }
             _saveStatus = "Збережено";
         }
@@ -2085,6 +2098,7 @@
 
     private void OnPlayedFromChanged(ChangeEventArgs e)
     {
+        _playedFromEdited = true;
         if (DateOnly.TryParse(e.Value?.ToString(), out var date))
         {
             _package!.PlayedFrom = date;
@@ -2097,6 +2111,7 @@
 
     private void OnPlayedToChanged(ChangeEventArgs e)
     {
+        _playedToEdited = true;
         if (DateOnly.TryParse(e.Value?.ToString(), out var date))
         {
             _package!.PlayedTo = date;
@@ -3773,6 +3788,21 @@
         if (_package != null)
         {
             _resultsSources = await PackageResults.GetSourcesForPackage(_package.Id);
+
+            // A load fills empty play dates from the tournament: show them (unless the user is mid-edit)
+            if (_package.PlayedFrom == null && _package.PlayedTo == null && !_playedFromEdited && !_playedToEdited)
+            {
+                await using var context = await DbContextFactory.CreateDbContextAsync();
+                var dates = await context.Packages
+                    .Where(p => p.Id == _package.Id)
+                    .Select(p => new { p.PlayedFrom, p.PlayedTo })
+                    .FirstOrDefaultAsync();
+                if (dates?.PlayedFrom != null)
+                {
+                    _package.PlayedFrom = dates.PlayedFrom;
+                    _package.PlayedTo = dates.PlayedTo;
+                }
+            }
         }
 
         StateHasChanged();

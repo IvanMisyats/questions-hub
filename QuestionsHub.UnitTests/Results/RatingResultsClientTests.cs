@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
@@ -185,6 +186,63 @@ public class RatingResultsClientTests
             PlatformAnswerState.Correct, PlatformAnswerState.Excluded,
             PlatformAnswerState.Excluded, PlatformAnswerState.Wrong);
         loaded.Warnings.Should().ContainSingle(w => w.Contains("спірні"));
+    }
+
+    [Fact]
+    public async Task Load_Tournament13097_ParsesDates()
+    {
+        var results = await CreateClient(HandlerFor13097()).Load("13097");
+
+        results.Dates.Should().Be(new TournamentDates(new DateOnly(2026, 5, 21), new DateOnly(2026, 5, 28)));
+    }
+
+    [Theory]
+    // Organizer's Kyiv midnight is the previous UTC evening (EET +2 in winter, EEST +3 in summer)
+    [InlineData("2015-01-09T22:00:00+00:00", "2015-01-11T21:55:00+00:00", "2015-01-10", "2015-01-11")]
+    [InlineData("2015-04-02T21:00:00+00:00", "2015-04-05T20:55:00+00:00", "2015-04-03", "2015-04-05")]
+    // Platform-local offsets are converted, not truncated (Moscow midnight is 23:00 in winter Kyiv)
+    [InlineData("2024-03-10T00:00:00+03:00", "2024-03-10T23:00:00+03:00", "2024-03-09", "2024-03-10")]
+    // One-day tournament: no end date
+    [InlineData("2024-06-01T09:00:00+00:00", "2024-06-01T18:00:00+00:00", "2024-06-01", null)]
+    // End before start (bad data): start only
+    [InlineData("2024-06-05T09:00:00+00:00", "2024-06-01T18:00:00+00:00", "2024-06-05", null)]
+    public async Task Load_DatesConvertedToKyivDates(string dateStart, string dateEnd, string expectedFrom, string? expectedTo)
+    {
+        var info = $$"""{"id":1,"questionQty":{"1":3},"dateStart":"{{dateStart}}","dateEnd":"{{dateEnd}}"}""";
+        var handler = new FakeResultsHandler()
+            .Add("/tournaments/1/results", """[{"team":{"id":1,"name":"А","town":null},"mask":"101","questionsTotal":2,"position":1.0}]""")
+            .Add("/tournaments/1", info);
+
+        var loaded = await CreateClient(handler).Load("1");
+
+        loaded.Dates.Should().Be(new TournamentDates(
+            DateOnly.Parse(expectedFrom, CultureInfo.InvariantCulture), expectedTo == null ? null : DateOnly.Parse(expectedTo, CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
+    public async Task Load_NoDateStart_NoDates()
+    {
+        var handler = new FakeResultsHandler()
+            .Add("/tournaments/1/results", """[{"team":{"id":1,"name":"А","town":null},"mask":"101","questionsTotal":2,"position":1.0}]""")
+            .Add("/tournaments/1", """{"id":1,"questionQty":{"1":3},"dateStart":null,"dateEnd":"2024-06-01T18:00:00+00:00"}""");
+
+        var loaded = await CreateClient(handler).Load("1");
+
+        loaded.Dates.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Load_EmbargoedTournament_ExceptionCarriesDates()
+    {
+        var handler = new FakeResultsHandler()
+            .Add("/tournaments/1/results", """[{"team":{"id":1,"name":"А","town":null},"mask":null,"questionsTotal":null,"position":null}]""")
+            .Add("/tournaments/1", """{"id":1,"questionQty":{"1":3},"hideResultsTo":"2099-01-01T00:00:00+00:00","dateStart":"2024-06-01T09:00:00+00:00","dateEnd":"2024-06-03T18:00:00+00:00"}""");
+
+        var act = () => CreateClient(handler).Load("1");
+
+        var exception = (await act.Should().ThrowAsync<ResultsLoadException>()).Which;
+        exception.EmbargoedUntil.Should().NotBeNull();
+        exception.Dates.Should().Be(new TournamentDates(new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 3)));
     }
 
     private static int CorrectCount(PlatformResults results, int questionIndex)

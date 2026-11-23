@@ -43,6 +43,13 @@ duplicates and non-WWW packages. `LoadSource` (synchronous, triggered from the m
 4. In one transaction: replaces the source's `TeamResults`, updates the source
    (`LoadedAt`, `TeamsCount`, `StatsMapped`, `WarningsJson`, `RawPayload`, `DisplayUrl`),
    re-aggregates `QuestionStats`.
+5. If the package has **no play dates** (`PlayedFrom` and `PlayedTo` both empty), fills them from
+   the tournament (Rating `dateStart`/`dateEnd` as Kyiv dates; `PlayedTo` stays null for a one-day
+   tournament). Dates already set, by hand or by an earlier source, are never changed, so with
+   several tournaments the first one loaded wins. A load that fails because the results are
+   embargoed or not uploaded yet fills them too (under the package lock). The editor page shows
+   the filled dates after a load, and its blur-save writes each date only when it was edited
+   there, so an open tab never undoes dates filled through the agent API.
 
 `DeleteSource` takes the same per-package lock (`PackageWriteLocks`) as the mapping/write part of
 `LoadSource`, and `LoadSource` re-checks that its source still exists once it holds the lock: a source
@@ -57,7 +64,8 @@ re-fetching («load external results only once»); a refetch happens only on exp
 
 - Official API, **anonymous** (auth exists but does not bypass the results embargo, so it is
   not used). Base URLs in `ResultsOptions` (`Results` config section).
-- `GET /tournaments/{id}` → `questionQty` (per-tour counts), `hideResultsTo` (embargo).
+- `GET /tournaments/{id}` → `questionQty` (per-tour counts), `hideResultsTo` (embargo),
+  `dateStart`/`dateEnd` (UTC instants of organizers' local midnights — converted to Kyiv dates).
 - `GET /tournaments/{id}/results?includeMasksAndControversials=1` → per team: `team.name`,
   `town`, `position` (float, ties share averaged), `questionsTotal`, `mask` — one char per
   question in play order: `0` wrong, `1` correct, `?` pending controversial, `X` removed

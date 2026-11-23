@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -432,6 +433,108 @@ public class PackageResultsServiceTests : IDisposable
         stats[questionIds[0]].Should().Match<QuestionStat>(s => s.CorrectCount == 1 && s.TotalTeams == 2);
         stats[questionIds[1]].Should().Match<QuestionStat>(s => s.CorrectCount == 1 && s.TotalTeams == 2);
         stats[questionIds[2]].Should().Match<QuestionStat>(s => s.CorrectCount == 1 && s.TotalTeams == 2);
+    }
+
+    #endregion
+
+    #region Play dates
+
+    private async Task SetPlayedDates(int packageId, DateOnly? from, DateOnly? to)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var package = await db.Packages.FirstAsync(p => p.Id == packageId);
+        package.PlayedFrom = from;
+        package.PlayedTo = to;
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<(DateOnly? From, DateOnly? To)> GetPlayedDates(int packageId)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var package = await db.Packages.AsNoTracking().FirstAsync(p => p.Id == packageId);
+        return (package.PlayedFrom, package.PlayedTo);
+    }
+
+    [Fact]
+    public async Task LoadSource_PackageWithoutDates_FillsThemFromTournament()
+    {
+        var packageId = await SeedWwwPackage(
+            (TourType.Regular, "1", 12), (TourType.Regular, "2", 12), (TourType.Regular, "3", 12));
+        var service = CreateService(HandlerForRating13097());
+        var source = await service.AttachSource(packageId, "13097");
+
+        await service.LoadSource(source.Id);
+
+        (await GetPlayedDates(packageId)).Should().Be((new DateOnly(2026, 5, 21), new DateOnly(2026, 5, 28)));
+    }
+
+    [Theory]
+    [InlineData("2026-01-10", null)]
+    [InlineData("2026-01-10", "2026-01-12")]
+    [InlineData(null, "2026-01-12")]
+    public async Task LoadSource_PackageWithDates_KeepsThem(string? from, string? to)
+    {
+        var packageId = await SeedWwwPackage(
+            (TourType.Regular, "1", 12), (TourType.Regular, "2", 12), (TourType.Regular, "3", 12));
+        DateOnly? fromDate = from == null ? null : DateOnly.Parse(from, CultureInfo.InvariantCulture);
+        DateOnly? toDate = to == null ? null : DateOnly.Parse(to, CultureInfo.InvariantCulture);
+        await SetPlayedDates(packageId, fromDate, toDate);
+        var service = CreateService(HandlerForRating13097());
+        var source = await service.AttachSource(packageId, "13097");
+
+        await service.LoadSource(source.Id);
+
+        (await GetPlayedDates(packageId)).Should().Be((fromDate, toDate));
+    }
+
+    [Fact]
+    public async Task LoadSource_SecondTournament_DoesNotChangeDatesFilledByFirst()
+    {
+        var packageId = await SeedWwwPackage((TourType.Regular, "1", 3));
+        const string results = """[{"team":{"id":1,"name":"А","town":null},"mask":"101","questionsTotal":2,"position":1.0}]""";
+        var handler = new FakeResultsHandler()
+            .Add("/tournaments/1/results", results)
+            .Add("/tournaments/1", """{"id":1,"questionQty":{"1":3},"dateStart":"2024-06-01T09:00:00+00:00","dateEnd":"2024-06-01T18:00:00+00:00"}""")
+            .Add("/tournaments/2/results", results)
+            .Add("/tournaments/2", """{"id":2,"questionQty":{"1":3},"dateStart":"2024-07-01T09:00:00+00:00","dateEnd":"2024-07-02T18:00:00+00:00"}""");
+        var service = CreateService(handler);
+
+        await service.LoadSource((await service.AttachSource(packageId, "1")).Id);
+        await service.LoadSource((await service.AttachSource(packageId, "2")).Id);
+
+        (await GetPlayedDates(packageId)).Should().Be((new DateOnly(2024, 6, 1), (DateOnly?)null));
+    }
+
+    [Fact]
+    public async Task LoadSource_EmbargoedTournament_StillFillsDates()
+    {
+        var packageId = await SeedWwwPackage((TourType.Regular, "1", 3));
+        var handler = new FakeResultsHandler()
+            .Add("/tournaments/1/results", """[{"team":{"id":1,"name":"А","town":null},"mask":null,"questionsTotal":null,"position":null}]""")
+            .Add("/tournaments/1", """{"id":1,"questionQty":{"1":3},"hideResultsTo":"2099-01-01T00:00:00+00:00","dateStart":"2024-06-01T09:00:00+00:00","dateEnd":"2024-06-03T18:00:00+00:00"}""");
+        var service = CreateService(handler);
+        var source = await service.AttachSource(packageId, "1");
+
+        var loaded = await service.LoadSource(source.Id);
+
+        loaded.LoadError.Should().Contain("приховано");
+        (await GetPlayedDates(packageId)).Should().Be((new DateOnly(2024, 6, 1), new DateOnly(2024, 6, 3)));
+    }
+
+    [Fact]
+    public async Task LoadSource_NoResultsYet_StillFillsDates()
+    {
+        var packageId = await SeedWwwPackage((TourType.Regular, "1", 3));
+        var handler = new FakeResultsHandler()
+            .Add("/tournaments/1/results", "[]")
+            .Add("/tournaments/1", """{"id":1,"questionQty":{"1":3},"dateStart":"2024-06-01T09:00:00+00:00","dateEnd":"2024-06-01T18:00:00+00:00"}""");
+        var service = CreateService(handler);
+        var source = await service.AttachSource(packageId, "1");
+
+        var loaded = await service.LoadSource(source.Id);
+
+        loaded.LoadError.Should().Contain("немає результатів");
+        (await GetPlayedDates(packageId)).Should().Be((new DateOnly(2024, 6, 1), (DateOnly?)null));
     }
 
     #endregion
