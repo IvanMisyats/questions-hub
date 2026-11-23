@@ -50,6 +50,12 @@ public sealed class PlatformTeam
     public IReadOnlyList<PlatformAnswerState>? Answers { get; init; }
 }
 
+/// <summary>
+/// Days a tournament was played, as local (Kyiv) dates. <see cref="To"/> is null for a one-day
+/// tournament, matching <c>Package.PlayedTo</c>.
+/// </summary>
+public sealed record TournamentDates(DateOnly From, DateOnly? To);
+
 /// <summary>Parsed tournament results fetched from a platform.</summary>
 public sealed class PlatformResults
 {
@@ -67,6 +73,9 @@ public sealed class PlatformResults
     /// <summary>Tournament/quiz title as reported by the platform (for the source-icon tooltip).</summary>
     public string? Title { get; init; }
 
+    /// <summary>When the tournament was played, if the platform reports it (fills empty package dates).</summary>
+    public TournamentDates? Dates { get; init; }
+
     /// <summary>Raw platform payload, persisted so results can be re-parsed without re-fetching.</summary>
     public required string RawPayload { get; init; }
 
@@ -83,4 +92,7 @@ public class ResultsLoadException(string message, Exception? innerException = nu
 {
     /// <summary>When set, the platform hides the results until this moment (Rating hideResultsTo).</summary>
     public DateTime? EmbargoedUntil { get; init; }
+
+    /// <summary>When the tournament was played, if known despite the failure (results embargoed or not uploaded yet).</summary>
+    public TournamentDates? Dates { get; init; }
 }

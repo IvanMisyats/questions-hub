@@ -69,5 +69,5 @@ Use `tools/rating/find_tournaments.py <packageId>…` (reads the package through
 
 - **Show the mapping before writing anything**: package (title, link) → tournament(s) with link, editors, type and dates. Wait for confirmation.
 - **Attach every version** of the package (synchron, asynchron, Ukrainian, Russian).
-- **Play dates**: fill only the empty `playedFrom`/`playedTo`, with the minimum start and maximum end over the attached tournaments, as Kyiv dates. **Never change dates that are already set.** Write them through an Agent API changeset (`updatePackage`).
+- **Play dates**: fill only the empty `playedFrom`/`playedTo`, with the minimum start and maximum end over the attached tournaments, as Kyiv dates. **Never change dates that are already set.** Loading a Rating source does the first part itself: a package without dates gets the dates of the **first** tournament loaded (see [RESULTS.md](RESULTS.md)). With several tournaments, widen that range to the min start / max end yourself through an Agent API changeset (`updatePackage`) — but only when the current dates are the ones the first tournament set.
 - Count-mismatch cases (tournament found, stats won't map) are listed for Ivan, not attached silently.

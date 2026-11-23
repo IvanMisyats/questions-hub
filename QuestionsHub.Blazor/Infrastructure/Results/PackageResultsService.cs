@@ -83,6 +83,8 @@ public class PackageResultsService(
     /// <summary>
     /// Loads (or reloads) results for a source from its platform. On failure the error is stored
     /// on the source and previously loaded results remain intact. Returns the updated source.
+    /// When the package has no play dates, they are filled from the tournament's (Rating; also while
+    /// its results are embargoed or not uploaded yet).
     /// </summary>
     public async Task<ResultsSource> LoadSource(int sourceId, CancellationToken cancellationToken = default)
     {
@@ -112,6 +114,16 @@ public class PackageResultsService(
             source.LoadError = Truncate(ex.Message, 1000);
             source.LoadErrorDetail = Truncate(ex.InnerException?.ToString(), 8000);
             source.ResultsAvailableAfter = ex.EmbargoedUntil;
+            if (ex.Dates != null)
+            {
+                // Results hidden (embargo) or not uploaded yet, but the dates are known. Package writes
+                // serialize with agent changesets, whose version covers the dates.
+                using var datesLock = await PackageWriteLocks.Acquire(source.PackageId, cancellationToken);
+                await FillEmptyPlayedDates(db, source.PackageId, ex.Dates, cancellationToken);
+                await SaveLoadFailure(db, cancellationToken);
+                return source;
+            }
+
             await SaveLoadFailure(db, cancellationToken);
             return source;
         }
@@ -196,6 +208,7 @@ public class PackageResultsService(
                 tracked.RawPayload = platformResults.RawPayload;
                 tracked.DisplayUrl = platformResults.DisplayUrl ?? tracked.DisplayUrl;
                 tracked.Title = Truncate(platformResults.Title, 500) ?? tracked.Title;
+                await FillEmptyPlayedDates(db, tracked.PackageId, platformResults.Dates, cancellationToken);
 
                 await db.SaveChangesAsync(cancellationToken);
                 await RecomputeQuestionStats(db, tracked.PackageId, cancellationToken);
@@ -320,6 +333,30 @@ public class PackageResultsService(
                 TotalTeams = aggregate.Total
             });
         }
+    }
+
+    /// <summary>
+    /// Copies the tournament's dates onto the package when both of its dates are empty — dates already
+    /// set (by hand or by an earlier source) are never changed. The caller saves changes.
+    /// </summary>
+    private async Task FillEmptyPlayedDates(QuestionsHubDbContext db, int packageId, TournamentDates? dates, CancellationToken cancellationToken)
+    {
+        if (dates == null)
+        {
+            return;
+        }
+
+        var package = await db.Packages.FirstOrDefaultAsync(
+            p => p.Id == packageId && p.PlayedFrom == null && p.PlayedTo == null, cancellationToken);
+        if (package == null)
+        {
+            return;
+        }
+
+        package.PlayedFrom = dates.From;
+        package.PlayedTo = dates.To;
+        logger.LogInformation("Filled empty play dates of package {PackageId} from its results: {From}..{To}",
+            packageId, dates.From, dates.To);
     }
 
     /// <summary>

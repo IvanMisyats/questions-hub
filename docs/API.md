@@ -442,6 +442,8 @@ For an OpenQuiz audience link the listen token in `url` is masked (`token=***`):
 
 A failed load is **not an HTTP error**: the source remains attached, `loadError` explains the failure,
 and `resultsAvailableAfter` carries an embargo date when applicable. Reload failures preserve previously loaded data.
+Loading a Rating tournament into a package **without play dates** also sets `playedFrom`/`playedTo` from the tournament
+(Kyiv dates; also when the results are embargoed or not uploaded yet). Dates already set are never changed. The package `version` changes when that happens.
 Invalid/unsupported URLs, duplicate sources, non-ЩДК packages and reloading `other` return **422**
 `{"error":"…"}` with the results service's message. Missing packages, packages outside the user's rights
 or token allowlist, and sources outside the addressed package return **404** `{"error":"…"}`.

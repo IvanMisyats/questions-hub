@@ -49,10 +49,11 @@ public class RatingResultsClient(
         var hideResultsTo = ParseHideResultsTo(infoDoc.RootElement);
         var tourSizes = ParseTourSizes(infoDoc.RootElement);
         var title = ParseString(infoDoc.RootElement, "longName") ?? ParseString(infoDoc.RootElement, "name");
+        var dates = ParseDates(infoDoc.RootElement);
 
         if (resultsDoc.RootElement.ValueKind != JsonValueKind.Array || resultsDoc.RootElement.GetArrayLength() == 0)
         {
-            throw new ResultsLoadException($"На rating.chgk.info немає результатів для турніру {tournamentId}.");
+            throw new ResultsLoadException($"На rating.chgk.info немає результатів для турніру {tournamentId}.") { Dates = dates };
         }
 
         var rawTeams = resultsDoc.RootElement.EnumerateArray().ToList();
@@ -68,11 +69,12 @@ public class RatingResultsClient(
                 throw new ResultsLoadException(
                     $"Результати приховано платформою до {embargo.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)} — спробуйте оновити після цієї дати.")
                 {
-                    EmbargoedUntil = embargo.UtcDateTime
+                    EmbargoedUntil = embargo.UtcDateTime,
+                    Dates = dates
                 };
             }
 
-            throw new ResultsLoadException($"Результати турніру {tournamentId} недоступні (порожні дані).");
+            throw new ResultsLoadException($"Результати турніру {tournamentId} недоступні (порожні дані).") { Dates = dates };
         }
 
         var totalQuestions = tourSizes.Sum();
@@ -157,6 +159,7 @@ public class RatingResultsClient(
             TourSizes = tourSizes,
             DisplayUrl = $"{options.Value.RatingSiteBaseUrl.TrimEnd('/')}/tournament/{tournamentId}",
             Title = title,
+            Dates = dates,
             RawPayload = $"{{\"tournament\":{infoBody},\"results\":{resultsBody}}}",
             Warnings = warnings
         };
@@ -207,6 +210,55 @@ public class RatingResultsClient(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Tournament dates as Kyiv dates. The API returns UTC instants of organizers' local midnights
+    /// (2015-04-02T21:00Z = 3 April 00:00 Kyiv), so the UTC date part can be a day early.
+    /// Null without a parseable dateStart; To is null for a one-day tournament (or an end before the start).
+    /// </summary>
+    private static TournamentDates? ParseDates(JsonElement info)
+    {
+        var start = ParseDateTimeOffset(info, "dateStart");
+        if (start == null)
+        {
+            return null;
+        }
+
+        var from = ToKyivDate(start.Value);
+        var end = ParseDateTimeOffset(info, "dateEnd");
+        var to = end != null ? ToKyivDate(end.Value) : (DateOnly?)null;
+        return new TournamentDates(from, to > from ? to : null);
+    }
+
+    private static DateOnly ToKyivDate(DateTimeOffset value)
+    {
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(value, KyivTimeZone.Value).DateTime);
+    }
+
+    /// <summary>Kyiv time zone; "Europe/Kyiv" needs tzdata 2022b+, older systems only know "Europe/Kiev".</summary>
+    private static readonly Lazy<TimeZoneInfo> KyivTimeZone = new(() =>
+    {
+        foreach (var id in new[] { "Europe/Kyiv", "Europe/Kiev", "FLE Standard Time" })
+        {
+            if (TimeZoneInfo.TryFindSystemTimeZoneById(id, out var zone))
+            {
+                return zone;
+            }
+        }
+
+        // No time zone data at all: fixed EET is off by an hour in summer, which only matters
+        // for times between 23:00 and 00:00
+        return TimeZoneInfo.CreateCustomTimeZone("Kyiv", TimeSpan.FromHours(2), "Kyiv", "Kyiv");
+    });
+
+    private static DateTimeOffset? ParseDateTimeOffset(JsonElement element, string property)
+    {
+        return element.TryGetProperty(property, out var prop)
+               && prop.ValueKind == JsonValueKind.String
+               && prop.TryGetDateTimeOffset(out var value)
+            ? value
+            : null;
     }
 
     /// <summary>An HTTP 200 with a non-JSON body (maintenance page, WAF challenge) must surface as a load error.</summary>
